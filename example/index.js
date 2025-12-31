@@ -70,6 +70,8 @@ async function init() {
             flyIdleAnim: "flyidle",
         },
         initPos: pos,
+        minCamDistance: 50,
+        maxCamDistance: 300,
     });
 
     window.addEventListener("resize", onWindowResize, false);
@@ -77,36 +79,36 @@ async function init() {
 
 function dispose() {
     try {
-    tweenGroup.removeAll();
-    if (player && typeof player.destroy === 'function') player.destroy();
-    if (renderer) renderer.dispose();
-    if (controls) controls.dispose();
-    if (renderer && typeof renderer.forceContextLoss === 'function') renderer.forceContextLoss();
+        tweenGroup.removeAll();
+        if (player && typeof player.destroy === 'function') player.destroy();
+        if (renderer) renderer.dispose();
+        if (controls) controls.dispose();
+        if (renderer && typeof renderer.forceContextLoss === 'function') renderer.forceContextLoss();
 
-    scene.traverse((child) => {
-        if (!child) return;
-        if (child.material) {
-        if (Array.isArray(child.material)) {
-            child.material.forEach(m => m.dispose && m.dispose());
-        } else {
-            child.material.dispose && child.material.dispose();
-        }
-        }
-        if (child.geometry) {
-        child.geometry.dispose && child.geometry.dispose();
-        }
-    });
+        scene.traverse((child) => {
+            if (!child) return;
+            if (child.material) {
+            if (Array.isArray(child.material)) {
+                child.material.forEach(m => m.dispose && m.dispose());
+            } else {
+                child.material.dispose && child.material.dispose();
+            }
+            }
+            if (child.geometry) {
+            child.geometry.dispose && child.geometry.dispose();
+            }
+        });
 
-    window.removeEventListener("resize", onWindowResize, false);
-    console.log("销毁完成");
+        window.removeEventListener("resize", onWindowResize, false);
+        console.log("销毁完成");
     } catch (e) {
-    console.error("销毁失败", e);
+        console.error("销毁失败", e);
     }
 }
 
 // ===== 相机 =====
 function initCamera() {
-    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 1000);
     camera.rotation.order = "YXZ";
     camera.position.copy(pos);
     camera.lookAt(pos.x, pos.y, pos.z + 1);
@@ -150,6 +152,7 @@ async function initBackground() {
     light.shadow.camera.right = 40;
     light.shadow.mapSize.width = 7680;
     light.shadow.mapSize.height = 7680;
+    light.shadow.bias = -0.0005;
     light.shadow.camera.near = 0;
     light.shadow.camera.far = 100;
 
@@ -200,9 +203,8 @@ async function initGLBScene(url) {
     model.scale.set(10, 10, 10);
     model.traverse((child) => {
         if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true; // 接收阴影
-        child.material.side = 0;
+            child.castShadow = true;
+            child.receiveShadow = true; // 接收阴影
         }
     });
     scene.add(model);

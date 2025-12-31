@@ -74,6 +74,7 @@ class PlayerController {
     _camEpsilon: number = 0.35; // 摄像机与障碍物之间的安全距离（米）
     _minCamDistance: number = 1.0; // 摄像机最小距离
     _maxCamDistance: number = 4.4; // 摄像机最大距离
+    orginMaxCamDistance: number = 4.4;
 
     //  物理/运动
     playerVelocity = new THREE.Vector3(); // 玩家速度向量
@@ -111,7 +112,7 @@ class PlayerController {
     readonly DIR_BKD = new THREE.Vector3(0, 0, 1);
     readonly DIR_LFT = new THREE.Vector3(-1, 0, 0);
     readonly DIR_RGT = new THREE.Vector3(1, 0, 0);
-    readonly DIR_Y = new THREE.Vector3(0, 1, 0);
+    readonly DIR_UP = new THREE.Vector3(0, 1, 0);
 
     readonly _personToCam = new THREE.Vector3();
 
@@ -149,6 +150,8 @@ class PlayerController {
             };
             initPos?: THREE.Vector3;
             mouseSensity?: number;
+            minCamDistance?: number;
+            maxCamDistance?: number;
         },
         callback?: () => void
     ) {
@@ -167,8 +170,10 @@ class PlayerController {
 
         this._camCollisionLerp = 0.18;
         this._camEpsilon = 35 * s;
-        this._minCamDistance = 100 * s;
-        this._maxCamDistance = 440 * s;
+        this._minCamDistance = opts.minCamDistance ? opts.minCamDistance * s : 100 * s;
+        this._maxCamDistance = opts.maxCamDistance ? opts.maxCamDistance * s : 440 * s;
+        this.orginMaxCamDistance = this._maxCamDistance;
+
         // 创建bvh
         await this.createBVH();
 
@@ -230,6 +235,7 @@ class PlayerController {
 
     // 重置控制器
     resetControls() {
+        if (!this.controls) return;
         this.controls.enabled = true;
         this.controls.enablePan = true;
         this.controls.maxPolarAngle = Math.PI / 2;
@@ -262,6 +268,7 @@ class PlayerController {
             this.person.traverse((child: any) => {
                 if (child.isMesh) {
                     child.castShadow = true;
+                    child.receiveShadow = true;
                 }
             });
             this.player.add(this.person);
@@ -270,7 +277,6 @@ class PlayerController {
             // 创建人物 mixer 与 actions
             this.personMixer = new THREE.AnimationMixer(this.person);
             const animations = gltf.animations ?? [];
-            console.log('animations',animations)
             this.personActions = new Map<string, THREE.AnimationAction>();
             // 取出动作并注册到 map
             const findClip = (name: string) => animations.find((a: any) => a.name === name);
@@ -405,6 +411,7 @@ class PlayerController {
         this.reset();
     }
 
+    // 获取法线与Y轴的夹角
     getAngleWithYAxis(normal: { x: number; y: number; z: number }): number {
         // Y轴正方向向量
         const yAxis = { x: 0, y: 1, z: 0 };
@@ -426,7 +433,7 @@ class PlayerController {
     // 每帧更新
     async update(delta: number = clock.getDelta()) {
         if (!this.isupdate || !this.player || !this.collider) return;
-        delta = Math.min(delta, 1 / 60);
+        delta = Math.min(delta, 1 / 30);
 
         if (!this.isFlying) this.player.position.addScaledVector(this.playerVelocity, delta);
         this.updateMixers(delta);
@@ -439,8 +446,15 @@ class PlayerController {
         if (this.bkdPressed) this.moveDir.add(this.DIR_BKD);
         if (this.lftPressed) this.moveDir.add(this.DIR_LFT);
         if (this.rgtPressed) this.moveDir.add(this.DIR_RGT);
-        if (this.isFlying && this.fwdPressed) {
-            this.moveDir.y = this.camDir.y;
+        if (this.isFlying) {
+            if (this.fwdPressed) {
+                this.moveDir.y = this.camDir.y;
+            } else {
+                this.moveDir.y = 0;
+            }
+            if (this.spacePressed) {
+                this.moveDir.add(this.DIR_UP);
+            }
         }
         // 设置速度
         if (this.isFlying && this.fwdPressed) {
@@ -464,6 +478,7 @@ class PlayerController {
             const h = this.playerHeight * this.playerModel.scale * 0.75; // 正常高度
             const minH = this.playerHeight * this.playerModel.scale * 0.7; // 最小高度
 
+            console.log(angle, playerDistanceFromGround, maxH, h, minH);
             if (this.isFlying) {
             } else {
                 if (playerDistanceFromGround > maxH) {
@@ -538,13 +553,27 @@ class PlayerController {
         this.player.position.add(deltaVector);
 
         // 第三人称-朝向
-        if (!this.isFirstPerson && this.moveDir.lengthSq() > 0) {
+        if (!this.isFirstPerson && this.moveDir.lengthSq() > 0 && !this.isFlying) {
             this.camDir.y = 0;
             this.camDir.normalize();
             this.camDir.negate();
             this.moveDir.normalize();
             this.moveDir.negate();
             const lookTarget = this.player.position.clone().add(this.moveDir);
+            this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
+            this.targetQuat.setFromRotationMatrix(this.targetMat);
+            const alpha = Math.min(1, this.rotationSpeed * delta);
+            this.player.quaternion.slerp(this.targetQuat, alpha);
+        }
+
+        // 飞行
+        if (this.isFlying) {
+            this.camDir.y = 0;
+            this.camDir.normalize();
+            this.camDir.negate();
+            this.moveDir.normalize();
+            this.moveDir.negate();
+            const lookTarget = this.player.position.clone().add(this.fwdPressed ? this.moveDir : this.camDir);
             this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
             this.targetQuat.setFromRotationMatrix(this.targetMat);
             const alpha = Math.min(1, this.rotationSpeed * delta);
@@ -693,8 +722,8 @@ class PlayerController {
                 this.setAnimationByPressed();
                 break;
             case "Space":
-                if (!this.playerIsOnGround || this.isFlying) return;
                 this.spacePressed = true;
+                if (!this.playerIsOnGround || this.isFlying) return;
                 this.playPersonAnimationByName("jumping");
                 this.playerVelocity.y = this.jumpHeight;
                 this.playerIsOnGround = false;
@@ -707,7 +736,12 @@ class PlayerController {
                 break;
             case "KeyF":
                 this.isFlying = !this.isFlying;
-                this.setAnimationByPressed();
+                this._maxCamDistance = this.isFlying ? this.orginMaxCamDistance * 2 : this.orginMaxCamDistance;
+                if (!this.isFlying && !this.playerIsOnGround) {
+                    this.playPersonAnimationByName("jumping");
+                } else {
+                    this.setAnimationByPressed();
+                }
                 break;
         }
     };
@@ -736,7 +770,7 @@ class PlayerController {
                 this.setAnimationByPressed();
                 break;
             case "Space":
-                // this.spacePressed = false;
+                this.spacePressed = false;
                 break;
             case "ControlLeft":
                 this.ctPressed = false;
@@ -746,14 +780,15 @@ class PlayerController {
 
     // 根据按键设置人物动画
     setAnimationByPressed = () => {
-        this._maxCamDistance = 440 * this.playerModel.scale;
+        this._maxCamDistance = this.orginMaxCamDistance;
         if (this.isFlying) {
             if (!this.fwdPressed) {
                 this.playPersonAnimationByName("flyidle");
                 return;
             }
             this.playPersonAnimationByName("flying");
-            this._maxCamDistance = 700 * this.playerModel.scale;
+            // this._maxCamDistance = 700 * this.playerModel.scale;
+            this._maxCamDistance = this.orginMaxCamDistance * 2;
             return;
         }
 
@@ -792,8 +827,6 @@ class PlayerController {
                 this.playPersonAnimationByName("walking_backward");
                 return;
             }
-        } else {
-            this.playPersonAnimationByName("jumping");
         }
     };
 
@@ -866,7 +899,6 @@ class PlayerController {
                 this.scene.remove(this.collider);
                 this.collider = null;
             }
-
             this.scene.traverse((c) => {
                 const mesh = c as THREE.Mesh;
                 if (mesh?.isMesh && mesh.geometry && c.name !== "capsule") {
@@ -997,6 +1029,8 @@ export function playerController() {
                 };
                 initPos?: THREE.Vector3;
                 mouseSensity?: number;
+                minCamDistance?: number;
+                maxCamDistance?: number;
             },
             callback?: () => void
         ) => c.init(opts, callback),
