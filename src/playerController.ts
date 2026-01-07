@@ -41,6 +41,7 @@ class PlayerController {
   jumpHeight!: number;
   playerSpeed!: number;
   mouseSensity!: number;
+  originPlayerSpeed!: number;
 
   playerRadius: number = 45;
   playerHeight: number = 180;
@@ -165,6 +166,7 @@ class PlayerController {
   ) {
     this.scene = opts.scene;
     this.camera = opts.camera;
+    this.camera.rotation.order = "YXZ";
     this.controls = opts.controls;
     this.playerModel = opts.playerModel;
     this.initPos = opts.initPos ? opts.initPos : new THREE.Vector3(0, 0, 0);
@@ -178,9 +180,10 @@ class PlayerController {
     this.jumpHeight = opts.playerModel.jumpHeight
       ? opts.playerModel.jumpHeight * s
       : 800 * s;
-    this.playerSpeed = opts.playerModel.speed
+    this.originPlayerSpeed = opts.playerModel.speed
       ? opts.playerModel.speed * s
       : 400 * s;
+    this.playerSpeed = this.originPlayerSpeed;
 
     this._camCollisionLerp = 0.18;
     this._camEpsilon = 35 * s;
@@ -530,12 +533,12 @@ class PlayerController {
     // 设置速度
     if (this.isFlying && this.fwdPressed) {
       this.playerSpeed = this.shiftPressed
-        ? 4000 * this.playerModel.scale
-        : 3000 * this.playerModel.scale;
+        ? this.originPlayerSpeed * 12
+        : this.originPlayerSpeed * 7;
     } else {
       this.playerSpeed = this.shiftPressed
-        ? 900 * this.playerModel.scale
-        : 400 * this.playerModel.scale;
+        ? this.originPlayerSpeed * 2
+        : this.originPlayerSpeed;
     }
     this.moveDir.normalize().applyAxisAngle(this.upVector, angle);
     this.player.position.addScaledVector(
@@ -1149,7 +1152,9 @@ class PlayerController {
     }
 
     // 构建bvh
-    (merged as any).boundsTree = new MeshBVH(merged);
+    (merged as any).boundsTree = new MeshBVH(merged, {
+      maxDepth: 100,
+    });
     this.collider = new THREE.Mesh(
       merged,
       new THREE.MeshBasicMaterial({

@@ -1,4 +1,3 @@
-import TWEEN from "@tweenjs/tween.js";
 import * as THREE from "three";
 import { playerController } from "three-player-controller";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -8,7 +7,6 @@ import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 
 const player = playerController();
-const tweenGroup = new TWEEN.Group();
 const scene = new THREE.Scene();
 
 let camera;
@@ -230,5 +228,4 @@ function render() {
     controls.update();
   }
   renderer.render(scene, camera);
-  tweenGroup.update();
 }
