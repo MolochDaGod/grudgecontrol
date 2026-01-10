@@ -1,4 +1,13 @@
-import * as THREE from "three";
+import {
+  ACESFilmicToneMapping,
+  AmbientLight,
+  DirectionalLight,
+  EquirectangularReflectionMapping,
+  PerspectiveCamera,
+  Scene,
+  Vector3,
+  WebGLRenderer,
+} from "three";
 import { playerController } from "three-player-controller";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
@@ -7,7 +16,7 @@ import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 
 const player = playerController();
-const scene = new THREE.Scene();
+const scene = new Scene();
 
 let camera;
 let renderer;
@@ -17,7 +26,7 @@ let gltfLoader;
 let isUpdatePlayer = false; // 是否更新玩家位置
 const modelUrl = "./glb/burnout_revenge_-_central_route_crash_junction.glb";
 
-const pos = new THREE.Vector3(21.88, 3, 10.98);
+const pos = new Vector3(21.88, 3, 10.98);
 
 function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -101,7 +110,7 @@ function dispose() {
 
 // ===== 相机 =====
 function initCamera() {
-  camera = new THREE.PerspectiveCamera(
+  camera = new PerspectiveCamera(
     70,
     window.innerWidth / window.innerHeight,
     0.01,
@@ -114,12 +123,12 @@ function initCamera() {
 
 // ===== 渲染器 =====
 function initRenderer() {
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer = new WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.6;
   renderer.shadowMap.enabled = true;
-  // renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // renderer.shadowMap.type = PCFSoftShadowMap;
   renderer.setAnimationLoop(render);
   const container = document.getElementById("container");
   if (container) container.appendChild(renderer.domElement);
@@ -140,7 +149,7 @@ function initControls() {
 async function initBackground() {
   const color = 0xffffff;
   const intensity = 10;
-  const light = new THREE.DirectionalLight(color, intensity);
+  const light = new DirectionalLight(color, intensity);
   light.position.set(50, 50, 50);
   light.target.position.set(0, 0, 0);
   light.castShadow = true;
@@ -157,7 +166,7 @@ async function initBackground() {
   scene.add(light);
   scene.add(light.target);
 
-  const ambient = new THREE.AmbientLight(0xffffff, 3.0);
+  const ambient = new AmbientLight(0xffffff, 3.0);
   scene.add(ambient);
 
   return new Promise((resolve, reject) => {
@@ -165,7 +174,7 @@ async function initBackground() {
       new HDRLoader().load(
         "./sky/1.hdr",
         (texture) => {
-          texture.mapping = THREE.EquirectangularReflectionMapping;
+          texture.mapping = EquirectangularReflectionMapping;
           scene.background = texture;
           // scene.environment = texture;
           resolve();
