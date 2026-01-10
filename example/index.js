@@ -172,7 +172,7 @@ async function initBackground() {
   return new Promise((resolve, reject) => {
     try {
       new HDRLoader().load(
-        "./sky/1.hdr",
+        "./img/1.hdr",
         (texture) => {
           texture.mapping = EquirectangularReflectionMapping;
           scene.background = texture;
