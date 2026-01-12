@@ -1,10 +1,10 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from "vite";
 
 export default defineConfig({
-  root: './example',
-  base: './',
+  root: "./example",
+  base: "./glbScene.html",
   build: {
-    outDir: '../docs',       
+    outDir: "../docs",
     emptyOutDir: true,
   },
 });

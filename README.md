@@ -22,7 +22,6 @@ npm install three-player-controller
 
 ![3DTiles 漫游](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/4.gif)
 
-
 # 使用
 
 ```js
@@ -50,6 +49,107 @@ player.init({
 // 渲染循环调用
 player.update();
 ```
+
+# API
+
+## 一、初始化
+
+### 导出函数
+
+```ts
+export function playerController(): {
+  init: (opts: PlayerControllerOptions, callback?: () => void) => void;
+  changeView: () => void;
+  reset: (pos?: THREE.Vector3) => void;
+  update: (dt?: number) => void;
+  destroy: () => void;
+};
+```
+
+### 方法说明
+
+- `init(opts, callback?)`  
+  初始化控制器。`callback` 在资源加载完成后调用。
+- `update(dt?)`  
+  每帧调用。
+- `changeView()`  
+  在第一/第三人称间切换。
+- `reset(pos?)`  
+  复位玩家到指定位置。
+- `destroy()`  
+  销毁控制器。
+
+---
+
+## 二、事件
+
+### 全局事件开关
+
+```ts
+export function onAllEvent(): void; // 打开所有输入事件
+export function offAllEvent(): void; // 关闭所有输入事件
+```
+
+### 说明
+
+- `onAllEvent()`：确保控制器存在并打开输入监听。
+- `offAllEvent()`：关闭输入监听（用于显示 UI 或暂停时禁止玩家输入）。
+- 默认处理包括：WASD 移动、奔跑、跳跃、鼠标视角等。
+
+---
+
+## 三、配置与参数说明
+
+### 类型定义
+
+```ts
+type PlayerControllerOptions = {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  controls: OrbitControls;
+  playerModel: {
+    url: string;
+    idleAnim: string;
+    walkAnim: string;
+    runAnim: string;
+    jumpAnim: string;
+    leftWalkAnim?: string;
+    rightWalkAnim?: string;
+    backwardAnim?: string;
+    flyAnim?: string;
+    flyIdleAnim?: string;
+    scale: number;
+    gravity?: number;
+    jumpHeight?: number;
+    speed?: number;
+  };
+  initPos?: THREE.Vector3;
+  mouseSensity?: number;
+  minCamDistance?: number;
+  maxCamDistance?: number;
+  colliderMeshUrl?: string;
+};
+```
+
+### 关键字段说明
+
+| 字段                                                         |                      类型 | 默认 / 说明                                    |
+| ------------------------------------------------------------ | ------------------------: | ---------------------------------------------- |
+| `scene`                                                      |             `THREE.Scene` | three.js 场景（必填）                          |
+| `camera`                                                     | `THREE.PerspectiveCamera` | three.js 相机（必填）                          |
+| `controls`                                                   |           `OrbitControls` | 外部相机控制器（必填）                         |
+| `playerModel.url`                                            |                  `string` | 人物模型路径（GLB/GLTF，必填）                 |
+| `playerModel.scale`                                          |                  `number` | 人物模型缩放（必填）                           |
+| `playerModel.idleAnim` / `walkAnim` / `runAnim` / `jumpAnim` |                  `string` | 人物动画名，需与人物模型中动画名称一致（必填） |
+| `playerModel.speed`                                          |                  `number` | 基准速度，默认约 `4.0`                         |
+| `playerModel.gravity`                                        |                  `number` | 重力加速度，默认 `9.8`                         |
+| `playerModel.jumpHeight`                                     |                  `number` | 跳跃高度                                       |
+| `initPos`                                                    |           `THREE.Vector3` | 初始位置，默认 `(0,0,0)`                       |
+| `mouseSensity`                                               |                  `number` | 鼠标灵敏度                                     |
+| `minCamDistance` / `maxCamDistance`                          |                  `number` | 第三人称相机距离限制                           |
+| `colliderMeshUrl`                                            |                 `string?` | 自制碰撞体模型路径                             |
+
+---
 
 # 感谢
 

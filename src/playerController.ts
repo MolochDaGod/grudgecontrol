@@ -9,12 +9,38 @@ import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUti
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
-let controllerInstance: PlayerController | null = null; // 单例实例
+let controllerInstance: PlayerController | null = null;
 const clock = new THREE.Clock();
+
+type PlayerControllerOptions = {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  controls: OrbitControls;
+  playerModel: {
+    url: string;
+    idleAnim: string;
+    walkAnim: string;
+    runAnim: string;
+    jumpAnim: string;
+    leftWalkAnim?: string;
+    rightWalkAnim?: string;
+    backwardAnim?: string;
+    flyAnim?: string;
+    flyIdleAnim?: string;
+    scale: number;
+    gravity?: number;
+    jumpHeight?: number;
+    speed?: number;
+  };
+  initPos?: THREE.Vector3;
+  mouseSensity?: number;
+  minCamDistance?: number;
+  maxCamDistance?: number;
+  colliderMeshUrl?: string;
+};
 
 class PlayerController {
   loader: GLTFLoader = new GLTFLoader();
-
   //  基本配置与参数
   scene!: THREE.Scene;
   camera!: THREE.PerspectiveCamera;
@@ -42,6 +68,7 @@ class PlayerController {
   playerSpeed!: number;
   mouseSensity!: number;
   originPlayerSpeed!: number;
+  colliderMeshUrl!: string;
 
   playerRadius: number = 45;
   playerHeight: number = 180;
@@ -136,34 +163,7 @@ class PlayerController {
   }
 
   // 初始化
-  async init(
-    opts: {
-      scene: THREE.Scene;
-      camera: THREE.PerspectiveCamera;
-      controls: OrbitControls;
-      playerModel: {
-        url: string;
-        idleAnim: string;
-        walkAnim: string;
-        runAnim: string;
-        jumpAnim: string;
-        leftWalkAnim?: string;
-        rightWalkAnim?: string;
-        backwardAnim?: string;
-        flyAnim?: string;
-        flyIdleAnim?: string;
-        scale: number;
-        gravity?: number;
-        jumpHeight?: number;
-        speed?: number;
-      };
-      initPos?: THREE.Vector3;
-      mouseSensity?: number;
-      minCamDistance?: number;
-      maxCamDistance?: number;
-    },
-    callback?: () => void
-  ) {
+  async init(opts: PlayerControllerOptions, callback?: () => void) {
     this.scene = opts.scene;
     this.camera = opts.camera;
     this.camera.rotation.order = "YXZ";
@@ -196,7 +196,7 @@ class PlayerController {
     this.orginMaxCamDistance = this._maxCamDistance;
 
     // 创建bvh
-    await this.createBVH();
+    await this.createBVH(opts.colliderMeshUrl);
 
     // 创建玩家
     this.createPlayer();
@@ -786,7 +786,7 @@ class PlayerController {
     }
   }
 
-  // 重置 / 销毁
+  // 重置
   reset(position?: THREE.Vector3) {
     if (!this.player) return;
     this.playerVelocity.set(0, 0, 0);
@@ -1171,7 +1171,7 @@ class PlayerController {
       this.scene.add(this.visualizer);
     }
     this.boundingBoxMinY = (this.collider as any).geometry.boundingBox.min.y;
-    console.log("bvh加载模型成功", this.collider);
+    // console.log("bvh加载模型成功", this.collider);
   }
 }
 
@@ -1180,43 +1180,12 @@ export function playerController() {
   if (!controllerInstance) controllerInstance = new PlayerController();
   const c = controllerInstance;
   return {
-    init: (
-      opts: {
-        scene: THREE.Scene;
-        camera: THREE.PerspectiveCamera;
-        controls: OrbitControls;
-        playerModel: {
-          url: string;
-          idleAnim: string;
-          walkAnim: string;
-          runAnim: string;
-          jumpAnim: string;
-          leftWalkAnim?: string;
-          rightWalkAnim?: string;
-          backwardAnim?: string;
-          flyAnim?: string;
-          flyIdleAnim?: string;
-          scale: number;
-          gravity?: number;
-          jumpHeight?: number;
-          speed?: number;
-        };
-        initPos?: THREE.Vector3;
-        mouseSensity?: number;
-        minCamDistance?: number;
-        maxCamDistance?: number;
-      },
-      callback?: () => void
-    ) => c.init(opts, callback),
+    init: (opts: PlayerControllerOptions, callback?: () => void) =>
+      c.init(opts, callback),
     changeView: () => c.changeView(),
-    createBVH: (url: string = "") => c.createBVH(url),
-    createPlayer: () => c.createPlayer(),
     reset: (pos?: THREE.Vector3) => c.reset(pos),
     update: (dt?: number) => c.update(dt),
     destroy: () => c.destroy(),
-    displayCollider: c.displayCollider,
-    displayPlayer: c.displayPlayer,
-    displayVisualizer: c.displayVisualizer,
   };
 }
 
