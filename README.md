@@ -8,9 +8,7 @@ npm install three-player-controller
 
 # 示例
 
-[glbScene](https://hh-hang.github.io/three-player-controller/glbScene.html)
-
-[3dtilesScene](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
+[glbScene](https://hh-hang.github.io/three-player-controller/index.html)
 
 ### 控制
 
