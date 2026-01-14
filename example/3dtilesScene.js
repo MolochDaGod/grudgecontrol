@@ -17,10 +17,10 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import { playerController } from "three-player-controller";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
+import { playerController } from "../src/playerController";
 
 let player = null;
 
@@ -72,13 +72,13 @@ function init() {
   light.shadow.bias = -0.0005;
   light.shadow.camera.near = 0;
   light.shadow.camera.far = 100;
-
   scene.add(light);
   scene.add(light.target);
-
+  // 环境光
   const ambient = new AmbientLight(0xffffff, 3.0);
   scene.add(ambient);
 
+  // 背景
   new HDRLoader().load(
     "./img/1.hdr",
     (texture) => {

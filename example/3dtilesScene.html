@@ -64,7 +64,6 @@
           0 2px 4px rgba(0, 0, 0, 0.25);
       }
 
-      /* 说明文本与小图标的间距 */
       .hint-text {
         color: #e6eef6;
         font-size: 13px;
@@ -131,6 +130,13 @@
           width: 24px;
         }
       }
+
+      @media (hover: none) and (pointer: coarse), (max-width: 768px) {
+        .hud,
+        .source {
+          display: none !important;
+        }
+      }
     </style>
   </head>
   <body>
@@ -163,7 +169,7 @@
     </div>
 
     <div class="model-credit">
-      3d tiles -
+      3dtiles加载器 -
       <a href="https://github.com/NASA-AMMOS/3DTilesRendererJS"
         >3DTilesRendererJS</a
       >

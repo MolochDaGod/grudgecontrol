@@ -131,6 +131,13 @@
           width: 24px;
         }
       }
+
+      @media (hover: none) and (pointer: coarse), (max-width: 768px) {
+        .hud,
+        .source {
+          display: none !important;
+        }
+      }
     </style>
   </head>
   <body>

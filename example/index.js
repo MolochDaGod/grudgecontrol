@@ -8,12 +8,12 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import { playerController } from "three-player-controller";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
+import { playerController } from "../src/playerController";
 
 const player = playerController();
 const scene = new Scene();
@@ -28,22 +28,25 @@ const modelUrl = "./glb/burnout_revenge_-_central_route_crash_junction.glb";
 
 const pos = new Vector3(21.88, 3, 10.98);
 
-function onWindowResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  camera.updateProjectionMatrix();
-  renderer.setPixelRatio(window.devicePixelRatio * 1);
+// 判断是否移动端
+function isMobileDevice() {
+  return (
+    (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+    "ontouchstart" in window ||
+    /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  );
 }
 
 init();
 
 async function init() {
+  // 渲染器
   renderer = new WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.6;
-  renderer.shadowMap.enabled = true;
-  renderer.setAnimationLoop(render);
+  renderer.shadowMap.enabled = !isMobileDevice();
+  renderer.setAnimationLoop(animate);
   document.body.appendChild(renderer.domElement);
 
   // 相机
@@ -57,6 +60,7 @@ async function init() {
   camera.position.copy(pos);
   camera.lookAt(pos.x, pos.y, pos.z + 1);
 
+  // 控制器
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.maxDistance = 2000;
@@ -65,6 +69,7 @@ async function init() {
   controls.maxPolarAngle = Math.PI / 2;
   controls.target.set(pos.x, pos.y, pos.z + 1);
 
+  // 平行光
   const color = 0xffffff;
   const intensity = 10;
   const light = new DirectionalLight(color, intensity);
@@ -80,13 +85,13 @@ async function init() {
   light.shadow.bias = -0.0005;
   light.shadow.camera.near = 0;
   light.shadow.camera.far = 100;
-
   scene.add(light);
   scene.add(light.target);
-
+  // 环境光
   const ambient = new AmbientLight(0xffffff, 3.0);
   scene.add(ambient);
 
+  // 背景
   new HDRLoader().load(
     "./img/1.hdr",
     (texture) => {
@@ -99,6 +104,7 @@ async function init() {
     }
   );
 
+  // 加载场景
   initGltfLoader();
   await initGLBScene(modelUrl);
 
@@ -128,7 +134,7 @@ async function init() {
 
   window.addEventListener("resize", onWindowResize, false);
 }
-// ===== GLTF 加载器配置 =====
+// GLTF加载器
 function initGltfLoader() {
   gltfLoader = new GLTFLoader();
 
@@ -146,7 +152,7 @@ function initGltfLoader() {
   gltfLoader.setKTX2Loader(ktx2Loader);
 }
 
-// ===== 加载 GLB 场景 =====
+// 加载GLB
 async function initGLBScene(url) {
   try {
     const gltf = await gltfLoader.loadAsync(url);
@@ -165,12 +171,18 @@ async function initGLBScene(url) {
   }
 }
 
-// ===== 渲染循环 =====
-function render() {
+function animate() {
   if (isUpdatePlayer) {
     if (player && typeof player.update === "function") player.update(); // 更新玩家
   } else {
     controls.update();
   }
   renderer.render(scene, camera);
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(window.devicePixelRatio * 1);
 }

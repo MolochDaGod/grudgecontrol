@@ -6,6 +6,9 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import flyIconModule from "../assets/imgs/fly.png";
+import jumpIconModule from "../assets/imgs/jump.png";
+import viewIconModule from "../assets/imgs/view.png";
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
@@ -37,6 +40,7 @@ type PlayerControllerOptions = {
   minCamDistance?: number;
   maxCamDistance?: number;
   colliderMeshUrl?: string;
+  isShowMobileControls?: boolean;
 };
 
 class PlayerController {
@@ -69,6 +73,7 @@ class PlayerController {
   mouseSensity!: number;
   originPlayerSpeed!: number;
   colliderMeshUrl!: string;
+  isShowMobileControls!: boolean;
 
   playerRadius: number = 45;
   playerHeight: number = 180;
@@ -79,18 +84,18 @@ class PlayerController {
   displayCollider: boolean = false;
   displayVisualizer: boolean = false;
 
-  //  场景对象
+  // 场景对象
   collider: THREE.Mesh | null = null;
   visualizer: MeshBVHHelper | null = null;
   player!: THREE.Mesh & { capsuleInfo?: any };
   person: THREE.Object3D | null = null;
 
-  //  状态开关
+  // 状态开关
   playerIsOnGround: boolean = false;
   isupdate: boolean = true;
   isFlying: boolean = false;
 
-  //  输入状态
+  // 输入状态
   fwdPressed: boolean = false;
   bkdPressed: boolean = false;
   lftPressed: boolean = false;
@@ -99,6 +104,21 @@ class PlayerController {
   ctPressed: boolean = false;
   shiftPressed: boolean = false;
 
+  // 移动端输入
+  prevJoyState = { dirX: 0, dirY: 0, shift: false };
+
+  // 移动控制相关
+  joystickManager: any = null;
+  joystickZoneEl: HTMLDivElement | null = null;
+  lookAreaEl: HTMLDivElement | null = null;
+  jumpBtnEl: HTMLButtonElement | null = null;
+  flyBtnEl: HTMLButtonElement | null = null;
+  viewBtnEl: HTMLButtonElement | null = null;
+  lookPointerId: number | null = null;
+  isLookDown = false;
+  lastTouchX = 0;
+  lastTouchY = 0;
+
   // 第三人称
   _camCollisionLerp: number = 0.18; // 平滑系数
   _camEpsilon: number = 0.35; // 摄像机与障碍物之间的安全距离（米）
@@ -106,7 +126,7 @@ class PlayerController {
   _maxCamDistance: number = 4.4; // 摄像机最大距离
   orginMaxCamDistance: number = 4.4;
 
-  //  物理/运动
+  // 物理/运动
   playerVelocity = new THREE.Vector3(); // 玩家速度向量
   readonly upVector = new THREE.Vector3(0, 1, 0);
 
@@ -117,7 +137,7 @@ class PlayerController {
   readonly tempMat = new THREE.Matrix4();
   readonly tempSegment = new THREE.Line3();
 
-  //  动画相关
+  // 动画相关
   personMixer?: THREE.AnimationMixer;
   personActions?: Map<string, THREE.AnimationAction>;
   idleAction!: THREE.AnimationAction;
@@ -131,6 +151,8 @@ class PlayerController {
   flyAction!: THREE.AnimationAction;
   controlDroneAction!: THREE.AnimationAction;
   actionState!: THREE.AnimationAction;
+  // 检测动画定时
+  recheckAnimTimer: NodeJS.Timeout | null = null;
 
   //  复用向量：用于相机朝向 / 移动
   readonly camDir = new THREE.Vector3();
@@ -195,6 +217,19 @@ class PlayerController {
       : 440 * s;
     this.orginMaxCamDistance = this._maxCamDistance;
 
+    this.isShowMobileControls = opts.isShowMobileControls ?? true;
+    // 判断是否移动端
+    function isMobileDevice() {
+      return (
+        (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+        "ontouchstart" in window ||
+        /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      );
+    }
+    if (isMobileDevice() && this.isShowMobileControls) {
+      this.initMobileControls();
+    }
+
     // 创建bvh
     await this.createBVH(opts.colliderMeshUrl);
 
@@ -205,8 +240,8 @@ class PlayerController {
     await this.loadPersonGLB();
 
     // 等待资源加载完毕再设置摄像机
-    if (this.isFirstPerson && this.player) {
-      this.player.add(this.camera);
+    if (this.isFirstPerson && this.person) {
+      this.person.add(this.camera);
     }
     this.onAllEvent(); // 绑定事件
     this.setCameraPos();
@@ -311,18 +346,7 @@ class PlayerController {
       this.person.traverse((child: any) => {
         if (child.isMesh) {
           child.castShadow = true;
-
-          const mat = child.material;
-          if (!mat) return;
-
-          // 处理多材质的情况
-          const mats = Array.isArray(mat) ? mat : [mat];
-
-          mats.forEach((m) => {
-            // console.log("mat", m);
-            // m.envMap = this.scene.background;
-            // m.envMapIntensity = 1.0;
-          });
+          child.receiveShadow = true;
         }
       });
       this.player.add(this.person);
@@ -688,6 +712,7 @@ class PlayerController {
         .add(this.fwdPressed ? this.moveDir : this.camDir);
       this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
       this.targetQuat.setFromRotationMatrix(this.targetMat);
+
       const alpha = Math.min(1, this.rotationSpeed * delta);
       this.player.quaternion.slerp(this.targetQuat, alpha);
     }
@@ -818,6 +843,8 @@ class PlayerController {
       this.collider = null;
     }
 
+    this.destroyMobileControls();
+
     controllerInstance = null;
   }
 
@@ -876,6 +903,8 @@ class PlayerController {
       case "Space":
         this.spacePressed = true;
         if (!this.playerIsOnGround || this.isFlying) return;
+        const next = this.personActions?.get("jumping");
+        if (next && this.actionState === next) return;
         this.playPersonAnimationByName("jumping");
         this.playerVelocity.y = this.jumpHeight;
         this.playerIsOnGround = false;
@@ -889,6 +918,8 @@ class PlayerController {
       case "KeyF":
         this.isFlying = !this.isFlying;
         this.setAnimationByPressed();
+        if (!this.isFlying && !this.playerIsOnGround)
+          this.playPersonAnimationByName("jumping");
         break;
     }
   };
@@ -934,7 +965,6 @@ class PlayerController {
         return;
       }
       this.playPersonAnimationByName("flying");
-      // this._maxCamDistance = 700 * this.playerModel.scale;
       this._maxCamDistance = this.orginMaxCamDistance * 2;
       return;
     }
@@ -982,53 +1012,24 @@ class PlayerController {
         this.playPersonAnimationByName("walking_backward");
         return;
       }
-    } else {
-      this.playPersonAnimationByName("jumping");
     }
+
+    // 销毁旧的定时器
+    if (this.recheckAnimTimer !== null) {
+      clearTimeout(this.recheckAnimTimer);
+    }
+    // 200ms后检测动画
+    this.recheckAnimTimer = setTimeout(() => {
+      this.setAnimationByPressed();
+      this.recheckAnimTimer = null;
+    }, 200);
   };
 
   // 鼠标移动事件
   private _mouseMove = (e: MouseEvent) => {
     // 记录状态
     if (document.pointerLockElement !== document.body) return;
-    if (this.isFirstPerson) {
-      const yaw = -e.movementX * 0.0001 * this.mouseSensity;
-      const pitch = -e.movementY * 0.0001 * this.mouseSensity;
-      this.player.rotateY(yaw);
-      this.camera.rotation.x = THREE.MathUtils.clamp(
-        this.camera.rotation.x + pitch,
-        -1.3,
-        1.4
-      );
-    } else {
-      const sensitivity = 0.0001 * this.mouseSensity;
-      const deltaX = -e.movementX * sensitivity;
-      const deltaY = -e.movementY * sensitivity;
-      // 获取目标点
-      const target = this.player.position.clone();
-      // 计算相机到目标的距离
-      const distance = this.camera.position.distanceTo(target);
-      // 计算当前角度
-      const currentPosition = this.camera.position.clone().sub(target);
-      let theta = Math.atan2(currentPosition.x, currentPosition.z);
-      let phi = Math.acos(currentPosition.y / distance);
-      // 应用旋转
-      theta += deltaX;
-      phi += deltaY;
-      // 限制phi角度
-      phi = Math.max(0.1, Math.min(Math.PI - 0.1, phi));
-      // 计算新的相机位置
-      const newX = distance * Math.sin(phi) * Math.sin(theta);
-      const newY = distance * Math.cos(phi);
-      const newZ = distance * Math.sin(phi) * Math.cos(theta);
-
-      this.camera.position.set(
-        target.x + newX,
-        target.y + newY,
-        target.z + newZ
-      );
-      this.camera.lookAt(target);
-    }
+    this.setToward(e.movementX, e.movementY, 0.0001);
   };
 
   private _mouseClick = (e: MouseEvent) => {
@@ -1173,6 +1174,420 @@ class PlayerController {
     this.boundingBoxMinY = (this.collider as any).geometry.boundingBox.min.y;
     // console.log("bvh加载模型成功", this.collider);
   }
+
+  // 设置朝向
+  setToward(dx: number, dy: number, speed: number) {
+    if (this.isFirstPerson) {
+      const yaw = -dx * speed * this.mouseSensity;
+      const pitch = -dy * speed * this.mouseSensity;
+      this.player.rotateY(yaw);
+      this.camera.rotation.x = THREE.MathUtils.clamp(
+        this.camera.rotation.x + pitch,
+        -1.1,
+        1.4
+      );
+    } else {
+      const sensitivity = this.mouseSensity;
+      const deltaX = -dx * speed * sensitivity;
+      const deltaY = -dy * speed * sensitivity;
+      // 获取目标点
+      const target = this.player.position.clone();
+      // 计算相机到目标的距离
+      const distance = this.camera.position.distanceTo(target);
+      // 计算当前角度
+      const currentPosition = this.camera.position.clone().sub(target);
+      let theta = Math.atan2(currentPosition.x, currentPosition.z);
+      let phi = Math.acos(currentPosition.y / distance);
+      // 应用旋转
+      theta += deltaX;
+      phi += deltaY;
+      // 限制phi角度
+      phi = Math.max(0.1, Math.min(Math.PI - 0.1, phi));
+      // 计算新的相机位置
+      const newX = distance * Math.sin(phi) * Math.sin(theta);
+      const newY = distance * Math.cos(phi);
+      const newZ = distance * Math.sin(phi) * Math.cos(theta);
+      this.camera.position.set(
+        target.x + newX,
+        target.y + newY,
+        target.z + newZ
+      );
+      this.camera.lookAt(target);
+    }
+  }
+
+  // 设置输入
+  setInput(
+    input: Partial<{
+      moveX: 1 | 0 | -1; // 摇杆移动X轴
+      moveY: 1 | 0 | -1; // 摇杆移动Y轴
+      lookDeltaX: number;
+      lookDeltaY: number;
+      jump: boolean; // 跳跃
+      shift: boolean; // 加速
+      toggleView: boolean; // 切换视角
+      toggleFly: boolean; // 切换飞行
+    }>
+  ) {
+    // 控制人物移动
+    if (typeof input.moveX === "number") {
+      this.lftPressed = input.moveX == -1;
+      this.rgtPressed = input.moveX == 1;
+      this.setAnimationByPressed();
+    }
+    if (typeof input.moveY === "number") {
+      this.fwdPressed = input.moveY == 1;
+      this.bkdPressed = input.moveY == -1;
+      this.setAnimationByPressed();
+    }
+
+    // 控制朝向
+    if (
+      typeof input.lookDeltaX === "number" &&
+      typeof input.lookDeltaY === "number"
+    ) {
+      this.setToward(input.lookDeltaX, input.lookDeltaY, 0.002);
+    }
+
+    // 跳跃
+    if (typeof input.jump === "boolean") {
+      if (input.jump) {
+        this.spacePressed = true;
+        if (!this.playerIsOnGround || this.isFlying) return;
+        this.playPersonAnimationByName("jumping");
+        this.playerVelocity.y = this.jumpHeight;
+        this.playerIsOnGround = false;
+      } else {
+        this.spacePressed = false;
+      }
+    }
+
+    // 加速
+    if (typeof input.shift === "boolean") {
+      this.shiftPressed = input.shift;
+    }
+
+    // 切换视角
+    if (input.toggleView) {
+      this.changeView();
+    }
+
+    // 切换飞行
+    if (input.toggleFly) {
+      this.isFlying = !this.isFlying;
+      this.setAnimationByPressed();
+      if (!this.isFlying && !this.playerIsOnGround)
+        this.playPersonAnimationByName("jumping");
+    }
+  }
+
+  onPointerDown = (e: PointerEvent) => {
+    // 仅响应触控
+    if (e.pointerType !== "touch") return;
+    this.isLookDown = true;
+    this.lookPointerId = e.pointerId;
+    this.lastTouchX = e.clientX;
+    this.lastTouchY = e.clientY;
+
+    this.lookAreaEl?.setPointerCapture &&
+      this.lookAreaEl.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
+
+  onPointerMove = (e: PointerEvent) => {
+    if (!this.isLookDown || e.pointerId !== this.lookPointerId) return;
+    const dx = e.clientX - this.lastTouchX;
+    const dy = e.clientY - this.lastTouchY;
+    this.lastTouchX = e.clientX;
+    this.lastTouchY = e.clientY;
+
+    this.setInput({
+      lookDeltaX: dx,
+      lookDeltaY: dy,
+    });
+    e.preventDefault();
+  };
+
+  onPointerUp = (e: PointerEvent) => {
+    if (e.pointerId !== this.lookPointerId) return;
+    this.isLookDown = false;
+    this.lookPointerId = null;
+    this.lookAreaEl?.releasePointerCapture &&
+      this.lookAreaEl.releasePointerCapture(e.pointerId);
+  };
+
+  // 初始化移动端摇杆控制
+  async initMobileControls() {
+    this.controls.maxPolarAngle = Math.PI * (300 / 360);
+    this.controls.touches = { ONE: null as any, TWO: null as any }; // 防止触摸触发
+    const mod: any = (await import("nipplejs")).default;
+    const nipple = mod;
+    const JOY_SIZE = 120; // 摇杆直径（px）
+
+    // 容器
+    const container = document.body;
+
+    // 摇杆容器
+    this.joystickZoneEl = document.createElement("div");
+    this.joystickZoneEl.id = "joy-zone";
+    Object.assign(this.joystickZoneEl.style, {
+      position: "absolute",
+      left: "16px",
+      bottom: "16px",
+      width: `${JOY_SIZE + 40}px`,
+      height: `${JOY_SIZE + 40}px`,
+      touchAction: "none",
+      zIndex: "999",
+      pointerEvents: "auto",
+      WebkitUserSelect: "none",
+      userSelect: "none",
+    });
+    container.appendChild(this.joystickZoneEl);
+
+    // 阻止touch的默认行为
+    ["touchstart", "touchmove", "touchend", "touchcancel"].forEach(
+      (evtName) => {
+        this.joystickZoneEl?.addEventListener(
+          evtName,
+          (e) => {
+            e.preventDefault();
+          },
+          { passive: false }
+        );
+      }
+    );
+
+    // 创建动态摇杆
+    this.joystickManager = nipple.create({
+      zone: this.joystickZoneEl,
+      mode: "static",
+      position: {
+        left: `${(JOY_SIZE + 40) / 2}px`,
+        bottom: `${(JOY_SIZE + 40) / 2}px`,
+      },
+      color: "#ffffff",
+      size: JOY_SIZE,
+      multitouch: true,
+      maxNumberOfNipples: 1,
+    });
+
+    this.joystickManager.on("move", (_evt: any, data: any) => {
+      if (!data) return;
+
+      const rawX = data.vector?.x ?? 0;
+      const rawY = data.vector?.y ?? 0;
+      const distance = data.distance ?? 0;
+
+      const deadzone = 0.5;
+
+      // 归一化
+      const dirX = rawX > deadzone ? 1 : rawX < -deadzone ? -1 : 0;
+      const dirY = rawY > deadzone ? 1 : rawY < -deadzone ? -1 : 0;
+
+      // 加速判断
+      const sprintThreshold = JOY_SIZE / 2;
+      const isSprinting = distance >= sprintThreshold;
+
+      // 无变化，不触发
+      const prev = this.prevJoyState || { dirX: 0, dirY: 0, shift: false };
+      if (
+        dirX === prev.dirX &&
+        dirY === prev.dirY &&
+        isSprinting === prev.shift
+      ) {
+        return;
+      }
+
+      // 保存当前状态
+      this.prevJoyState = { dirX, dirY, shift: isSprinting };
+
+      // 调用 setInput
+      this.setInput({ moveX: dirX, moveY: dirY, shift: isSprinting });
+    });
+
+    this.joystickManager.on("end", () => {
+      const prev = this.prevJoyState || { dirX: 0, dirY: 0, shift: false };
+      if (prev.dirX !== 0 || prev.dirY !== 0 || prev.shift !== false) {
+        this.prevJoyState = { dirX: 0, dirY: 0, shift: false };
+        this.setInput({ moveX: 0, moveY: 0, shift: false });
+      }
+    });
+
+    // 右侧区域
+    this.lookAreaEl = document.createElement("div");
+    Object.assign(this.lookAreaEl.style, {
+      position: "absolute",
+      right: "0",
+      bottom: "0",
+      width: "50%",
+      height: "100%",
+      zIndex: "998",
+      touchAction: "none",
+      WebkitUserSelect: "none",
+      userSelect: "none",
+    });
+    container.appendChild(this.lookAreaEl);
+
+    // 阻止touch的默认行为
+    ["touchstart", "touchmove", "touchend", "touchcancel"].forEach(
+      (evtName) => {
+        this.lookAreaEl?.addEventListener(
+          evtName,
+          (e) => {
+            e.preventDefault();
+          },
+          { passive: false }
+        );
+      }
+    );
+
+    // 监听
+    this.lookAreaEl.addEventListener("pointerdown", this.onPointerDown, {
+      passive: false,
+    });
+    this.lookAreaEl.addEventListener("pointermove", this.onPointerMove, {
+      passive: false,
+    });
+    this.lookAreaEl.addEventListener("pointerup", this.onPointerUp, {
+      passive: false,
+    });
+    this.lookAreaEl.addEventListener("pointercancel", this.onPointerUp, {
+      passive: false,
+    });
+
+    const createBtn = (rightPx: number, bottomPx: number, bgUrl?: string) => {
+      const btn = document.createElement("button");
+      const styles: Partial<CSSStyleDeclaration> = {
+        position: "absolute",
+        right: `${rightPx}px`,
+        bottom: `${bottomPx}px`,
+        width: "56px",
+        height: "56px",
+        zIndex: "1000",
+        borderRadius: "50%",
+        border: "2px solid black",
+        background: "rgba(0,0,0)",
+        padding: "20px",
+        opacity: "0.95",
+        touchAction: "none",
+        fontSize: "14px",
+        userSelect: "none",
+        overflow: "hidden",
+        boxSizing: "border-box",
+
+        backgroundColor: "transparent",
+        backgroundRepeat: "no-repeat, no-repeat",
+        backgroundPosition: "center center, center center",
+        backgroundSize: "100% 100%, 80% 80%",
+      };
+
+      if (bgUrl) {
+        const overlayColor = "rgba(0,0,0,0.5)";
+        styles.backgroundImage = `linear-gradient(${overlayColor}, ${overlayColor}), url("${bgUrl}")`;
+      }
+
+      Object.assign(btn.style, styles);
+      container.appendChild(btn);
+      ["touchstart", "touchend", "touchcancel"].forEach((evtName) => {
+        btn.addEventListener(
+          evtName,
+          (e) => {
+            e.preventDefault();
+          },
+          { passive: false }
+        );
+      });
+
+      return btn;
+    };
+
+    // 跳跃
+    this.jumpBtnEl = createBtn(14, 14, jumpIconModule);
+    this.jumpBtnEl.addEventListener(
+      "touchstart",
+      (e) => {
+        e.preventDefault();
+        this.setInput({ jump: true });
+      },
+      { passive: false }
+    );
+    this.jumpBtnEl.addEventListener(
+      "touchend",
+      (e) => {
+        e.preventDefault();
+        this.setInput({ jump: false });
+      },
+      { passive: false }
+    );
+    this.jumpBtnEl.addEventListener(
+      "touchcancel",
+      (e) => {
+        e.preventDefault();
+        this.setInput({ jump: false });
+      },
+      { passive: false }
+    );
+
+    // 切换飞行
+    this.flyBtnEl = createBtn(14, 14 + 80, flyIconModule);
+    this.flyBtnEl.addEventListener(
+      "touchstart",
+      (e) => {
+        e.preventDefault();
+        this.setInput({ toggleFly: true });
+      },
+      { passive: false }
+    );
+
+    // 切换视角
+    this.viewBtnEl = createBtn(14, 14 + 200, viewIconModule);
+    this.viewBtnEl.addEventListener(
+      "touchstart",
+      (e) => {
+        e.preventDefault();
+        this.setInput({ toggleView: true });
+      },
+      { passive: false }
+    );
+  }
+
+  // 销毁移动端摇杆控制
+  destroyMobileControls() {
+    try {
+      if (this.joystickManager && this.joystickManager.destroy) {
+        this.joystickManager.destroy();
+        this.joystickManager = null;
+      }
+      if (this.joystickZoneEl?.parentElement) {
+        this.joystickZoneEl.parentElement.removeChild(this.joystickZoneEl);
+        this.joystickZoneEl = null;
+      }
+      if (this.lookAreaEl?.parentElement) {
+        this.lookAreaEl.parentElement.removeChild(this.lookAreaEl);
+        this.lookAreaEl = null;
+      }
+      if (this.jumpBtnEl?.parentElement) {
+        this.jumpBtnEl.parentElement.removeChild(this.jumpBtnEl);
+        this.jumpBtnEl = null;
+      }
+      if (this.flyBtnEl?.parentElement) {
+        this.flyBtnEl.parentElement.removeChild(this.flyBtnEl);
+        this.flyBtnEl = null;
+      }
+      if (this.viewBtnEl?.parentElement) {
+        this.viewBtnEl.parentElement.removeChild(this.viewBtnEl);
+        this.viewBtnEl = null;
+      }
+
+      // 监听
+      this.lookAreaEl?.removeEventListener("pointerdown", this.onPointerDown);
+      this.lookAreaEl?.removeEventListener("pointermove", this.onPointerMove);
+      this.lookAreaEl?.removeEventListener("pointerup", this.onPointerUp);
+      this.lookAreaEl?.removeEventListener("pointercancel", this.onPointerUp);
+    } catch (e) {
+      console.warn("销毁移动端摇杆控制时出错：", e);
+    }
+  }
 }
 
 // 导出API
@@ -1186,6 +1601,7 @@ export function playerController() {
     reset: (pos?: THREE.Vector3) => c.reset(pos),
     update: (dt?: number) => c.update(dt),
     destroy: () => c.destroy(),
+    setInput: (i: any) => c.setInput(i),
   };
 }
 
