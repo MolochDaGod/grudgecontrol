@@ -15,17 +15,17 @@ npm install three-player-controller
 [glb 场景](https://hh-hang.github.io/three-player-controller/index.html)
 [3dtiles 场景](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
 
-### 控制
+### 普通控制
 
-![控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/1.gif)
+![普通控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/1.gif)
 
-### 飞行
+### 飞行控制
 
-![飞行](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/3.gif)
+![飞行控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/4.gif)
 
-### 3DTiles 漫游
+### 移动端控制演示
 
-![3DTiles 漫游](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/4.gif)
+![移动端控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/5.gif)
 
 # 使用
 
