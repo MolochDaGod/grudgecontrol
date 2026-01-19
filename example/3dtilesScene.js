@@ -35,21 +35,23 @@ init();
 function init() {
   scene = new Scene();
 
+  const cont = document.querySelector("#container");
+
   // 渲染器
   renderer = new WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(cont.clientWidth, cont.clientHeight);
   renderer.shadowMap.enabled = true;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.6;
   renderer.setAnimationLoop(animate);
-  document.body.appendChild(renderer.domElement);
+  cont.appendChild(renderer.domElement);
 
   // 相机
   camera = new PerspectiveCamera(
     70,
-    window.innerWidth / window.innerHeight,
+    cont.clientWidth / cont.clientHeight,
     0.01,
-    10000
+    10000,
   );
   camera.position.set(1e3, 1e3, 1e3).multiplyScalar(0.5);
 
@@ -88,7 +90,7 @@ function init() {
     undefined,
     (err) => {
       console.warn("HDR 加载失败：", err);
-    }
+    },
   );
 
   // 3DTiles
@@ -135,22 +137,22 @@ function reinstantiateTiles() {
       apiToken: apiToken,
       assetId: "2275207",
       autoRefreshToken: true,
-    })
+    }),
   );
   tiles.registerPlugin(new TileCompressionPlugin());
   tiles.registerPlugin(new TilesFadePlugin());
   tiles.registerPlugin(
     new GLTFExtensionsPlugin({
       dracoLoader: new DRACOLoader().setDecoderPath(
-        "https://unpkg.com/three@0.153.0/examples/jsm/libs/draco/gltf/"
+        "https://unpkg.com/three@0.153.0/examples/jsm/libs/draco/gltf/",
       ),
-    })
+    }),
   );
   tiles.registerPlugin(
     new ReorientationPlugin({
       lat: 48.8584 * MathUtils.DEG2RAD,
       lon: 2.2945 * MathUtils.DEG2RAD,
-    })
+    }),
   );
 
   scene.add(tiles.group);

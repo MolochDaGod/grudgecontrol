@@ -1,15 +1,18 @@
+[English](README_En.md)
+
 # three-player-controller
 
-轻量的第三人称 / 第一人称玩家控制器，开箱即用，基于 three.js 和 three-mesh-bvh 实现人物胶囊体碰撞、BVH 碰撞检测、人物动画、第一/三人称切换与相机避障。此仓库包含库源码、example 演示。
+轻量的第三人称 / 第一人称玩家控制器，开箱即用，基于 three.js 和 three-mesh-bvh 实现人物胶囊体碰撞、BVH 碰撞检测、人物动画、第一/三人称切换与相机避障。
 
 # 安装
 
+```bash
 npm install three-player-controller
+```
 
 # 示例
 
 [glb 场景](https://hh-hang.github.io/three-player-controller/index.html)
-
 [3dtiles 场景](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
 
 ### 控制
@@ -72,12 +75,12 @@ export function playerController(): {
 
 - `init(opts, callback?)`  
   初始化控制器。`callback` 在资源加载完成后调用。
-- `update(dt?)`  
-  每帧调用。
 - `changeView()`  
   在第一/第三人称间切换。
 - `reset(pos?)`  
   复位玩家到指定位置。
+- `update(dt?)`  
+  每帧调用。
 - `destroy()`  
   销毁控制器。
 
@@ -96,7 +99,8 @@ export function offAllEvent(): void; // 关闭所有输入事件
 
 - `onAllEvent()`：确保控制器存在并打开输入监听。
 - `offAllEvent()`：关闭输入监听（用于显示 UI 或暂停时禁止玩家输入）。
-- 默认处理包括：WASD 移动、奔跑、跳跃、鼠标视角等。
+
+  默认处理包括：WASD 移动、奔跑、跳跃、鼠标视角等。
 
 ---
 
@@ -135,21 +139,23 @@ type PlayerControllerOptions = {
 
 ### 关键字段说明
 
-| 字段                                                         |                      类型 | 默认 / 说明                                    |
-| ------------------------------------------------------------ | ------------------------: | ---------------------------------------------- |
-| `scene`                                                      |             `THREE.Scene` | three.js 场景（必填）                          |
-| `camera`                                                     | `THREE.PerspectiveCamera` | three.js 相机（必填）                          |
-| `controls`                                                   |           `OrbitControls` | 外部相机控制器（必填）                         |
-| `playerModel.url`                                            |                  `string` | 人物模型路径（GLB/GLTF，必填）                 |
-| `playerModel.scale`                                          |                  `number` | 人物模型缩放（必填）                           |
-| `playerModel.idleAnim` / `walkAnim` / `runAnim` / `jumpAnim` |                  `string` | 人物动画名，需与人物模型中动画名称一致（必填） |
-| `playerModel.speed`                                          |                  `number` | 基准速度，默认约 `4.0`                         |
-| `playerModel.gravity`                                        |                  `number` | 重力加速度，默认 `9.8`                         |
-| `playerModel.jumpHeight`                                     |                  `number` | 跳跃高度                                       |
-| `initPos`                                                    |           `THREE.Vector3` | 初始位置，默认 `(0,0,0)`                       |
-| `mouseSensity`                                               |                  `number` | 鼠标灵敏度                                     |
-| `minCamDistance` / `maxCamDistance`                          |                  `number` | 第三人称相机距离限制                           |
-| `colliderMeshUrl`                                            |                 `string?` | 自制碰撞体模型路径                             |
+| 字段                                                         |                      类型 | 默认 / 说明                                                                                                                                            |
+| ------------------------------------------------------------ | ------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `scene`                                                      |             `THREE.Scene` | three.js 场景（必填）                                                                                                                                  |
+| `camera`                                                     | `THREE.PerspectiveCamera` | three.js 相机（必填）                                                                                                                                  |
+| `controls`                                                   |           `OrbitControls` | 外部相机控制器（必填）                                                                                                                                 |
+| `playerModel.url`                                            |                  `string` | 人物模型路径（GLB/GLTF，必填）                                                                                                                         |
+| `playerModel.scale`                                          |                  `number` | 人物模型缩放（必填）                                                                                                                                   |
+| `playerModel.idleAnim` / `walkAnim` / `runAnim` / `jumpAnim` |                  `string` | 人物动画名，需与人物模型中动画名称一致（必填）                                                                                                         |
+| `playerModel.speed`                                          |                  `number` | 基准速度，默认`400`                                                                                                                                    |
+| `playerModel.gravity`                                        |                  `number` | 重力加速度，默认`-2400`                                                                                                                                |
+| `playerModel.jumpHeight`                                     |                  `number` | 跳跃高度，默认`800`                                                                                                                                    |
+| `initPos`                                                    |           `THREE.Vector3` | 初始位置，默认`(0,0,0)`                                                                                                                                |
+| `mouseSensity`                                               |                  `number` | 鼠标灵敏度，默认`5`                                                                                                                                    |
+| `minCamDistance` / `maxCamDistance`                          |                  `number` | 第三人称相机距离限制，默认分别为`100`、`440`                                                                                                           |
+| `colliderMeshUrl`                                            |                  `string` | 自制碰撞体模型路径，默认`""`                                                                                                                           |
+| `isShowMobileControls`                                       |                 `boolean` | 移动端运行时，是否自动显示移动端控制器，默认`true`                                                                                                     |
+| `thirdMouseMode`                                             |            `[0, 1, 2, 3]` | 第三人称视角下的不同鼠标控制模式 ，默认`1`(0: 隐藏鼠标控制朝向及视角，1: 隐藏鼠标仅控制视角，2: 显示鼠标拖拽控制朝向及视角, 3: 显示鼠标拖拽仅控制视角) |
 
 ---
 

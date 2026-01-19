@@ -23,7 +23,6 @@ let renderer;
 let controls;
 let gltfLoader;
 
-let isUpdatePlayer = false; // 是否更新玩家位置
 const modelUrl = "./glb/burnout_revenge_-_central_route_crash_junction.glb";
 
 const pos = new Vector3(21.88, 3, 10.98);
@@ -40,21 +39,22 @@ function isMobileDevice() {
 init();
 
 async function init() {
+  const cont = document.querySelector("#container");
   // 渲染器
   renderer = new WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(cont.clientWidth, cont.clientHeight);
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.6;
   renderer.shadowMap.enabled = !isMobileDevice();
   renderer.setAnimationLoop(animate);
-  document.body.appendChild(renderer.domElement);
+  cont.appendChild(renderer.domElement);
 
   // 相机
   camera = new PerspectiveCamera(
     70,
-    window.innerWidth / window.innerHeight,
+    cont.clientWidth / cont.clientHeight,
     0.01,
-    1000
+    1000,
   );
   camera.rotation.order = "YXZ";
   camera.position.copy(pos);
@@ -101,7 +101,7 @@ async function init() {
     undefined,
     (err) => {
       console.warn("HDR 加载失败：", err);
-    }
+    },
   );
 
   // 加载场景
@@ -110,7 +110,6 @@ async function init() {
 
   // 首次渲染
   renderer.render(scene, camera);
-  isUpdatePlayer = true; // 启用玩家更新
 
   // 初始化玩家控制器
   player.init({
@@ -140,13 +139,13 @@ function initGltfLoader() {
 
   const dracoLoader = new DRACOLoader();
   dracoLoader.setDecoderPath(
-    "https://unpkg.com/three@0.180.0/examples/jsm/libs/draco/"
+    "https://unpkg.com/three@0.180.0/examples/jsm/libs/draco/",
   );
   gltfLoader.setDRACOLoader(dracoLoader);
 
   const ktx2Loader = new KTX2Loader();
   ktx2Loader.setTranscoderPath(
-    "https://unpkg.com/three@0.180.0/examples/jsm/libs/basis/"
+    "https://unpkg.com/three@0.180.0/examples/jsm/libs/basis/",
   );
   ktx2Loader.detectSupport(renderer);
   gltfLoader.setKTX2Loader(ktx2Loader);
@@ -172,8 +171,8 @@ async function initGLBScene(url) {
 }
 
 function animate() {
-  if (isUpdatePlayer) {
-    if (player && typeof player.update === "function") player.update(); // 更新玩家
+  if (player) {
+    player.update(); // 更新玩家
   } else {
     controls.update();
   }

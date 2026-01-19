@@ -36,11 +36,13 @@ type PlayerControllerOptions = {
     speed?: number;
   };
   initPos?: THREE.Vector3;
+  intDirection?: THREE.Vector3;
   mouseSensity?: number;
   minCamDistance?: number;
   maxCamDistance?: number;
   colliderMeshUrl?: string;
   isShowMobileControls?: boolean;
+  thirdMouseMode?: 0 | 1 | 2 | 3;
 };
 
 class PlayerController {
@@ -49,7 +51,6 @@ class PlayerController {
   scene!: THREE.Scene;
   camera!: THREE.PerspectiveCamera;
   controls!: OrbitControls;
-  initPos!: THREE.Vector3;
   playerModel!: {
     url: string;
     idleAnim: string;
@@ -66,6 +67,8 @@ class PlayerController {
     jumpHeight?: number;
     speed?: number;
   };
+  initPos!: THREE.Vector3;
+  intDirection!: THREE.Vector3;
   visualizeDepth!: number;
   gravity!: number;
   jumpHeight!: number;
@@ -74,6 +77,7 @@ class PlayerController {
   originPlayerSpeed!: number;
   colliderMeshUrl!: string;
   isShowMobileControls!: boolean;
+  thirdMouseMode!: 0 | 1 | 2 | 3; // 0: 隐藏鼠标控制朝向及视角，1: 隐藏鼠标仅控制视角，2: 显示鼠标拖拽控制朝向及视角, 3: 显示鼠标拖拽仅控制视角
 
   playerRadius: number = 45;
   playerHeight: number = 180;
@@ -106,6 +110,7 @@ class PlayerController {
 
   // 移动端输入
   prevJoyState = { dirX: 0, dirY: 0, shift: false };
+  nippleModule: any = null;
 
   // 移动控制相关
   joystickManager: any = null;
@@ -152,7 +157,7 @@ class PlayerController {
   controlDroneAction!: THREE.AnimationAction;
   actionState!: THREE.AnimationAction;
   // 检测动画定时
-  recheckAnimTimer: NodeJS.Timeout | null = null;
+  recheckAnimTimer: any | null = null;
 
   //  复用向量：用于相机朝向 / 移动
   readonly camDir = new THREE.Vector3();
@@ -171,11 +176,11 @@ class PlayerController {
   readonly _originTmp = new THREE.Vector3();
   readonly _raycaster = new THREE.Raycaster(
     new THREE.Vector3(),
-    new THREE.Vector3(0, -1, 0)
+    new THREE.Vector3(0, -1, 0),
   );
   readonly _raycasterPersonToCam = new THREE.Raycaster(
     new THREE.Vector3(),
-    new THREE.Vector3()
+    new THREE.Vector3(),
   );
 
   // 射线检测时只返回第一个碰撞
@@ -192,6 +197,9 @@ class PlayerController {
     this.controls = opts.controls;
     this.playerModel = opts.playerModel;
     this.initPos = opts.initPos ? opts.initPos : new THREE.Vector3(0, 0, 0);
+    this.intDirection = opts.intDirection
+      ? opts.intDirection
+      : new THREE.Vector3(0, 0, -1);
     this.mouseSensity = opts.mouseSensity ? opts.mouseSensity : 5;
 
     const s = this.playerModel.scale;
@@ -216,8 +224,8 @@ class PlayerController {
       ? opts.maxCamDistance * s
       : 440 * s;
     this.orginMaxCamDistance = this._maxCamDistance;
+    this.thirdMouseMode = opts.thirdMouseMode ?? 1;
 
-    this.isShowMobileControls = opts.isShowMobileControls ?? true;
     // 判断是否移动端
     function isMobileDevice() {
       return (
@@ -226,7 +234,10 @@ class PlayerController {
         /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
       );
     }
-    if (isMobileDevice() && this.isShowMobileControls) {
+
+    this.isShowMobileControls =
+      (opts.isShowMobileControls ?? true) && isMobileDevice();
+    if (this.isShowMobileControls) {
       this.initMobileControls();
     }
 
@@ -257,26 +268,35 @@ class PlayerController {
       this.camera.position.set(
         0,
         40 * this.playerModel.scale,
-        30 * this.playerModel.scale
+        30 * this.playerModel.scale,
       );
       this.camera.rotation.set(0, Math.PI, 0);
-      document.body.requestPointerLock(); // 锁定鼠标
+      this.setPointerLock(); // 锁定鼠标
     } else {
       this.scene.attach(this.camera);
       const worldPos = this.player.position.clone();
       const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(
-        this.player.quaternion
+        this.player.quaternion,
       );
       const angle = Math.atan2(dir.z, dir.x);
       const offset = new THREE.Vector3(
         Math.cos(angle) * 400 * this.playerModel.scale,
         200 * this.playerModel.scale,
-        Math.sin(angle) * 400 * this.playerModel.scale
+        Math.sin(angle) * 400 * this.playerModel.scale,
       );
       this.camera.position.copy(worldPos).add(offset);
       this.controls.target.copy(worldPos);
-      document.body.requestPointerLock(); // 锁定鼠标
+      this.setPointerLock(); // 锁定鼠标
     }
+  }
+
+  setPointerLock() {
+    if (
+      ((this.thirdMouseMode == 0 || this.thirdMouseMode == 1) &&
+        !this.isFirstPerson) ||
+      this.isFirstPerson
+    )
+      document.body.requestPointerLock(); // 锁定鼠标
   }
 
   // 摄像机/控制器设置
@@ -285,18 +305,18 @@ class PlayerController {
       this.camera.position.set(
         0,
         40 * this.playerModel.scale,
-        30 * this.playerModel.scale
+        30 * this.playerModel.scale,
       );
     } else {
       const worldPos = this.player.position.clone();
       const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(
-        this.player.quaternion
+        this.player.quaternion,
       );
       const angle = Math.atan2(dir.z, dir.x);
       const offset = new THREE.Vector3(
         Math.cos(angle) * 400 * this.playerModel.scale,
-        200 * this.playerModel.scale,
-        Math.sin(angle) * 400 * this.playerModel.scale
+        -100 * this.playerModel.scale,
+        Math.sin(angle) * 400 * this.playerModel.scale,
       );
       this.camera.position.copy(worldPos).add(offset);
     }
@@ -305,7 +325,13 @@ class PlayerController {
 
   // 设置控制器
   setControls() {
-    this.controls.enabled = false;
+    if (this.thirdMouseMode == 0 || this.thirdMouseMode == 1) {
+      this.controls.enabled = false;
+    } else {
+      this.controls.enabled = true;
+    }
+
+    this.controls.rotateSpeed = this.mouseSensity * 0.05;
     this.controls.maxPolarAngle = Math.PI * (300 / 360);
   }
 
@@ -328,7 +354,7 @@ class PlayerController {
   async initLoader() {
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath(
-      "https://unpkg.com/three@0.180.0/examples/jsm/libs/draco/gltf/"
+      "https://unpkg.com/three@0.180.0/examples/jsm/libs/draco/gltf/",
     );
     dracoLoader.setDecoderConfig({ type: "js" });
     this.loader.setDRACOLoader(dracoLoader);
@@ -488,7 +514,7 @@ class PlayerController {
     const h = this.playerHeight * this.playerModel.scale;
     this.player = new THREE.Mesh(
       new RoundedBoxGeometry(r * 2, h, r * 2, 1, 75),
-      material
+      material,
     ) as typeof this.player;
 
     this.player.geometry.translate(0, -h * 0.25, 0);
@@ -496,7 +522,7 @@ class PlayerController {
       radius: r,
       segment: new THREE.Line3(
         new THREE.Vector3(),
-        new THREE.Vector3(0, -h * 0.5, 0)
+        new THREE.Vector3(0, -h * 0.5, 0),
       ),
     };
 
@@ -516,7 +542,7 @@ class PlayerController {
 
     // 向量模长
     const normalMagnitude = Math.sqrt(
-      normal.x * normal.x + normal.y * normal.y + normal.z * normal.z
+      normal.x * normal.x + normal.y * normal.y + normal.z * normal.z,
     );
     const yAxisMagnitude = 1; // Y轴单位向量长度为1
 
@@ -567,7 +593,7 @@ class PlayerController {
     this.moveDir.normalize().applyAxisAngle(this.upVector, angle);
     this.player.position.addScaledVector(
       this.moveDir,
-      this.playerSpeed * delta
+      this.playerSpeed * delta,
     );
 
     // 向下射线检测地面高度
@@ -575,12 +601,12 @@ class PlayerController {
     this._originTmp.set(
       this.player.position.x,
       this.player.position.y,
-      this.player.position.z
+      this.player.position.z,
     );
     this._raycaster.ray.origin.copy(this._originTmp);
     const intersects = this._raycaster.intersectObject(
       this.collider as THREE.Object3D,
-      false
+      false,
     );
     if (intersects.length > 0) {
       playerDistanceFromGround = this.player.position.y - intersects[0].point.y;
@@ -625,7 +651,7 @@ class PlayerController {
           this.player.position.set(
             this.player.position.x,
             intersects[0].point.y + h,
-            this.player.position.z
+            this.player.position.z,
           );
           this.playerIsOnGround = true;
         }
@@ -661,7 +687,7 @@ class PlayerController {
         const distance = tri.closestPointToSegment(
           this.tempSegment,
           triPoint,
-          capsulePoint
+          capsulePoint,
         );
         // 距离小于人物半径，发生碰撞
         if (distance < capsuleInfo.radius) {
@@ -679,7 +705,7 @@ class PlayerController {
       .applyMatrix4(this.collider!.matrixWorld);
     const deltaVector = this.tempVector2.subVectors(
       newPosition,
-      this.player.position
+      this.player.position,
     );
     // 应用位移
     const offset = Math.max(0, deltaVector.length() - 1e-5);
@@ -687,17 +713,34 @@ class PlayerController {
     this.player.position.add(deltaVector);
 
     // 第三人称-朝向
-    if (!this.isFirstPerson && this.moveDir.lengthSq() > 0 && !this.isFlying) {
+    if (!this.isFirstPerson && !this.isFlying) {
       this.camDir.y = 0;
       this.camDir.normalize();
       this.camDir.negate();
       this.moveDir.normalize();
       this.moveDir.negate();
-      const lookTarget = this.player.position.clone().add(this.moveDir);
-      this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
-      this.targetQuat.setFromRotationMatrix(this.targetMat);
-      const alpha = Math.min(1, this.rotationSpeed * delta);
-      this.player.quaternion.slerp(this.targetQuat, alpha);
+      let lookTarget: THREE.Vector3;
+      if (this.thirdMouseMode == 0 || this.thirdMouseMode == 2) {
+        if (this.moveDir.lengthSq() > 0) {
+          lookTarget = this.player.position.clone().add(this.moveDir);
+        } else {
+          lookTarget = this.player.position.clone().add(this.camDir);
+        }
+        this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
+        this.targetQuat.setFromRotationMatrix(this.targetMat);
+        const alpha = Math.min(1, this.rotationSpeed * delta);
+        this.player.quaternion.slerp(this.targetQuat, alpha);
+      }
+      if (
+        (this.thirdMouseMode == 1 || this.thirdMouseMode == 3) &&
+        this.moveDir.lengthSq() > 0
+      ) {
+        lookTarget = this.player.position.clone().add(this.moveDir);
+        this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
+        this.targetQuat.setFromRotationMatrix(this.targetMat);
+        const alpha = Math.min(1, this.rotationSpeed * delta);
+        this.player.quaternion.slerp(this.targetQuat, alpha);
+      }
     }
 
     // 飞行
@@ -712,7 +755,6 @@ class PlayerController {
         .add(this.fwdPressed ? this.moveDir : this.camDir);
       this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
       this.targetQuat.setFromRotationMatrix(this.targetMat);
-
       const alpha = Math.min(1, this.rotationSpeed * delta);
       this.player.quaternion.slerp(this.targetQuat, alpha);
     }
@@ -739,14 +781,14 @@ class PlayerController {
       // 做相交检测
       const intersects = this._raycasterPersonToCam.intersectObject(
         this.collider as THREE.Object3D,
-        false
+        false,
       );
       if (intersects.length > 0) {
         // 相机拉近
         const hit = intersects[0]; // 找到第一个命中
         const safeDist = Math.max(
           hit.distance - this._camEpsilon,
-          this._minCamDistance
+          this._minCamDistance,
         ); // 计算安全距离（hit.distance是从origin到碰撞点的距离）
         const targetCamPos = origin
           .clone()
@@ -759,7 +801,7 @@ class PlayerController {
         // 检查预设相机位置是否有遮挡
         const intersectsMaxDis = this._raycasterPersonToCam.intersectObject(
           this.collider as THREE.Object3D,
-          false
+          false,
         );
         // 恢复相机
         let safeDist = this._maxCamDistance;
@@ -780,12 +822,12 @@ class PlayerController {
       this._originTmp.set(
         this.player.position.x,
         10000,
-        this.player.position.z
+        this.player.position.z,
       );
       this._raycaster.ray.origin.copy(this._originTmp);
       const intersects = this._raycaster.intersectObject(
         this.collider as THREE.Object3D,
-        false
+        false,
       );
       if (intersects.length > 0) {
         // 出现碰撞 说明玩家为bug意外掉落
@@ -794,8 +836,8 @@ class PlayerController {
           new THREE.Vector3(
             this.player.position.x,
             intersects[0].point.y + 5,
-            this.player.position.z
-          )
+            this.player.position.z,
+          ),
         );
       } else {
         // 无碰撞 正常掉落
@@ -804,8 +846,8 @@ class PlayerController {
           new THREE.Vector3(
             this.player.position.x,
             this.player.position.y + 15,
-            this.player.position.z
-          )
+            this.player.position.z,
+          ),
         );
       }
     }
@@ -851,7 +893,8 @@ class PlayerController {
   // 事件绑定
   onAllEvent() {
     this.isupdate = true;
-    document.body.requestPointerLock();
+    this.setPointerLock();
+
     window.addEventListener("keydown", this._boundOnKeydown);
     window.addEventListener("keyup", this._boundOnKeyup);
     window.addEventListener("mousemove", this._mouseMove);
@@ -899,6 +942,11 @@ class PlayerController {
       case "ShiftLeft":
         this.shiftPressed = true;
         this.setAnimationByPressed();
+        this.controls.mouseButtons = {
+          LEFT: 2,
+          MIDDLE: 1,
+          RIGHT: 0,
+        };
         break;
       case "Space":
         this.spacePressed = true;
@@ -946,6 +994,11 @@ class PlayerController {
       case "ShiftLeft":
         this.shiftPressed = false;
         this.setAnimationByPressed();
+        this.controls.mouseButtons = {
+          LEFT: 0,
+          MIDDLE: 1,
+          RIGHT: 2,
+        };
         break;
       case "Space":
         this.spacePressed = false;
@@ -1033,8 +1086,7 @@ class PlayerController {
   };
 
   private _mouseClick = (e: MouseEvent) => {
-    if (document.pointerLockElement !== document.body)
-      document.body.requestPointerLock();
+    this.setPointerLock();
   };
 
   // 更新模型动画
@@ -1047,7 +1099,7 @@ class PlayerController {
     await this.initLoader(); // 初始化加载器
 
     const ensureAttributesMinimal = (
-      geom: THREE.BufferGeometry
+      geom: THREE.BufferGeometry,
     ): THREE.BufferGeometry | null => {
       if (!geom.attributes.position) {
         // console.warn("跳过无 position 的几何体", geom);
@@ -1127,7 +1179,7 @@ class PlayerController {
             const array = new meta.arrayCtor(len);
             g.setAttribute(
               name,
-              new THREE.BufferAttribute(array, meta.itemSize)
+              new THREE.BufferAttribute(array, meta.itemSize),
             );
           }
         }
@@ -1162,7 +1214,7 @@ class PlayerController {
         opacity: 0.5,
         transparent: true,
         wireframe: true,
-      })
+      }),
     );
 
     if (this.displayCollider) this.scene.add(this.collider);
@@ -1184,7 +1236,7 @@ class PlayerController {
       this.camera.rotation.x = THREE.MathUtils.clamp(
         this.camera.rotation.x + pitch,
         -1.1,
-        1.4
+        1.4,
       );
     } else {
       const sensitivity = this.mouseSensity;
@@ -1210,7 +1262,7 @@ class PlayerController {
       this.camera.position.set(
         target.x + newX,
         target.y + newY,
-        target.z + newZ
+        target.z + newZ,
       );
       this.camera.lookAt(target);
     }
@@ -1227,7 +1279,7 @@ class PlayerController {
       shift: boolean; // 加速
       toggleView: boolean; // 切换视角
       toggleFly: boolean; // 切换飞行
-    }>
+    }>,
   ) {
     // 控制人物移动
     if (typeof input.moveX === "number") {
@@ -1320,8 +1372,8 @@ class PlayerController {
   async initMobileControls() {
     this.controls.maxPolarAngle = Math.PI * (300 / 360);
     this.controls.touches = { ONE: null as any, TWO: null as any }; // 防止触摸触发
-    const mod: any = (await import("nipplejs")).default;
-    const nipple = mod;
+    this.nippleModule = await import("nipplejs");
+    const nipple = this.nippleModule?.default;
     const JOY_SIZE = 120; // 摇杆直径（px）
 
     // 容器
@@ -1352,12 +1404,12 @@ class PlayerController {
           (e) => {
             e.preventDefault();
           },
-          { passive: false }
+          { passive: false },
         );
-      }
+      },
     );
 
-    // 创建动态摇杆
+    // 创建摇杆
     this.joystickManager = nipple.create({
       zone: this.joystickZoneEl,
       mode: "static",
@@ -1436,9 +1488,9 @@ class PlayerController {
           (e) => {
             e.preventDefault();
           },
-          { passive: false }
+          { passive: false },
         );
-      }
+      },
     );
 
     // 监听
@@ -1494,7 +1546,7 @@ class PlayerController {
           (e) => {
             e.preventDefault();
           },
-          { passive: false }
+          { passive: false },
         );
       });
 
@@ -1509,7 +1561,7 @@ class PlayerController {
         e.preventDefault();
         this.setInput({ jump: true });
       },
-      { passive: false }
+      { passive: false },
     );
     this.jumpBtnEl.addEventListener(
       "touchend",
@@ -1517,7 +1569,7 @@ class PlayerController {
         e.preventDefault();
         this.setInput({ jump: false });
       },
-      { passive: false }
+      { passive: false },
     );
     this.jumpBtnEl.addEventListener(
       "touchcancel",
@@ -1525,7 +1577,7 @@ class PlayerController {
         e.preventDefault();
         this.setInput({ jump: false });
       },
-      { passive: false }
+      { passive: false },
     );
 
     // 切换飞行
@@ -1536,7 +1588,7 @@ class PlayerController {
         e.preventDefault();
         this.setInput({ toggleFly: true });
       },
-      { passive: false }
+      { passive: false },
     );
 
     // 切换视角
@@ -1547,7 +1599,7 @@ class PlayerController {
         e.preventDefault();
         this.setInput({ toggleView: true });
       },
-      { passive: false }
+      { passive: false },
     );
   }
 
