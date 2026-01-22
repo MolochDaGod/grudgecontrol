@@ -12,8 +12,11 @@ npm install three-player-controller
 
 ## Demo
 
-- GLB scene: [https://hh-hang.github.io/three-player-controller/index.html](https://hh-hang.github.io/three-player-controller/index.html)
-- 3DTiles scene: [https://hh-hang.github.io/three-player-controller/3dtilesScene.html](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
+- GLB Scene: [https://hh-hang.github.io/three-player-controller/index.html](https://hh-hang.github.io/three-player-controller/index.html)
+
+- 3DTiles Scene: [https://hh-hang.github.io/three-player-controller/3dtilesScene.html](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
+
+- 3DTiles Customize: [https://hh-hang.github.io/three-player-controller/3dtilesScene.html](https://hh-hang.github.io/three-player-controller/3dtilesCustomize.html)
 
 ## Controls
 
@@ -37,18 +40,18 @@ const player = playerController();
 
 // Initialize the player controller
 player.init({
-  scene, // three.js Scene
-  camera, // three.js PerspectiveCamera
-  controls, // OrbitControls (or other external camera controller)
-  playerModel: {
-    url: "./glb/person.glb", // model URL (GLB/GLTF)
-    scale: 0.001, // model scale
-    idleAnim: "Idle_2", // default idle animation name
-    walkAnim: "Walking_11", // default walk animation name
-    runAnim: "Running_9", // default run animation name
-    jumpAnim: "Jump_3", // default jump animation name
-  },
-  initPos: pos, // initial position (THREE.Vector3)
+    scene, // three.js Scene
+    camera, // three.js PerspectiveCamera
+    controls, // OrbitControls (or other external camera controller)
+    playerModel: {
+        url: "./glb/person.glb", // model URL (GLB/GLTF)
+        scale: 0.001, // model scale
+        idleAnim: "Idle_2", // default idle animation name
+        walkAnim: "Walking_11", // default walk animation name
+        runAnim: "Running_9", // default run animation name
+        jumpAnim: "Jump_3", // default jump animation name
+    },
+    initPos: pos, // initial position (THREE.Vector3)
 });
 
 // Call this in the render loop
@@ -61,11 +64,11 @@ player.update();
 
 ```ts
 export function playerController(): {
-  init: (opts: PlayerControllerOptions, callback?: () => void) => void;
-  changeView: () => void;
-  reset: (pos?: THREE.Vector3) => void;
-  update: (dt?: number) => void;
-  destroy: () => void;
+    init: (opts: PlayerControllerOptions, callback?: () => void) => void;
+    changeView: () => void;
+    reset: (pos?: THREE.Vector3) => void;
+    update: (dt?: number) => void;
+    destroy: () => void;
 };
 ```
 
@@ -103,30 +106,30 @@ Default input handling includes WASD movement, run, jump, and mouse look.
 
 ```ts
 type PlayerControllerOptions = {
-  scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
-  controls: OrbitControls;
-  playerModel: {
-    url: string;
-    idleAnim: string;
-    walkAnim: string;
-    runAnim: string;
-    jumpAnim: string;
-    leftWalkAnim?: string;
-    rightWalkAnim?: string;
-    backwardAnim?: string;
-    flyAnim?: string;
-    flyIdleAnim?: string;
-    scale: number;
-    gravity?: number;
-    jumpHeight?: number;
-    speed?: number;
-  };
-  initPos?: THREE.Vector3;
-  mouseSensity?: number;
-  minCamDistance?: number;
-  maxCamDistance?: number;
-  colliderMeshUrl?: string;
+    scene: THREE.Scene;
+    camera: THREE.PerspectiveCamera;
+    controls: OrbitControls;
+    playerModel: {
+        url: string;
+        idleAnim: string;
+        walkAnim: string;
+        runAnim: string;
+        jumpAnim: string;
+        leftWalkAnim?: string;
+        rightWalkAnim?: string;
+        backwardAnim?: string;
+        flyAnim?: string;
+        flyIdleAnim?: string;
+        scale: number;
+        gravity?: number;
+        jumpHeight?: number;
+        speed?: number;
+    };
+    initPos?: THREE.Vector3;
+    mouseSensity?: number;
+    minCamDistance?: number;
+    maxCamDistance?: number;
+    colliderMeshUrl?: string;
 };
 ```
 

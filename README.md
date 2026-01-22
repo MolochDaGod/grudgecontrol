@@ -12,8 +12,11 @@ npm install three-player-controller
 
 # 示例
 
-[glb 场景](https://hh-hang.github.io/three-player-controller/index.html)
-[3dtiles 场景](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
+- [glb 场景](https://hh-hang.github.io/three-player-controller/index.html)
+
+- [3dtiles 场景](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
+
+- [3dtiles 自定义](https://hh-hang.github.io/three-player-controller/3dtilesCustomize.html)
 
 ### 普通控制
 
@@ -37,18 +40,18 @@ const player = playerController();
 
 // 初始化玩家控制器
 player.init({
-  scene, // three.js 场景
-  camera, // three.js 相机
-  controls, // three.js 控制器
-  playerModel: {
-    url: "./glb/person.glb", // 模型路径
-    scale: 0.001, // 模型缩放
-    idleAnim: "Idle_2", // 默认 Idle 动画名字
-    walkAnim: "Walking_11", // 默认 Walk 动画名字
-    runAnim: "Running_9", // 默认 Run 动画名字
-    jumpAnim: "Jump_3", // 默认 Jump 动画名字
-  },
-  initPos: pos, // 初始位置
+    scene, // three.js 场景
+    camera, // three.js 相机
+    controls, // three.js 控制器
+    playerModel: {
+        url: "./glb/person.glb", // 模型路径
+        scale: 0.001, // 模型缩放
+        idleAnim: "Idle_2", // 默认 Idle 动画名字
+        walkAnim: "Walking_11", // 默认 Walk 动画名字
+        runAnim: "Running_9", // 默认 Run 动画名字
+        jumpAnim: "Jump_3", // 默认 Jump 动画名字
+    },
+    initPos: pos, // 初始位置
 });
 
 // 渲染循环调用
@@ -63,11 +66,11 @@ player.update();
 
 ```ts
 export function playerController(): {
-  init: (opts: PlayerControllerOptions, callback?: () => void) => void;
-  changeView: () => void;
-  reset: (pos?: THREE.Vector3) => void;
-  update: (dt?: number) => void;
-  destroy: () => void;
+    init: (opts: PlayerControllerOptions, callback?: () => void) => void;
+    changeView: () => void;
+    reset: (pos?: THREE.Vector3) => void;
+    update: (dt?: number) => void;
+    destroy: () => void;
 };
 ```
 
@@ -100,7 +103,7 @@ export function offAllEvent(): void; // 关闭所有输入事件
 - `onAllEvent()`：确保控制器存在并打开输入监听。
 - `offAllEvent()`：关闭输入监听（用于显示 UI 或暂停时禁止玩家输入）。
 
-  默认处理包括：WASD 移动、奔跑、跳跃、鼠标视角等。
+    默认处理包括：WASD 移动、奔跑、跳跃、鼠标视角等。
 
 ---
 
@@ -110,30 +113,30 @@ export function offAllEvent(): void; // 关闭所有输入事件
 
 ```ts
 type PlayerControllerOptions = {
-  scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
-  controls: OrbitControls;
-  playerModel: {
-    url: string;
-    idleAnim: string;
-    walkAnim: string;
-    runAnim: string;
-    jumpAnim: string;
-    leftWalkAnim?: string;
-    rightWalkAnim?: string;
-    backwardAnim?: string;
-    flyAnim?: string;
-    flyIdleAnim?: string;
-    scale: number;
-    gravity?: number;
-    jumpHeight?: number;
-    speed?: number;
-  };
-  initPos?: THREE.Vector3;
-  mouseSensity?: number;
-  minCamDistance?: number;
-  maxCamDistance?: number;
-  colliderMeshUrl?: string;
+    scene: THREE.Scene;
+    camera: THREE.PerspectiveCamera;
+    controls: OrbitControls;
+    playerModel: {
+        url: string;
+        idleAnim: string;
+        walkAnim: string;
+        runAnim: string;
+        jumpAnim: string;
+        leftWalkAnim?: string;
+        rightWalkAnim?: string;
+        backwardAnim?: string;
+        flyAnim?: string;
+        flyIdleAnim?: string;
+        scale: number;
+        gravity?: number;
+        jumpHeight?: number;
+        speed?: number;
+    };
+    initPos?: THREE.Vector3;
+    mouseSensity?: number;
+    minCamDistance?: number;
+    maxCamDistance?: number;
+    colliderMeshUrl?: string;
 };
 ```
 
