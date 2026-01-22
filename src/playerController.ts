@@ -1474,7 +1474,7 @@ export function playerController() {
         update: (dt?: number) => c.update(dt),
         destroy: () => c.destroy(),
         setInput: (i: any) => c.setInput(i),
-        position: () => c.getPosition(),
+        getposition: () => c.getPosition(),
     };
 }
 
