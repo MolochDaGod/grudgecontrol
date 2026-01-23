@@ -1,6 +1,6 @@
 [English](README_En.md)
 
-[![NPM Package][npm]][https://www.npmjs.com/package/three-player-controller]
+[![NPM Package][npm]][npm-url]
 
 # three-player-controller
 
@@ -169,3 +169,6 @@ type PlayerControllerOptions = {
 [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh)
 
 [three](https://github.com/mrdoob/three.js)
+
+[npm]: https://img.shields.io/npm/v/three-player-controller
+[npm-url]: https://www.npmjs.com/package/three-player-controller
