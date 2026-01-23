@@ -1,8 +1,8 @@
 [English](README_En.md)
 
-[![NPM Package][npm]][npm-url]
-
 # three-player-controller
+
+[![NPM Package][npm]][npm-url]
 
 轻量的第三人称 / 第一人称玩家控制器，开箱即用，基于 three.js 和 three-mesh-bvh 实现人物胶囊体碰撞、BVH 碰撞检测、人物动画、第一/三人称切换与相机避障。
 

@@ -1,8 +1,8 @@
 [中文](README.md)
 
-[![NPM Package][npm]][npm-url]
-
 # three-player-controller
+
+[![NPM Package][npm]][npm-url]
 
 A lightweight third-person / first-person player controller — ready to use out of the box. Built on three.js and three-mesh-bvh, it provides capsule-based character collision, BVH collision detection, character animations, first/third-person switching, and camera obstacle avoidance.
 
