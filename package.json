@@ -1,6 +1,6 @@
 {
   "name": "three-player-controller",
-  "version": "0.2.51",
+  "version": "0.2.52",
   "description": "Third-person / first-person player controller for three.js (three-mesh-bvh based)",
   "author": "",
   "license": "MIT",
@@ -39,5 +39,10 @@
   "dependencies": {
     "3d-tiles-renderer": "^0.4.19",
     "nipplejs": "^0.10.2"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hh-hang/three-player-controller"
+  },
+  "homepage": "https://github.com/hh-hang/three-player-controller"
 }
