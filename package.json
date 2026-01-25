@@ -1,48 +1,48 @@
 {
-  "name": "three-player-controller",
-  "version": "0.2.52",
-  "description": "Third-person / first-person player controller for three.js (three-mesh-bvh based)",
-  "author": "",
-  "license": "MIT",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
-  "exports": {
-    ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "dev": "vite",
-    "build": "tsup",
-    "clean": "rimraf dist",
-    "prepare": "npm run build",
-    "build:example": "vite build",
-    "dev:example": "vite example"
-  },
-  "peerDependencies": {
-    "three": "^0.182.0",
-    "three-mesh-bvh": "^0.9.1"
-  },
-  "devDependencies": {
-    "@types/node": "^25.0.6",
-    "@types/three": "^0.182.0",
-    "rimraf": "^6.0.0",
-    "tsup": "^8.0.1",
-    "typescript": "^5.4.0",
-    "vite": "^7.3.0"
-  },
-  "dependencies": {
-    "3d-tiles-renderer": "^0.4.19",
-    "nipplejs": "^0.10.2"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/hh-hang/three-player-controller"
-  },
-  "homepage": "https://github.com/hh-hang/three-player-controller"
+    "name": "three-player-controller",
+    "version": "0.3.0",
+    "description": "Third-person / first-person player controller for three.js (three-mesh-bvh based)",
+    "author": "",
+    "license": "MIT",
+    "main": "./dist/index.js",
+    "module": "./dist/index.mjs",
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "exports": {
+        ".": {
+            "import": "./dist/index.mjs",
+            "require": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "dev": "vite",
+        "build": "tsup",
+        "clean": "rimraf dist",
+        "prepare": "npm run build",
+        "build:example": "vite build",
+        "dev:example": "vite example"
+    },
+    "peerDependencies": {
+        "three": "^0.182.0",
+        "three-mesh-bvh": "^0.9.1"
+    },
+    "devDependencies": {
+        "@types/node": "^25.0.6",
+        "@types/three": "^0.182.0",
+        "rimraf": "^6.0.0",
+        "tsup": "^8.0.1",
+        "typescript": "^5.4.0",
+        "vite": "^7.3.0"
+    },
+    "dependencies": {
+        "3d-tiles-renderer": "^0.4.19",
+        "nipplejs": "^0.10.2"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/hh-hang/three-player-controller"
+    },
+    "homepage": "https://github.com/hh-hang/three-player-controller"
 }
