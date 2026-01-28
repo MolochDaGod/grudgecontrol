@@ -62,6 +62,7 @@ class PlayerController {
     colliderMeshUrl!: string;
     isShowMobileControls!: boolean;
     thirdMouseMode!: 0 | 1 | 2 | 3; // 0: 隐藏鼠标控制朝向及视角，1: 隐藏鼠标仅控制视角，2: 显示鼠标拖拽控制朝向及视角, 3: 显示鼠标拖拽仅控制视角
+    controllerMode!: 0 | 1 | 2; // 0: 普通 1: 飞行 2: 车辆
 
     // ==================== 玩家基本属性 ====================
     playerRadius: number = 45;
@@ -79,6 +80,7 @@ class PlayerController {
     visualizer: MeshBVHHelper | null = null;
     player!: THREE.Mesh & { capsuleInfo?: any };
     person: THREE.Object3D | null = null;
+    vehicle: THREE.Object3D | null = null;
 
     // ==================== 状态开关 ====================
     playerIsOnGround: boolean = false;
@@ -140,6 +142,9 @@ class PlayerController {
     flyAction!: THREE.AnimationAction;
     actionState!: THREE.AnimationAction;
     recheckAnimTimer: any | null = null;
+
+    vehicleMixer?: THREE.AnimationMixer;
+    vehicleActions?: Map<string, THREE.AnimationAction>;
 
     // ==================== 相机朝向/移动复用向量 ====================
     readonly camDir = new THREE.Vector3();
@@ -395,6 +400,74 @@ class PlayerController {
         this.player.rotateY(this.playerModel.rotateY ?? 0);
     }
 
+    // ==================== 车辆模型相关 ====================
+
+    /**
+     * 加载车辆模型与动画
+     */
+    async loadVehicleModel(params: {
+        url: string;
+        position: THREE.Vector3;
+        scale?: number;
+        animations?: {
+            openDoorAnim?: string;
+            wheelsTurnAnim?: string;
+            turnLeftAnim?: string;
+            turnRightAnim?: string;
+        };
+    }) {
+        try {
+            const { url, position, scale = 1 } = params;
+            const gltf: GLTF = await this.loader.loadAsync(url);
+            this.vehicle = gltf.scene;
+            this.vehicle.scale.set(scale, scale, scale);
+            this.vehicle.position.copy(position);
+            this.vehicle.traverse((child: any) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+
+            this.scene.add(this.vehicle);
+
+            const animations = gltf.animations ?? [];
+            // console.log("车辆所有动画", animations);
+            this.vehicleActions = new Map<string, THREE.AnimationAction>();
+            this.vehicleMixer = new THREE.AnimationMixer(this.vehicle);
+
+            // 动画映射表
+            const animationMappings: [string, string][] = [
+                [params.animations?.openDoorAnim ?? "", "open_door"],
+                [params.animations?.wheelsTurnAnim ?? "", "wheels_turn"],
+                [params.animations?.turnLeftAnim ?? "", "turn_left"],
+                [params.animations?.turnRightAnim ?? "", "turn_right"],
+            ];
+
+            // 注册动画动作
+            const findClip = (name: string) => animations.find((a: any) => a.name === name);
+            for (const [clipName, actionName] of animationMappings) {
+                const clip = findClip(clipName);
+                if (!clip) continue;
+                const action = this.vehicleMixer.clipAction(clip);
+                action.setLoop(THREE.LoopOnce, 1);
+                action.clampWhenFinished = true;
+                action.setEffectiveTimeScale(2);
+                action.enabled = true;
+                action.setEffectiveWeight(0);
+                this.vehicleActions.set(actionName, action);
+            }
+
+            console.log("开门动画", this.vehicleActions.get("open_door"));
+
+            // const next = this.vehicleActions.get("open_door") as THREE.AnimationAction;
+            // next.setEffectiveWeight(1);
+            // next.play();
+        } catch (error) {
+            console.error("加载车辆模型失败:", error);
+        }
+    }
+
     // ==================== 相机与视角控制 ====================
 
     /**
@@ -418,6 +491,11 @@ class PlayerController {
         }
 
         this.setPointerLock();
+    }
+
+    setDrive() {
+        this.controllerMode = 2;
+        this.person?.attach(this.vehicle as THREE.Object3D);
     }
 
     /**
@@ -703,22 +781,34 @@ class PlayerController {
             const h = this.playerHeight * this.playerModel.scale * 0.75; // 正常高度
             const minH = this.playerHeight * this.playerModel.scale * 0.7; // 最小高度
 
+            // console.log("人物中心点距离地面高度", playerDistanceFromGround, "坡度高度阈值", maxH, "正常高度", h, "最小高度", minH);
+            // console.log("坡度角度", angle);
+
+            // console.log("this.playerVelocity.y", this.playerVelocity.y);
+
             if (!this.isFlying) {
                 if (playerDistanceFromGround > maxH) {
                     // 下落状态
                     this.playerVelocity.y += delta * this.gravity;
                     this.player.position.addScaledVector(this.playerVelocity, delta);
                     this.playerIsOnGround = false;
+                    // console.log("下落");
                 } else if (playerDistanceFromGround > h && playerDistanceFromGround < maxH) {
                     if (angle >= 0 && angle < 5) {
                         // 平地
                         this.playerVelocity.y += delta * this.gravity;
                         this.player.position.addScaledVector(this.playerVelocity, delta);
                         this.playerIsOnGround = true;
+                        // console.log("平地");
                     } else {
                         // 坡地
-                        this.playerVelocity.set(0, 0, 0);
-                        this.playerIsOnGround = true;
+                        if (this.spacePressed) {
+                            this.playerVelocity.y += delta * this.gravity;
+                        } else {
+                            // console.log("坡地", this.spacePressed);
+                            this.playerVelocity.set(0, 0, 0);
+                            this.playerIsOnGround = true;
+                        }
                     }
                 } else if (playerDistanceFromGround > minH && playerDistanceFromGround < h) {
                     // 误差范围内在平地
@@ -731,6 +821,8 @@ class PlayerController {
                     this.playerIsOnGround = true;
                 }
             }
+
+            // console.log("是否在地面", this.playerIsOnGround);
         }
 
         // 更新玩家矩阵
@@ -880,6 +972,7 @@ class PlayerController {
      */
     private updateMixers(delta: number) {
         if (this.personMixer) this.personMixer.update(delta);
+        if (this.vehicleMixer) this.vehicleMixer.update(delta);
     }
 
     /**
@@ -1059,6 +1152,7 @@ class PlayerController {
                 break;
             case "Space":
                 this.spacePressed = true;
+                // console.log("点击跳跃", this.playerIsOnGround, this.isFlying);
                 if (!this.playerIsOnGround || this.isFlying) return;
                 const next = this.personActions?.get("jumping");
                 if (next && this.actionState === next) return;
@@ -1078,6 +1172,9 @@ class PlayerController {
                 if (!this.isFlying && !this.playerIsOnGround) {
                     this.playPersonAnimationByName("jumping");
                 }
+                break;
+            case "KeyE":
+                this.setDrive();
                 break;
         }
     };
@@ -1481,6 +1578,17 @@ export function playerController() {
         destroy: () => c.destroy(),
         setInput: (i: any) => c.setInput(i),
         getposition: () => c.getPosition(),
+        loadVehicleModel: (params: {
+            url: string;
+            position: THREE.Vector3;
+            scale?: number;
+            animations: {
+                openDoorAnim?: string;
+                wheelsTurnAnim?: string;
+                turnLeftAnim?: string;
+                turnRightAnim?: string;
+            };
+        }) => c.loadVehicleModel(params),
     };
 }
 
