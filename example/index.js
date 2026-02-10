@@ -112,8 +112,6 @@ async function init() {
         initPos: pos,
         minCamDistance: 50,
         maxCamDistance: 300,
-        thirdMouseMode: 2,
-        enableZoom: true,
     });
 
     window.addEventListener("resize", onWindowResize, false);
