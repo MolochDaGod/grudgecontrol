@@ -71,6 +71,7 @@ export function playerController(): {
     reset: (pos?: THREE.Vector3) => void;
     update: (dt?: number) => void;
     destroy: () => void;
+    getposition: () => THREE.Vector3;
 };
 ```
 
@@ -81,6 +82,7 @@ export function playerController(): {
 - `reset(pos?)` — Reset the player to the specified position.
 - `update(dt?)` — Call every frame (optionally supply delta time).
 - `destroy()` — Destroy the controller and release resources.
+- `getposition()`— Get the current position of the player.
 
 ---
 
@@ -154,6 +156,7 @@ type PlayerControllerOptions = {
 | `colliderMeshUrl`                                            |                  `string` | Default `""` — optional custom collider mesh URL                                                                                                                                                                                   |
 | `isShowMobileControls`                                       |                 `boolean` | Default `true` — show mobile controls when running on mobile                                                                                                                                                                       |
 | `thirdMouseMode`                                             |               `[0,1,2,3]` | Default `1` — modes for mouse behavior in third-person view (0: hide mouse control, 1: hide mouse cursor and control only camera, 2: show mouse and drag controls orientation+camera, 3: show mouse and drag controls camera only) |
+| `enableZoom`                                                 |                 `boolean` | Default `true` — enable zoom                                                                                                                                                                                                       |
 
 ---
 

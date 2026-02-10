@@ -43,6 +43,7 @@ export type PlayerControllerOptions = {
     colliderMeshUrl?: string;
     isShowMobileControls?: boolean;
     thirdMouseMode?: 0 | 1 | 2 | 3;
+    enableZoom?: boolean;
 };
 
 class PlayerController {
@@ -63,6 +64,7 @@ class PlayerController {
     isShowMobileControls!: boolean;
     thirdMouseMode!: 0 | 1 | 2 | 3; // 0: 隐藏鼠标控制朝向及视角，1: 隐藏鼠标仅控制视角，2: 显示鼠标拖拽控制朝向及视角, 3: 显示鼠标拖拽仅控制视角
     controllerMode!: 0 | 1 | 2; // 0: 普通 1: 飞行 2: 车辆
+    enableZoom!: boolean;
 
     // ==================== 玩家基本属性 ====================
     playerRadius: number = 45;
@@ -198,6 +200,7 @@ class PlayerController {
         this._maxCamDistance = (opts.maxCamDistance ?? 440) * s;
         this.orginMaxCamDistance = this._maxCamDistance;
         this.thirdMouseMode = opts.thirdMouseMode ?? 1;
+        this.enableZoom = opts.enableZoom ?? false;
 
         // 判断是否移动端
         const isMobileDevice = () => (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) || "ontouchstart" in window || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -480,6 +483,7 @@ class PlayerController {
             this.player.attach(this.camera);
             this.camera.position.set(0, 40 * this.playerModel.scale, 30 * this.playerModel.scale);
             this.camera.rotation.set(0, Math.PI, 0);
+            this.controls.enableZoom = false;
         } else {
             this.scene.attach(this.camera);
             const worldPos = this.player.position.clone();
@@ -488,6 +492,7 @@ class PlayerController {
             const offset = new THREE.Vector3(Math.cos(angle) * 400 * this.playerModel.scale, 200 * this.playerModel.scale, Math.sin(angle) * 400 * this.playerModel.scale);
             this.camera.position.copy(worldPos).add(offset);
             this.controls.target.copy(worldPos);
+            this.controls.enableZoom = this.enableZoom;
         }
 
         this.setPointerLock();
@@ -504,6 +509,8 @@ class PlayerController {
     setPointerLock() {
         if (((this.thirdMouseMode === 0 || this.thirdMouseMode === 1) && !this.isFirstPerson) || this.isFirstPerson) {
             document.body.requestPointerLock();
+        } else {
+            document.exitPointerLock();
         }
     }
 
@@ -527,9 +534,11 @@ class PlayerController {
      * 设置控制器
      */
     setControls() {
-        this.controls.enabled = !(this.thirdMouseMode === 0 || this.thirdMouseMode === 1);
+        // this.controls.enabled = !(this.thirdMouseMode === 0 || this.thirdMouseMode === 1);
+        this.controls.enableZoom = this.enableZoom;
         this.controls.rotateSpeed = this.mouseSensity * 0.05;
         this.controls.maxPolarAngle = Math.PI * (300 / 360);
+        this.controls.mouseButtons = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
     }
 
     /**
@@ -946,33 +955,33 @@ class PlayerController {
             this.controls.update();
 
             // 当视线被遮挡时的处理
-            this._personToCam.subVectors(this.camera.position, this.player.position);
-            const origin = this.player.position.clone().add(new THREE.Vector3(0, 0, 0));
-            const direction = this._personToCam.clone().normalize();
-            const desiredDist = this._personToCam.length();
-            this._raycasterPersonToCam.set(origin, direction);
-            this._raycasterPersonToCam.far = desiredDist;
+            if (!this.enableZoom) {
+                this._personToCam.subVectors(this.camera.position, this.player.position);
+                const origin = this.player.position.clone().add(new THREE.Vector3(0, 0, 0));
+                const direction = this._personToCam.clone().normalize();
+                const desiredDist = this._personToCam.length();
+                this._raycasterPersonToCam.set(origin, direction);
+                this._raycasterPersonToCam.far = desiredDist;
+                const intersects = this._raycasterPersonToCam.intersectObject(this.collider as THREE.Object3D, false);
+                if (intersects.length > 0) {
+                    // 相机拉近
+                    const hit = intersects[0];
+                    const safeDist = Math.max(hit.distance - this._camEpsilon, this._minCamDistance);
+                    const targetCamPos = origin.clone().add(direction.clone().multiplyScalar(safeDist));
+                    this.camera.position.lerp(targetCamPos, this._camCollisionLerp);
+                } else {
+                    // 相机恢复
+                    this._raycasterPersonToCam.far = this._maxCamDistance;
+                    const intersectsMaxDis = this._raycasterPersonToCam.intersectObject(this.collider as THREE.Object3D, false);
 
-            const intersects = this._raycasterPersonToCam.intersectObject(this.collider as THREE.Object3D, false);
-
-            if (intersects.length > 0) {
-                // 相机拉近
-                const hit = intersects[0];
-                const safeDist = Math.max(hit.distance - this._camEpsilon, this._minCamDistance);
-                const targetCamPos = origin.clone().add(direction.clone().multiplyScalar(safeDist));
-                this.camera.position.lerp(targetCamPos, this._camCollisionLerp);
-            } else {
-                // 相机恢复
-                this._raycasterPersonToCam.far = this._maxCamDistance;
-                const intersectsMaxDis = this._raycasterPersonToCam.intersectObject(this.collider as THREE.Object3D, false);
-
-                let safeDist = this._maxCamDistance;
-                if (intersectsMaxDis.length) {
-                    const hitMax = intersectsMaxDis[0];
-                    safeDist = hitMax.distance - this._camEpsilon;
+                    let safeDist = this._maxCamDistance;
+                    if (intersectsMaxDis.length) {
+                        const hitMax = intersectsMaxDis[0];
+                        safeDist = hitMax.distance - this._camEpsilon;
+                    }
+                    const targetCamPos = origin.clone().add(direction.clone().multiplyScalar(safeDist));
+                    this.camera.position.lerp(targetCamPos, this._camCollisionLerp);
                 }
-                const targetCamPos = origin.clone().add(direction.clone().multiplyScalar(safeDist));
-                this.camera.position.lerp(targetCamPos, this._camCollisionLerp);
             }
         }
 

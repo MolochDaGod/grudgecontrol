@@ -73,6 +73,7 @@ export function playerController(): {
     reset: (pos?: THREE.Vector3) => void;
     update: (dt?: number) => void;
     destroy: () => void;
+    getposition: () => THREE.Vector3;
 };
 ```
 
@@ -88,6 +89,8 @@ export function playerController(): {
   每帧调用。
 - `destroy()`  
   销毁控制器。
+- `getposition()`  
+  获取人物当前位置。
 
 ---
 
@@ -139,6 +142,9 @@ type PlayerControllerOptions = {
     minCamDistance?: number;
     maxCamDistance?: number;
     colliderMeshUrl?: string;
+    isShowMobileControls?: boolean;
+    thirdMouseMode?: number;
+    enableZoom?: boolean;
 };
 ```
 
@@ -161,6 +167,7 @@ type PlayerControllerOptions = {
 | `colliderMeshUrl`                                            |                  `string` | 自制碰撞体模型路径，默认`""`                                                                                                                           |
 | `isShowMobileControls`                                       |                 `boolean` | 移动端运行时，是否自动显示移动端控制器，默认`true`                                                                                                     |
 | `thirdMouseMode`                                             |            `[0, 1, 2, 3]` | 第三人称视角下的不同鼠标控制模式 ，默认`1`(0: 隐藏鼠标控制朝向及视角，1: 隐藏鼠标仅控制视角，2: 显示鼠标拖拽控制朝向及视角, 3: 显示鼠标拖拽仅控制视角) |
+| `enableZoom`                                                 |                 `boolean` | 第三人称模式下是否允许缩放，默认`false`                                                                                                                |
 
 ---
 

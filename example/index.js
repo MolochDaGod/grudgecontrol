@@ -1,5 +1,6 @@
 import { ACESFilmicToneMapping, AmbientLight, DirectionalLight, EquirectangularReflectionMapping, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { MapControls } from "three/examples/jsm/Addons.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
@@ -38,12 +39,11 @@ async function init() {
 
     // 相机
     camera = new PerspectiveCamera(70, cont.clientWidth / cont.clientHeight, 0.01, 1000);
-    camera.rotation.order = "YXZ";
     camera.position.copy(pos);
     camera.lookAt(pos.x, pos.y, pos.z + 1);
 
     // 控制器
-    controls = new OrbitControls(camera, renderer.domElement);
+    controls = new MapControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.maxDistance = 2000;
     controls.dampingFactor = 0.1;
@@ -112,6 +112,8 @@ async function init() {
         initPos: pos,
         minCamDistance: 50,
         maxCamDistance: 300,
+        thirdMouseMode: 2,
+        enableZoom: true,
     });
 
     window.addEventListener("resize", onWindowResize, false);
