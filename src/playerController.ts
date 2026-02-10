@@ -582,6 +582,79 @@ class PlayerController {
     // ==================== 物理与碰撞检测 ====================
 
     /**
+     * 统一属性集合
+     */
+    unifiedAttribute(collected: THREE.BufferGeometry[]) {
+        type AttrMeta = {
+            itemSize: number;
+            arrayCtor: any;
+            examples: number;
+            normalized: boolean;
+        };
+        const attrMap = new Map<string, AttrMeta>();
+        const attrConflict = new Set<string>();
+
+        // 保留必需的属性
+        const requiredAttrs = new Set(["position", "normal", "uv"]);
+
+        // 删除非必需属性
+        for (const g of collected) {
+            const attrNames = Object.keys(g.attributes);
+            for (const name of attrNames) {
+                if (!requiredAttrs.has(name)) {
+                    g.deleteAttribute(name);
+                }
+            }
+        }
+
+        for (const g of collected) {
+            for (const name of Object.keys(g.attributes)) {
+                const attr = g.attributes[name] as THREE.BufferAttribute;
+                const ctor = (attr.array as any).constructor;
+                const itemSize = attr.itemSize;
+                const normalized = attr.normalized;
+
+                if (!attrMap.has(name)) {
+                    attrMap.set(name, { itemSize, arrayCtor: ctor, examples: 1, normalized });
+                } else {
+                    const m = attrMap.get(name)!;
+                    if (m.itemSize !== itemSize || m.arrayCtor !== ctor || m.normalized !== normalized) {
+                        attrConflict.add(name);
+                    } else {
+                        m.examples++;
+                    }
+                }
+            }
+        }
+
+        // 删除冲突属性
+        if (attrConflict.size) {
+            for (const g of collected) {
+                for (const name of Array.from(attrConflict)) {
+                    if (g.attributes[name]) g.deleteAttribute(name);
+                }
+            }
+            for (const name of attrConflict) attrMap.delete(name);
+        }
+
+        // 补全缺失属性
+        const attrNames = Array.from(attrMap.keys());
+        for (const g of collected) {
+            const count = g.attributes.position.count;
+            for (const name of attrNames) {
+                if (!g.attributes[name]) {
+                    const meta = attrMap.get(name)!;
+                    const len = count * meta.itemSize;
+                    const array = new meta.arrayCtor(len);
+                    g.setAttribute(name, new THREE.BufferAttribute(array, meta.itemSize, meta.normalized));
+                }
+            }
+        }
+
+        return collected;
+    }
+
+    /**
      * BVH碰撞体构建
      */
     async createBVH(meshUrl: string = ""): Promise<void> {
@@ -598,7 +671,7 @@ class PlayerController {
             return geom;
         };
 
-        const collected: THREE.BufferGeometry[] = [];
+        let collected: THREE.BufferGeometry[] = [];
 
         if (meshUrl === "") {
             // 从场景中收集几何体
@@ -624,53 +697,7 @@ class PlayerController {
 
             if (!collected.length) return;
 
-            // 统一属性集合
-            type AttrMeta = { itemSize: number; arrayCtor: any; examples: number };
-            const attrMap = new Map<string, AttrMeta>();
-            const attrConflict = new Set<string>();
-
-            for (const g of collected) {
-                for (const name of Object.keys(g.attributes)) {
-                    const attr = g.attributes[name] as THREE.BufferAttribute;
-                    const ctor = (attr.array as any).constructor;
-                    const itemSize = attr.itemSize;
-
-                    if (!attrMap.has(name)) {
-                        attrMap.set(name, { itemSize, arrayCtor: ctor, examples: 1 });
-                    } else {
-                        const m = attrMap.get(name)!;
-                        if (m.itemSize !== itemSize || m.arrayCtor !== ctor) {
-                            attrConflict.add(name);
-                        } else {
-                            m.examples++;
-                        }
-                    }
-                }
-            }
-
-            // 删除冲突属性
-            if (attrConflict.size) {
-                for (const g of collected) {
-                    for (const name of Array.from(attrConflict)) {
-                        if (g.attributes[name]) g.deleteAttribute(name);
-                    }
-                }
-                for (const name of attrConflict) attrMap.delete(name);
-            }
-
-            // 补全缺失属性
-            const attrNames = Array.from(attrMap.keys());
-            for (const g of collected) {
-                const count = g.attributes.position.count;
-                for (const name of attrNames) {
-                    if (!g.attributes[name]) {
-                        const meta = attrMap.get(name)!;
-                        const len = count * meta.itemSize;
-                        const array = new meta.arrayCtor(len);
-                        g.setAttribute(name, new THREE.BufferAttribute(array, meta.itemSize));
-                    }
-                }
-            }
+            collected = this.unifiedAttribute(collected);
         } else {
             // 从URL加载模型
             const gltf: GLTF = await this.loader.loadAsync(meshUrl);
