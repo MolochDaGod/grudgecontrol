@@ -175,6 +175,22 @@ async function init() {
         suspensionRestLengthRatio: 0.2,
     });
 
+    // 开启人物 车辆模型阴影
+    player.getPerson()?.traverse((child) => {
+        if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+        }
+    });
+    player.getAllVehicles().forEach((v) => {
+        v.vehicleGroup?.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+    });
+
     window.addEventListener("resize", onWindowResize, false);
 }
 // GLTF加载器
