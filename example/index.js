@@ -1,5 +1,4 @@
 import { ACESFilmicToneMapping, AmbientLight, DirectionalLight, EquirectangularReflectionMapping, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { MapControls } from "three/examples/jsm/Addons.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -17,7 +16,8 @@ let gltfLoader;
 
 const modelUrl = "./glb/burnout_revenge_-_central_route_crash_junction.glb";
 
-const pos = new Vector3(21.88, 3, 10.98);
+const pos = new Vector3(21.5, 4, 15);
+// const pos = new Vector3(21.88, 5.3, 20);
 
 // 判断是否移动端
 function isMobileDevice() {
@@ -95,23 +95,84 @@ async function init() {
 
     // 初始化玩家控制器
     player = playerController();
-    player.init({
+    // player.init({
+    //     scene,
+    //     camera,
+    //     controls,
+    //     playerModel: {
+    //         url: "./glb/person.glb",
+    //         scale: 0.001,
+    //         idleAnim: "idle",
+    //         walkAnim: "walk",
+    //         runAnim: "run",
+    //         jumpAnim: "jump",
+    //         flyAnim: "flying",
+    //         flyIdleAnim: "flyidle",
+    //     },
+    //     initPos: pos,
+    //     minCamDistance: 50,
+    //     maxCamDistance: 300,
+    // });
+    await player.init({
         scene,
         camera,
         controls,
         playerModel: {
             url: "./glb/person.glb",
             scale: 0.001,
-            idleAnim: "idle",
+            idleAnim: "idle1",
             walkAnim: "walk",
             runAnim: "run",
             jumpAnim: "jump",
             flyAnim: "flying",
             flyIdleAnim: "flyidle",
+            enterCarAnim: "enterCar",
+            exitCarAnim: "exitCar",
+            headObjName: "mixamorigHead",
+            rotateY: Math.PI,
         },
         initPos: pos,
         minCamDistance: 50,
-        maxCamDistance: 300,
+        maxCamDistance: 250,
+        thirdMouseMode: 1,
+    });
+
+    await player.loadVehicleModel({
+        url: "./glb/landRover.glb",
+        scale: 0.115,
+        position: new Vector3(21.88, 5.3, 20),
+        wheelsNames: [
+            "WheelFL", // 前左
+            "WheelFR", // 前右
+            "WheelBL", // 后左
+            "WheelBR", // 后右
+        ],
+        animations: {
+            openDoorAnim: "opendoor",
+        },
+        boardingPoint: new Vector3(0.8, 0, 1.5),
+        seatOffset: new Vector3(0, 0.5, 0),
+        chassisRatio: 0.4,
+        suspensionRestLengthRatio: 0.2,
+    });
+
+    await player.loadVehicleModel({
+        url: "./glb/bugatti.glb",
+        scale: 0.1,
+        position: new Vector3(22, 3.69, 14.5),
+        wheelsNames: [
+            "Wheel_LF", // 前左
+            "Wheel_RF", // 前右
+            "Wheel_LR", // 后左
+            "Wheel_RR", // 后右
+        ],
+        animations: {
+            openDoorAnim: "openDoorLF",
+        },
+        boardingPoint: new Vector3(0.5, 0, 1.8),
+        seatOffset: new Vector3(0, 0.6, 0),
+        chassisRatio: 0.15,
+        suspensionRestLengthRatio: 0.2,
     });
 
     window.addEventListener("resize", onWindowResize, false);
