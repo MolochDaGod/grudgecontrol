@@ -4,7 +4,7 @@
 
 [![NPM Package][npm]][npm-url]
 
-A lightweight third-person / first-person player controller — ready to use out of the box. Built on three.js and three-mesh-bvh, it provides capsule-based character collision, BVH collision detection, character animations, first/third-person switching, and camera obstacle avoidance.
+A lightweight third-person / first-person player controller, ready to use out of the box. Implemented with **three.js** and **three-mesh-bvh**. Features capsule-based character collision, BVH collision detection, character animations, first/third-person switching, and camera obstacle avoidance.
 
 ## Installation
 
@@ -12,25 +12,23 @@ A lightweight third-person / first-person player controller — ready to use out
 npm install three-player-controller
 ```
 
-## Demo
+## Demos
 
-- GLB Scene: [https://hh-hang.github.io/three-player-controller/index.html](https://hh-hang.github.io/three-player-controller/index.html)
+- GLB scene: https://hh-hang.github.io/three-player-controller/index.html
+- 3D Tiles scene: https://hh-hang.github.io/three-player-controller/3dtilesScene.html
+- 3D Tiles customized: https://hh-hang.github.io/three-player-controller/3dtilesCustomize.html
 
-- 3DTiles Scene: [https://hh-hang.github.io/three-player-controller/3dtilesScene.html](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
+### Normal control demo
 
-- 3DTiles Customize: [https://hh-hang.github.io/three-player-controller/3dtilesScene.html](https://hh-hang.github.io/three-player-controller/3dtilesCustomize.html)
+![Normal control demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/1.gif)
 
-## Controls
+### Flying control demo
 
-![controls demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/1.gif)
+![Flying control demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/4.gif)
 
-## Flight
+### Mobile control demo
 
-![flight demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/3.gif)
-
-## 3DTiles Roaming
-
-![3DTiles roaming demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/4.gif)
+![Mobile control demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/5.gif)
 
 ## Usage
 
@@ -43,7 +41,7 @@ const player = playerController();
 // Initialize the player controller
 player.init({
     scene, // three.js Scene
-    camera, // three.js PerspectiveCamera
+    camera, // three.js Camera
     controls, // OrbitControls (or other external camera controller)
     playerModel: {
         url: "./glb/person.glb", // model URL (GLB/GLTF)
@@ -56,7 +54,7 @@ player.init({
     initPos: pos, // initial position (THREE.Vector3)
 });
 
-// Call this in the render loop
+// Call every frame
 player.update();
 ```
 
@@ -67,28 +65,36 @@ player.update();
 ```ts
 export function playerController(): {
     init: (opts: PlayerControllerOptions, callback?: () => void) => void;
+    loadVehicleModel: (params: vehicleOptions) => void;
     changeView: () => void;
     reset: (pos?: THREE.Vector3) => void;
     update: (dt?: number) => void;
     destroy: () => void;
     getposition: () => THREE.Vector3;
+    getPerson: () => THREE.Object3D | null;
+    getActiveVehicle: () => VehicleInstance | null;
+    getAllVehicles: () => VehicleInstance[];
 };
 ```
 
 ### Methods
 
 - `init(opts, callback?)` — Initialize the controller. `callback` is called after resources finish loading.
-- `changeView()` — Toggle between first-person and third-person views.
+- `loadVehicleModel(params?)` — Initialize a vehicle model.
+- `changeView()` — Toggle between first-person and third-person view.
 - `reset(pos?)` — Reset the player to the specified position.
-- `update(dt?)` — Call every frame (optionally supply delta time).
-- `destroy()` — Destroy the controller and release resources.
-- `getposition()`— Get the current position of the player.
+- `update(dt?)` — Call every frame to update the controller.
+- `destroy()` — Destroy the controller and clean up resources.
+- `getposition()` — Get the player world position.
+- `getPerson()` — Get the player model object.
+- `getActiveVehicle()` — Get the currently active vehicle instance.
+- `getAllVehicles()` — Get all vehicle instances.
 
 ---
 
 ## Events
 
-### Global event toggles
+### Global event toggle
 
 ```ts
 export function onAllEvent(): void; // enable all input events
@@ -97,16 +103,16 @@ export function offAllEvent(): void; // disable all input events
 
 ### Description
 
-- `onAllEvent()` ensures the controller exists and enables input listeners.
-- `offAllEvent()` disables input listeners (useful for UI overlays or pausing gameplay).
+- `onAllEvent()` — Ensure the controller exists and enable input listeners.
+- `offAllEvent()` — Disable input listeners (useful when showing UI or pausing to block player input).
 
-Default input handling includes WASD movement, run, jump, and mouse look.
+Default handled inputs include: WASD movement, run, jump, mouse look, etc.
 
 ---
 
-## Configuration and Options
+## Configuration and Types
 
-### Type definition
+### PlayerControllerOptions
 
 ```ts
 type PlayerControllerOptions = {
@@ -134,36 +140,76 @@ type PlayerControllerOptions = {
     minCamDistance?: number;
     maxCamDistance?: number;
     colliderMeshUrl?: string;
+    isShowMobileControls?: boolean;
+    thirdMouseMode?: number;
+    enableZoom?: boolean;
 };
 ```
 
-### Key fields and defaults
+### Key fields
 
-| Field                                                        |                      Type | Default / Notes                                                                                                                                                                                                                    |
-| ------------------------------------------------------------ | ------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scene`                                                      |             `THREE.Scene` | Required — three.js scene                                                                                                                                                                                                          |
-| `camera`                                                     | `THREE.PerspectiveCamera` | Required — three.js camera                                                                                                                                                                                                         |
-| `controls`                                                   |           `OrbitControls` | Required — external camera controller                                                                                                                                                                                              |
-| `playerModel.url`                                            |                  `string` | Required — path to the GLB/GLTF model                                                                                                                                                                                              |
-| `playerModel.scale`                                          |                  `number` | Required — model scale                                                                                                                                                                                                             |
-| `playerModel.idleAnim` / `walkAnim` / `runAnim` / `jumpAnim` |                  `string` | Required — animation names must match the model's animation clips                                                                                                                                                                  |
-| `playerModel.speed`                                          |                  `number` | Default `400` — base movement speed                                                                                                                                                                                                |
-| `playerModel.gravity`                                        |                  `number` | Default `-2400` — gravity acceleration                                                                                                                                                                                             |
-| `playerModel.jumpHeight`                                     |                  `number` | Default `800` — jump height                                                                                                                                                                                                        |
-| `initPos`                                                    |           `THREE.Vector3` | Default `(0, 0, 0)` — initial player position                                                                                                                                                                                      |
-| `mouseSensity`                                               |                  `number` | Default `5` — mouse sensitivity                                                                                                                                                                                                    |
-| `minCamDistance` / `maxCamDistance`                          |                  `number` | Default `100` / `440` — third-person camera distance limits                                                                                                                                                                        |
-| `colliderMeshUrl`                                            |                  `string` | Default `""` — optional custom collider mesh URL                                                                                                                                                                                   |
-| `isShowMobileControls`                                       |                 `boolean` | Default `true` — show mobile controls when running on mobile                                                                                                                                                                       |
-| `thirdMouseMode`                                             |               `[0,1,2,3]` | Default `1` — modes for mouse behavior in third-person view (0: hide mouse control, 1: hide mouse cursor and control only camera, 2: show mouse and drag controls orientation+camera, 3: show mouse and drag controls camera only) |
-| `enableZoom`                                                 |                 `boolean` | Default `true` — enable zoom                                                                                                                                                                                                       |
+| Field                                                        |                      Type | Default / Notes                                                                                                                                                     |
+| ------------------------------------------------------------ | ------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scene`                                                      |             `THREE.Scene` | Required                                                                                                                                                            |
+| `camera`                                                     | `THREE.PerspectiveCamera` | Required                                                                                                                                                            |
+| `controls`                                                   |           `OrbitControls` | Required (external camera controller)                                                                                                                               |
+| `playerModel.url`                                            |                  `string` | Model URL (GLB/GLTF), required                                                                                                                                      |
+| `playerModel.scale`                                          |                  `number` | Required                                                                                                                                                            |
+| `playerModel.idleAnim` / `walkAnim` / `runAnim` / `jumpAnim` |                  `string` | Animation names in the model, required                                                                                                                              |
+| `playerModel.enterCarAnim` / `exitCarAnim`                   |                  `string` | Optional (enter/exit vehicle animations)                                                                                                                            |
+| `playerModel.rotateY`                                        |                  `number` | Optional, extra Y-axis rotation offset                                                                                                                              |
+| `playerModel.headObjName`                                    |                  `string` | Optional, head object name for camera binding                                                                                                                       |
+| `playerModel.speed`                                          |                  `number` | Base speed, default `400`                                                                                                                                           |
+| `playerModel.gravity`                                        |                  `number` | Gravity acceleration, default `-2400`                                                                                                                               |
+| `playerModel.jumpHeight`                                     |                  `number` | Jump height, default `800`                                                                                                                                          |
+| `initPos`                                                    |           `THREE.Vector3` | Initial position, default `(0,0,0)`                                                                                                                                 |
+| `mouseSensity`                                               |                  `number` | Mouse sensitivity, default `5`                                                                                                                                      |
+| `minCamDistance` / `maxCamDistance`                          |                  `number` | Third-person camera distance limits, default `100` / `440`                                                                                                          |
+| `colliderMeshUrl`                                            |                  `string` | Custom collider mesh URL, default `""`                                                                                                                              |
+| `isShowMobileControls`                                       |                 `boolean` | Show mobile controls by default on mobile, default `true`                                                                                                           |
+| `thirdMouseMode`                                             |            `[0, 1, 2, 3]` | Third-person mouse modes, default `1` (0: hide mouse control, 1: hide mouse but control view, 2: show mouse for drag control, 3: show mouse drag only control view) |
+| `enableZoom`                                                 |                 `boolean` | Allow zoom in third-person, default `false`                                                                                                                         |
 
 ---
 
-## Credits
+### Vehicle options
+
+```ts
+type vehicleOptions = {
+    url: string;
+    position: THREE.Vector3;
+    wheelsNames: string[];
+    scale?: number;
+    animations: {
+        openDoorAnim?: string;
+    };
+    boardingPoint: THREE.Vector3;
+    seatOffset?: THREE.Vector3;
+    chassisRatio?: number;
+    suspensionRestLengthRatio?: number;
+};
+```
+
+### Vehicle fields
+
+| Field                       |            Type | Required |                    Default | Description                                                                                             |
+| --------------------------- | --------------: | :------: | -------------------------: | ------------------------------------------------------------------------------------------------------- |
+| `url`                       |        `string` |   yes    |                          — | Vehicle model URL (GLB/GLTF). CORS applies.                                                             |
+| `position`                  | `THREE.Vector3` |   yes    |                          — | Initial vehicle world position (e.g. `new THREE.Vector3(10,0,5)`).                                      |
+| `wheelsNames`               |      `string[]` |   yes    |                          — | Wheel node names in model: front-left, front-right, rear-left, rear-right.                              |
+| `scale`                     |        `number` |    no    |                        `1` | Model scale factor.                                                                                     |
+| `animations.openDoorAnim`   |        `string` |    no    |                          — | Open door animation clip name.                                                                          |
+| `boardingPoint`             | `THREE.Vector3` |   yes    |                          — | Boarding point **local coordinate** relative to the vehicle model, e.g. `new THREE.Vector3(0.8,1.0,0)`. |
+| `seatOffset`                | `THREE.Vector3` |    no    | `new THREE.Vector3(0,0,0)` | Offset from `boardingPoint` to the player's seat position (local coordinates).                          |
+| `chassisRatio`              |        `number` |    no    |                      `0.2` | Estimated chassis height ratio relative to wheel diameter (used to adjust model placement).             |
+| `suspensionRestLengthRatio` |        `number` |    no    |                      `0.2` | Ratio affecting actual chassis collision height (different from `chassisRatio`).                        |
+
+---
+
+## Acknowledgements
 
 - [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh)
-- [three.js](https://github.com/mrdoob/three.js)
+- [three](https://github.com/mrdoob/three.js)
 
 [npm]: https://img.shields.io/npm/v/three-player-controller
 [npm-url]: https://www.npmjs.com/package/three-player-controller

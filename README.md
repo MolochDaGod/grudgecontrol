@@ -69,11 +69,15 @@ player.update();
 ```ts
 export function playerController(): {
     init: (opts: PlayerControllerOptions, callback?: () => void) => void;
+    loadVehicleModel: (params: vehicleOptions) => void;
     changeView: () => void;
     reset: (pos?: THREE.Vector3) => void;
     update: (dt?: number) => void;
     destroy: () => void;
     getposition: () => THREE.Vector3;
+    getPerson: () => THREE.Object3D | null;
+    getActiveVehicle: () => VehicleInstance | null;
+    getAllVehicles: () => VehicleInstance[];
 };
 ```
 
@@ -81,6 +85,8 @@ export function playerController(): {
 
 - `init(opts, callback?)`  
   初始化控制器。`callback` 在资源加载完成后调用。
+- `loadVehicleModel(params?)`  
+  初始化车辆。
 - `changeView()`  
   在第一/第三人称间切换。
 - `reset(pos?)`  
@@ -91,6 +97,12 @@ export function playerController(): {
   销毁控制器。
 - `getposition()`  
   获取人物当前位置。
+- `getPerson()`  
+  获取人物模型。
+- `getActiveVehicle()`  
+  获取当前车辆实例。
+- `getAllVehicles()`  
+  获取所有车辆实例。。
 
 ---
 
@@ -114,7 +126,7 @@ export function offAllEvent(): void; // 关闭所有输入事件
 
 ## 三、配置与参数说明
 
-### 类型定义
+### 人物类型定义
 
 ```ts
 type PlayerControllerOptions = {
@@ -158,6 +170,9 @@ type PlayerControllerOptions = {
 | `playerModel.url`                                            |                  `string` | 人物模型路径（GLB/GLTF，必填）                                                                                                                         |
 | `playerModel.scale`                                          |                  `number` | 人物模型缩放（必填）                                                                                                                                   |
 | `playerModel.idleAnim` / `walkAnim` / `runAnim` / `jumpAnim` |                  `string` | 人物动画名，需与人物模型中动画名称一致（必填）                                                                                                         |
+| `playerModel.enterCarAnim` / `exitCarAnim`                   |                  `string` | 上车/下车动画名（可选）                                                                                                                                |
+| `playerModel.rotateY`                                        |                  `number` | 模型绕 Y 轴的额外旋转偏移（可选）                                                                                                                      |
+| `playerModel.headObjName`                                    |                  `string` | 头部对象名称（用于相机绑定或查找头部节点）（可选）                                                                                                     |
 | `playerModel.speed`                                          |                  `number` | 基准速度，默认`400`                                                                                                                                    |
 | `playerModel.gravity`                                        |                  `number` | 重力加速度，默认`-2400`                                                                                                                                |
 | `playerModel.jumpHeight`                                     |                  `number` | 跳跃高度，默认`800`                                                                                                                                    |
@@ -168,6 +183,40 @@ type PlayerControllerOptions = {
 | `isShowMobileControls`                                       |                 `boolean` | 移动端运行时，是否自动显示移动端控制器，默认`true`                                                                                                     |
 | `thirdMouseMode`                                             |            `[0, 1, 2, 3]` | 第三人称视角下的不同鼠标控制模式 ，默认`1`(0: 隐藏鼠标控制朝向及视角，1: 隐藏鼠标仅控制视角，2: 显示鼠标拖拽控制朝向及视角, 3: 显示鼠标拖拽仅控制视角) |
 | `enableZoom`                                                 |                 `boolean` | 第三人称模式下是否允许缩放，默认`false`                                                                                                                |
+
+---
+
+### 车辆类型定义
+
+```ts
+type vehicleOptions = {
+    url: string;
+    position: THREE.Vector3;
+    wheelsNames: string[];
+    scale?: number;
+    animations: {
+        openDoorAnim?: string;
+    };
+    boardingPoint: THREE.Vector3;
+    seatOffset?: THREE.Vector3;
+    chassisRatio?: number;
+    suspensionRestLengthRatio?: number;
+};
+```
+
+### 关键字段说明
+
+| 字段                        |            类型 | 必填 |            默认            | 说明                                                                                      |
+| --------------------------- | --------------: | :--: | :------------------------: | ----------------------------------------------------------------------------------------- |
+| `url`                       |        `string` |  是  |             —              | 车辆模型路径（GLB/GLTF）。CORS。                                                          |
+| `position`                  | `THREE.Vector3` |  是  |             —              | 车辆在场景中的初始位置（世界坐标）。示例：`new THREE.Vector3(10,0,5)`。                   |
+| `wheelsNames`               |      `string[]` |  是  |             —              | 车辆模型中车轮节点的名称数组。顺序为前左、前右、后左、后右。                              |
+| `scale`                     |        `number` |  否  |            `1`             | 模型缩放系数。                                                                            |
+| `animations.openDoorAnim`   |        `string` |  否  |             —              | 打开车门的动画片段名称。                                                                  |
+| `boardingPoint`             | `THREE.Vector3` |  是  |             —              | 上车点 **局部坐标**（相对于车辆模型的本地坐标）。例：`new THREE.Vector3(0.8,1.0,0)`。     |
+| `seatOffset`                | `THREE.Vector3` |  否  | `new THREE.Vector3(0,0,0)` | 从 `boardingPoint` 到玩家座位的位置偏移（局部坐标）。可用于微调人物进入车辆后的具体位置。 |
+| `chassisRatio`              |        `number` |  否  |           `0.2`            | 观察车辆原始模型预估底盘高度相较于轮胎直径的比例系数填入（实际作用为调整车辆模型位置）。  |
+| `suspensionRestLengthRatio` |        `number` |  否  |           `0.2`            | 底盘高度相较于轮胎直径的比例系数，与`chassisRatio`不同， 直接影响实际碰撞的底盘高度       |
 
 ---
 

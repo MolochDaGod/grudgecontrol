@@ -2375,14 +2375,14 @@ export function playerController() {
     const c = controllerInstance;
     return {
         init: (opts: PlayerControllerOptions, callback?: () => void) => c.init(opts, callback),
+        loadVehicleModel: (params: vehicleOptions) => c.loadVehicleModel(params),
         changeView: () => c.changeView(),
         reset: (pos?: THREE.Vector3) => c.reset(pos),
         update: (dt?: number) => c.update(dt),
         destroy: () => c.destroy(),
         setInput: (i: any) => c.setInput(i),
         getposition: () => c.getPosition(),
-        loadVehicleModel: (params: vehicleOptions) => c.loadVehicleModel(params),
-        getPreson: () => c.person,
+        getPerson: () => c.person,
         getActiveVehicle: () => c.activeVehicle,
         getAllVehicles: () => c.vehicles,
     };
