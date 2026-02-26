@@ -17,7 +17,6 @@ let gltfLoader;
 const modelUrl = "./glb/burnout_revenge_-_central_route_crash_junction.glb";
 
 const pos = new Vector3(21.5, 4, 15);
-// const pos = new Vector3(21.88, 5.3, 20);
 
 // 判断是否移动端
 function isMobileDevice() {
@@ -32,7 +31,7 @@ async function init() {
     renderer = new WebGLRenderer({ antialias: true });
     renderer.setSize(cont.clientWidth, cont.clientHeight);
     renderer.toneMapping = ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.6;
+    renderer.toneMappingExposure = 1;
     renderer.shadowMap.enabled = !isMobileDevice();
     renderer.setAnimationLoop(animate);
     cont.appendChild(renderer.domElement);
@@ -52,9 +51,7 @@ async function init() {
     controls.target.set(pos.x, pos.y, pos.z + 1);
 
     // 平行光
-    const color = 0xffffff;
-    const intensity = 10;
-    const light = new DirectionalLight(color, intensity);
+    const light = new DirectionalLight(0xffffff, 8);
     light.position.set(50, 50, 50);
     light.target.position.set(0, 0, 0);
     light.castShadow = true;
@@ -62,15 +59,15 @@ async function init() {
     light.shadow.camera.bottom = -40;
     light.shadow.camera.left = -40;
     light.shadow.camera.right = 40;
-    light.shadow.mapSize.width = 7680;
-    light.shadow.mapSize.height = 7680;
+    light.shadow.mapSize.width = 5120;
+    light.shadow.mapSize.height = 5120;
     light.shadow.bias = -0.0005;
     light.shadow.camera.near = 0;
     light.shadow.camera.far = 100;
     scene.add(light);
     scene.add(light.target);
     // 环境光
-    const ambient = new AmbientLight(0xffffff, 3.0);
+    const ambient = new AmbientLight(0xffffff, 4);
     scene.add(ambient);
 
     // 背景
@@ -95,24 +92,6 @@ async function init() {
 
     // 初始化玩家控制器
     player = playerController();
-    // player.init({
-    //     scene,
-    //     camera,
-    //     controls,
-    //     playerModel: {
-    //         url: "./glb/person.glb",
-    //         scale: 0.001,
-    //         idleAnim: "idle",
-    //         walkAnim: "walk",
-    //         runAnim: "run",
-    //         jumpAnim: "jump",
-    //         flyAnim: "flying",
-    //         flyIdleAnim: "flyidle",
-    //     },
-    //     initPos: pos,
-    //     minCamDistance: 50,
-    //     maxCamDistance: 300,
-    // });
     await player.init({
         scene,
         camera,
