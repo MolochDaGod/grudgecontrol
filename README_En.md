@@ -26,6 +26,10 @@ npm install three-player-controller
 
 ![Flying control demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/4.gif)
 
+### Vehicle control demo
+
+![Vehicle control demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/6.gif)
+
 ### Mobile control demo
 
 ![Mobile control demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/5.gif)

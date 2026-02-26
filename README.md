@@ -28,6 +28,10 @@ npm install three-player-controller
 
 ![飞行控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/4.gif)
 
+### 车辆控制
+
+![车辆控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/6.gif)
+
 ### 移动端控制演示
 
 ![移动端控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/5.gif)
