@@ -6,12 +6,6 @@
 
 A lightweight third-person / first-person player controller, ready to use out of the box. Implemented with **three.js** and **three-mesh-bvh**. Features capsule-based character collision, BVH collision detection, character animations, first/third-person switching, and camera obstacle avoidance.
 
-## Installation
-
-```bash
-npm install three-player-controller
-```
-
 ## Demos
 
 - GLB scene: https://hh-hang.github.io/three-player-controller/index.html
@@ -33,6 +27,27 @@ npm install three-player-controller
 ### Mobile control demo
 
 ![Mobile control demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/5.gif)
+
+## Installation
+
+```bash
+npm install three-player-controller
+```
+
+## Run Examples Locally
+
+```bash
+# Clone the repository
+git clone https://github.com/hh-hang/three-player-controller.git
+
+# Install dependencies
+npm install
+
+# Start the development server
+npm run dev
+```
+
+Then open your browser and visit `http://localhost:5173/three-player-controller/` to view the examples.
 
 ## Usage
 

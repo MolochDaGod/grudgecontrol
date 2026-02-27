@@ -6,12 +6,6 @@
 
 轻量的第三人称 / 第一人称玩家控制器，开箱即用，基于 three.js 和 three-mesh-bvh 实现人物胶囊体碰撞、BVH 碰撞检测、人物动画、第一/三人称切换与相机避障。
 
-# 安装
-
-```bash
-npm install three-player-controller
-```
-
 # 示例
 
 - [glb 场景](https://hh-hang.github.io/three-player-controller/index.html)
@@ -35,6 +29,27 @@ npm install three-player-controller
 ### 移动端控制演示
 
 ![移动端控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/5.gif)
+
+# 安装
+
+```bash
+npm install three-player-controller
+```
+
+# 本地运行示例
+
+```bash
+# 克隆仓库
+git clone https://github.com/hh-hang/three-player-controller.git
+
+# 安装依赖
+npm install
+
+# 运行开发服务器
+npm run dev
+```
+
+在浏览器访问 `http://localhost:5173/three-player-controller/` 查看示例。
 
 # 使用
 
