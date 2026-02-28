@@ -278,8 +278,8 @@ class PlayerController {
 
         const s = this.playerModel.scale;
         this.gravity = (opts.playerModel.gravity ?? -2400) * s;
-        this.jumpHeight = (opts.playerModel.jumpHeight ?? 800) * s;
-        this.originPlayerSpeed = (opts.playerModel.speed ?? 400) * s;
+        this.jumpHeight = (opts.playerModel.jumpHeight ?? 600) * s;
+        this.originPlayerSpeed = (opts.playerModel.speed ?? 300) * s;
         this.playerSpeed = this.originPlayerSpeed;
         this.playerModel.rotateY = opts.playerModel.rotateY ?? 0;
 

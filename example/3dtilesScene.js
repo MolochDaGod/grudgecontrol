@@ -100,10 +100,11 @@ function initPlayer() {
             jumpAnim: "jump",
             flyAnim: "flying",
             flyIdleAnim: "flyidle",
+            headObjName: "mixamorigHead",
         },
         initPos: pos,
         minCamDistance: 50,
-        maxCamDistance: 300,
+        maxCamDistance: 250,
         colliderMeshUrl: "./glb/EiffelCollider.glb",
     });
 }
