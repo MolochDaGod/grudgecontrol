@@ -117,25 +117,6 @@ async function init() {
     });
 
     await player.loadVehicleModel({
-        url: "./glb/landRover.glb",
-        scale: 0.115,
-        position: new Vector3(21.88, 5.3, 20),
-        wheelsNames: [
-            "WheelFL", // 前左
-            "WheelFR", // 前右
-            "WheelBL", // 后左
-            "WheelBR", // 后右
-        ],
-        animations: {
-            openDoorAnim: "opendoor",
-        },
-        boardingPoint: new Vector3(0.8, 0, 1.5),
-        seatOffset: new Vector3(0, 0.5, 0),
-        chassisRatio: 0.4,
-        suspensionRestLengthRatio: 0.2,
-    });
-
-    await player.loadVehicleModel({
         url: "./glb/bugatti.glb",
         scale: 0.1,
         position: new Vector3(22, 3.69, 14.5),
