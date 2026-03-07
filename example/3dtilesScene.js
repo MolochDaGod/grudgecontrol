@@ -6,6 +6,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import { playerController } from "../src/playerController";
+import Stats from 'three/examples/jsm/libs/stats.module.js';
 
 let player = null;
 
@@ -14,10 +15,11 @@ let controls;
 let tiles;
 let renderer;
 let scene;
+let stats;
 
 init();
 
-function init() {
+async function init() {
     scene = new Scene();
 
     const cont = document.querySelector("#container");
@@ -32,7 +34,7 @@ function init() {
     cont.appendChild(renderer.domElement);
 
     // 相机
-    camera = new PerspectiveCamera(70, cont.clientWidth / cont.clientHeight, 0.01, 10000);
+    camera = new PerspectiveCamera(60, cont.clientWidth / cont.clientHeight, 0.01, 10000);
     camera.position.set(1e3, 1e3, 1e3).multiplyScalar(0.5);
 
     // 控制器
@@ -73,26 +75,43 @@ function init() {
         }
     );
 
+    // 帧率
+    stats = new Stats();
+    Object.assign(stats.dom.style, {
+        position: "fixed",
+        bottom: "0",
+        left: "0",
+        top: "auto",
+        zIndex: "9998",
+        display: "block",
+    });
+    document.body.appendChild(stats.dom);
+
     // 3DTiles
     reinstantiateTiles();
 
-    initPlayer();
+    await initPlayer();
 
     // 窗口大小监听
     onWindowResize();
     window.addEventListener("resize", onWindowResize, false);
+
+    // 关闭加载页面
+    window.hideLoader();
 }
 
-function initPlayer() {
+async function initPlayer() {
     player = playerController();
-    const pos = new Vector3(100, 100, 100);
     renderer.render(scene, camera);
-    player.init({
+
+    // 初始化玩家控制器
+    player = playerController();
+    await player.init({
         scene,
         camera,
         controls,
         playerModel: {
-            url: "./glb/person.glb",
+            url: "./glb/person2.glb",
             scale: 0.01,
             idleAnim: "idle",
             walkAnim: "walk",
@@ -100,12 +119,38 @@ function initPlayer() {
             jumpAnim: "jump",
             flyAnim: "flying",
             flyIdleAnim: "flyidle",
+            enterCarAnim: "enterCar",
+            exitCarAnim: "exitCar",
             headObjName: "mixamorigHead",
+            rotateY: Math.PI,
         },
-        initPos: pos,
+        initPos: new Vector3(100, 100, 100),
         minCamDistance: 50,
         maxCamDistance: 250,
         colliderMeshUrl: "./glb/EiffelCollider.glb",
+        thirdMouseMode: 1,
+        enableOverShoulderView: true,
+    });
+
+    await player.loadVehicleModel({
+        url: "./glb/tesla.glb",
+        scale: 1.15,
+        position: new Vector3(80, 80, 80),
+        wheelsNames: [
+            "WHEEL_LF", // 前左
+            "WHEEL_RF", // 前右
+            "WHEEL_LR", // 后左
+            "WHEEL_RR", // 后右
+        ],
+        animations: {
+            openDoorAnim: "opendoor",
+        },
+        boardingPoint: new Vector3(0.7, 0, 1.3),
+        seatOffset: new Vector3(0.1, 0.4, 0),
+        chassisRatio: 0.4,
+        suspensionRestLengthRatio: 0.2,
+        followVehicleDirection: false,
+        speedMultiplier: 1.5,
     });
 }
 
@@ -150,6 +195,8 @@ function animate() {
     if (player) player.update();
 
     renderer.render(scene, camera);
+
+    stats?.update();
 }
 
 function onWindowResize() {

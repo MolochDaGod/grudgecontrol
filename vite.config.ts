@@ -11,8 +11,9 @@ export default defineConfig({
         rollupOptions: {
             input: {
                 main: resolve(__dirname, "example", "index.html"),
+                gltf: resolve(__dirname, "example", "glTF.html"),
                 tiles: resolve(__dirname, "example", "3dtilesScene.html"),
-                tilesCustomize: resolve(__dirname, "example", "3dtilesCustomize.html"),
+                dgs: resolve(__dirname, "example", "3dgs.html"),
             },
         },
     },

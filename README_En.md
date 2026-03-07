@@ -4,37 +4,49 @@
 
 [![NPM Package][npm]][npm-url]
 
-A lightweight third-person / first-person player controller, ready to use out of the box. Implemented with **three.js** and **three-mesh-bvh**. Features capsule-based character collision, BVH collision detection, character animations, first/third-person switching, and camera obstacle avoidance.
+A lightweight third-person / first-person player controller for three.js. Out-of-the-box capsule collision, BVH-accelerated collision detection, character animations, first/third-person camera switching, camera occlusion avoidance, and high-performance operation in large scenes powered by three-mesh-bvh.
 
-## Demos
+# Demo
 
-- GLB scene: https://hh-hang.github.io/three-player-controller/index.html
-- 3D Tiles scene: https://hh-hang.github.io/three-player-controller/3dtilesScene.html
-- 3D Tiles customized: https://hh-hang.github.io/three-player-controller/3dtilesCustomize.html
+- [Demo](https://hh-hang.github.io/three-player-controller/index.html)
 
-### Normal control demo
+### Basic Movement
 
-![Normal control demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/1.gif)
+![Basic Movement](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/1.gif)
 
-### Flying control demo
+### Fly Mode
 
-![Flying control demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/4.gif)
+![Fly Mode](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/4.gif)
 
-### Vehicle control demo
+### Vehicle Control
 
-![Vehicle control demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/6.gif)
+![Vehicle Control](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/6.gif)
 
-### Mobile control demo
+### Mobile Controls
 
-![Mobile control demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/5.gif)
+![Mobile Controls](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/5.gif)
 
-## Installation
+# Installation
 
 ```bash
-npm install three-player-controller
+npm install three-player-controller three three-mesh-bvh
 ```
 
-## Run Examples Locally
+## Optional Dependencies
+
+For **vehicle control**, install Rapier:
+
+```bash
+npm install @dimforge/rapier3d-compat
+```
+
+For **mobile controls**, install nipplejs:
+
+```bash
+npm install nipplejs
+```
+
+# Run Examples Locally
 
 ```bash
 # Clone the repository
@@ -43,13 +55,13 @@ git clone https://github.com/hh-hang/three-player-controller.git
 # Install dependencies
 npm install
 
-# Start the development server
+# Start dev server
 npm run dev
 ```
 
-Then open your browser and visit `http://localhost:5173/three-player-controller/` to view the examples.
+Open `http://localhost:5173/three-player-controller/` in your browser.
 
-## Usage
+# Usage
 
 ```js
 import * as THREE from "three";
@@ -58,78 +70,162 @@ import { playerController } from "three-player-controller";
 const player = playerController();
 
 // Initialize the player controller
-player.init({
-    scene, // three.js Scene
-    camera, // three.js Camera
-    controls, // OrbitControls (or other external camera controller)
+await player.init({
+    scene,   // three.js scene
+    camera,  // three.js camera
+    controls, // three.js controls
     playerModel: {
-        url: "./glb/person.glb", // model URL (GLB/GLTF)
-        scale: 0.001, // model scale
-        idleAnim: "Idle_2", // default idle animation name
-        walkAnim: "Walking_11", // default walk animation name
-        runAnim: "Running_9", // default run animation name
-        jumpAnim: "Jump_3", // default jump animation name
+        url: "./glb/person.glb", // model path
+        scale: 0.001,            // model scale
+        idleAnim: "idle",        // idle animation name
+        walkAnim: "walk",        // walk animation name
+        runAnim: "run",          // run animation name
+        jumpAnim: "jump",        // jump animation name
     },
-    initPos: pos, // initial position (THREE.Vector3)
+    initPos: new THREE.Vector3(0, 0, 0),
+});
+
+// Load a vehicle
+await player.loadVehicleModel({
+    url: "./glb/bugatti.glb",
+    scale: 0.1,
+    position: new Vector3(22, 3.69, 14.5),
+    wheelsNames: [
+        "Wheel_LF", // front left
+        "Wheel_RF", // front right
+        "Wheel_LR", // rear left
+        "Wheel_RR", // rear right
+    ],
+    animations: {
+        openDoorAnim: "openDoorLF",
+    },
+    boardingPoint: new Vector3(0.5, 0, 1.8),
+    seatOffset: new Vector3(0, 0.6, 0),
+    chassisRatio: 0.15,
+    suspensionRestLengthRatio: 0.2,
 });
 
 // Call every frame
 player.update();
 ```
 
-## API
+# API
 
-### Exported function
+## I. Initialization
+
+### Exported Function
 
 ```ts
 export function playerController(): {
+    // Initialize
     init: (opts: PlayerControllerOptions, callback?: () => void) => void;
-    loadVehicleModel: (params: vehicleOptions) => void;
+    // Load a vehicle model
+    loadVehicleModel: (params: VehicleOptions) => void;
+    // Switch character model at runtime
+    switchPlayerModel: (model: PlayerControllerOptions["playerModel"]) => void;
+    // Toggle first / third person
     changeView: () => void;
+    // Reset player position
     reset: (pos?: THREE.Vector3) => void;
+    // Call every frame
     update: (dt?: number) => void;
+    // Destroy the controller
     destroy: () => void;
-    getposition: () => THREE.Vector3;
+    // External input injection
+    setInput: (input: PlayerInput) => void;
+    // Get current player world position
+    getPosition: () => THREE.Vector3;
+    // Get center-screen raycast hit against the collider
+    getCenterScreenRaycastHit: () => THREE.Intersection | undefined;
+    // Get the character model object
     getPerson: () => THREE.Object3D | null;
+    // Get the currently driven vehicle instance
     getActiveVehicle: () => VehicleInstance | null;
+    // Get all loaded vehicle instances
     getAllVehicles: () => VehicleInstance[];
+    // Runtime parameter setters
+    setMouseSensitivity: (mouseSensity: number) => void;
+    setGravity: (gravity: number) => void;
+    setJumpHeight: (jumpHeight: number) => void;
+    setPlayerSpeed: (playerSpeed: number) => void;
+    setPlayerFlySpeed: (playerFlySpeed: number) => void;
+    setMinCamDistance: (minCamDistance: number) => void;
+    setMaxCamDistance: (maxCamDistance: number) => void;
+    setThirdMouseMode: (thirdMouseMode: 0 | 1 | 2 | 3) => void;
+    setEnableZoom: (enableZoom: boolean) => void;
+    setOverShoulderView: (enable: boolean) => void;
+    setPlayerScale: (scale: number) => void;
+    setDebug: (debug: boolean) => void;
 };
 ```
 
-### Methods
+### Method Reference
 
-- `init(opts, callback?)` — Initialize the controller. `callback` is called after resources finish loading.
-- `loadVehicleModel(params?)` — Initialize a vehicle model.
-- `changeView()` — Toggle between first-person and third-person view.
-- `reset(pos?)` — Reset the player to the specified position.
-- `update(dt?)` — Call every frame to update the controller.
-- `destroy()` — Destroy the controller and clean up resources.
-- `getposition()` — Get the player world position.
-- `getPerson()` — Get the player model object.
-- `getActiveVehicle()` — Get the currently active vehicle instance.
-- `getAllVehicles()` — Get all vehicle instances.
+| Method | Description |
+|--------|-------------|
+| `init(opts, callback?)` | Initialize the controller. `callback` fires after all assets are loaded. |
+| `loadVehicleModel(params)` | Load and initialize a vehicle. Can be called multiple times for multiple vehicles. |
+| `switchPlayerModel(model)` | Swap the character model at runtime, preserving current position and rotation. |
+| `changeView()` | Toggle between first-person and third-person view. |
+| `reset(pos?)` | Reset player to the given position (defaults to `initPos`). |
+| `update(dt?)` | Drive physics and animation — call once per frame. |
+| `destroy()` | Destroy the controller and release all resources. |
+| `setInput(input)` | Inject external input state, useful for custom key bindings or gamepad support. |
+| `getPosition()` | Get the player's current world position. |
+| `getCenterScreenRaycastHit()` | Get the intersection of the center-screen ray with the scene collider, useful for aim / interaction detection. |
+| `getPerson()` | Get the character model `Object3D`. |
+| `getActiveVehicle()` | Get the vehicle instance currently being driven. |
+| `getAllVehicles()` | Get the array of all loaded vehicle instances. |
+| `setMouseSensitivity(v)` | Set mouse sensitivity. |
+| `setGravity(v)` | Set gravity (base value — multiplied by scale internally). |
+| `setJumpHeight(v)` | Set jump height (base value — multiplied by scale internally). |
+| `setPlayerSpeed(v)` | Set movement speed (base value — multiplied by scale internally). |
+| `setPlayerFlySpeed(v)` | Set fly speed (base value — multiplied by scale internally). |
+| `setMinCamDistance(v)` | Set minimum third-person camera distance. |
+| `setMaxCamDistance(v)` | Set maximum third-person camera distance. |
+| `setThirdMouseMode(v)` | Set third-person mouse mode (0–3). |
+| `setEnableZoom(v)` | Enable or disable scroll-wheel zoom in third-person. |
+| `setOverShoulderView(v)` | Enable or disable over-the-shoulder camera offset. |
+| `setPlayerScale(scale)` | Dynamically scale the character, syncing the collider capsule and all physics parameters. |
+| `setDebug(v)` | Toggle collider debug wireframe display. |
 
 ---
 
-## Events
+## II. Events
 
-### Global event toggle
+### Global Event Toggle
 
 ```ts
-export function onAllEvent(): void; // enable all input events
-export function offAllEvent(): void; // disable all input events
+export function onAllEvent(): void;  // Enable all input listeners
+export function offAllEvent(): void; // Disable all input listeners
 ```
 
-### Description
+- `onAllEvent()`: Ensures the controller instance exists and enables input.
+- `offAllEvent()`: Disables input — use when showing UI overlays or pausing.
 
-- `onAllEvent()` — Ensure the controller exists and enable input listeners.
-- `offAllEvent()` — Disable input listeners (useful when showing UI or pausing to block player input).
+Built-in inputs: WASD movement, sprint, jump, mouse look, etc.
 
-Default handled inputs include: WASD movement, run, jump, mouse look, etc.
+### setInput — External Input
+
+Use `setInput` to take over input, e.g. for custom key mappings or a gamepad:
+
+```ts
+player.setInput({
+    moveX: 1 | 0 | -1,      // Horizontal: 1 right, -1 left, 0 stop
+    moveY: 1 | 0 | -1,      // Forward/back: 1 forward, -1 backward, 0 stop
+    lookDeltaX: number,      // Horizontal look delta
+    lookDeltaY: number,      // Vertical look delta
+    jump: boolean,           // Jump
+    shift: boolean,          // Sprint
+    toggleView: boolean,     // Toggle first/third person
+    toggleFly: boolean,      // Toggle fly mode
+    toggleVehicle: boolean,  // Enter / exit vehicle
+});
+```
 
 ---
 
-## Configuration and Types
+## III. Configuration
 
 ### PlayerControllerOptions
 
@@ -140,6 +236,7 @@ type PlayerControllerOptions = {
     controls: OrbitControls;
     playerModel: {
         url: string;
+        scale: number;
         idleAnim: string;
         walkAnim: string;
         runAnim: string;
@@ -149,10 +246,15 @@ type PlayerControllerOptions = {
         backwardAnim?: string;
         flyAnim?: string;
         flyIdleAnim?: string;
-        scale: number;
+        enterCarAnim?: string;
+        exitCarAnim?: string;
         gravity?: number;
         jumpHeight?: number;
         speed?: number;
+        playerFlySpeed?: number;
+        rotateY?: number;
+        headObjName?: string;
+        flyEnabled?: boolean;
     };
     initPos?: THREE.Vector3;
     mouseSensity?: number;
@@ -160,41 +262,64 @@ type PlayerControllerOptions = {
     maxCamDistance?: number;
     colliderMeshUrl?: string;
     isShowMobileControls?: boolean;
-    thirdMouseMode?: number;
+    thirdMouseMode?: 0 | 1 | 2 | 3;
     enableZoom?: boolean;
+    enableOverShoulderView?: boolean;
 };
 ```
 
-### Key fields
+### Field Reference
 
-| Field                                                        |                      Type | Default / Notes                                                                                                                                                     |
-| ------------------------------------------------------------ | ------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scene`                                                      |             `THREE.Scene` | Required                                                                                                                                                            |
-| `camera`                                                     | `THREE.PerspectiveCamera` | Required                                                                                                                                                            |
-| `controls`                                                   |           `OrbitControls` | Required (external camera controller)                                                                                                                               |
-| `playerModel.url`                                            |                  `string` | Model URL (GLB/GLTF), required                                                                                                                                      |
-| `playerModel.scale`                                          |                  `number` | Required                                                                                                                                                            |
-| `playerModel.idleAnim` / `walkAnim` / `runAnim` / `jumpAnim` |                  `string` | Animation names in the model, required                                                                                                                              |
-| `playerModel.enterCarAnim` / `exitCarAnim`                   |                  `string` | Optional (enter/exit vehicle animations)                                                                                                                            |
-| `playerModel.rotateY`                                        |                  `number` | Optional, extra Y-axis rotation offset                                                                                                                              |
-| `playerModel.headObjName`                                    |                  `string` | Optional, head object name for camera binding                                                                                                                       |
-| `playerModel.speed`                                          |                  `number` | Base speed, default `400`                                                                                                                                           |
-| `playerModel.gravity`                                        |                  `number` | Gravity acceleration, default `-2400`                                                                                                                               |
-| `playerModel.jumpHeight`                                     |                  `number` | Jump height, default `800`                                                                                                                                          |
-| `initPos`                                                    |           `THREE.Vector3` | Initial position, default `(0,0,0)`                                                                                                                                 |
-| `mouseSensity`                                               |                  `number` | Mouse sensitivity, default `5`                                                                                                                                      |
-| `minCamDistance` / `maxCamDistance`                          |                  `number` | Third-person camera distance limits, default `100` / `440`                                                                                                          |
-| `colliderMeshUrl`                                            |                  `string` | Custom collider mesh URL, default `""`                                                                                                                              |
-| `isShowMobileControls`                                       |                 `boolean` | Show mobile controls by default on mobile, default `true`                                                                                                           |
-| `thirdMouseMode`                                             |            `[0, 1, 2, 3]` | Third-person mouse modes, default `1` (0: hide mouse control, 1: hide mouse but control view, 2: show mouse for drag control, 3: show mouse drag only control view) |
-| `enableZoom`                                                 |                 `boolean` | Allow zoom in third-person, default `false`                                                                                                                         |
+| Field | Type | Required | Default | Description |
+|-------|-----:|:--------:|:-------:|-------------|
+| `scene` | `THREE.Scene` | Yes | — | three.js scene |
+| `camera` | `THREE.PerspectiveCamera` | Yes | — | three.js camera |
+| `controls` | `OrbitControls` | Yes | — | External camera controls |
+| `playerModel.url` | `string` | Yes | — | Character model path (GLB/GLTF) |
+| `playerModel.scale` | `number` | Yes | — | Model scale |
+| `playerModel.idleAnim` | `string` | Yes | — | Idle animation name, must match clip name in model |
+| `playerModel.walkAnim` | `string` | Yes | — | Walk animation name, must match clip name in model |
+| `playerModel.runAnim` | `string` | Yes | — | Run animation name, must match clip name in model |
+| `playerModel.jumpAnim` | `string` | Yes | — | Jump animation name, must match clip name in model |
+| `playerModel.leftWalkAnim` | `string` | No | `walkAnim` | Strafe-left anim; falls back to `walkAnim` if omitted |
+| `playerModel.rightWalkAnim` | `string` | No | `walkAnim` | Strafe-right anim; falls back to `walkAnim` if omitted |
+| `playerModel.backwardAnim` | `string` | No | `walkAnim` | Backward anim; falls back to `walkAnim` if omitted |
+| `playerModel.flyAnim` | `string` | No | `idleAnim` | Fly anim; falls back to `idleAnim` if omitted |
+| `playerModel.flyIdleAnim` | `string` | No | `idleAnim` | Fly-idle anim; falls back to `idleAnim` if omitted |
+| `playerModel.enterCarAnim` | `string` | No | — | Enter-vehicle anim (required when using vehicles) |
+| `playerModel.exitCarAnim` | `string` | No | — | Exit-vehicle anim (required when using vehicles) |
+| `playerModel.rotateY` | `number` | No | `0` | Extra Y-axis rotation offset for the model |
+| `playerModel.headObjName` | `string` | No | — | Head node name for first-person camera attachment |
+| `playerModel.speed` | `number` | No | `300` | Movement speed base value |
+| `playerModel.gravity` | `number` | No | `-2400` | Gravity base value |
+| `playerModel.jumpHeight` | `number` | No | `600` | Jump height base value |
+| `playerModel.playerFlySpeed` | `number` | No | `2100` | Fly speed base value |
+| `playerModel.flyEnabled` | `boolean` | No | `true` | Whether fly mode is available |
+| `initPos` | `THREE.Vector3` | No | `(0,0,0)` | Initial position |
+| `mouseSensity` | `number` | No | `5` | Mouse sensitivity |
+| `minCamDistance` | `number` | No | `100` | Minimum third-person camera distance |
+| `maxCamDistance` | `number` | No | `440` | Maximum third-person camera distance |
+| `colliderMeshUrl` | `string` | No | — | Custom collider mesh path; defaults to all meshes in the scene |
+| `isShowMobileControls` | `boolean` | No | `true` | Auto-show virtual joystick on mobile |
+| `thirdMouseMode` | `0\|1\|2\|3` | No | `1` | Mouse mode in third-person (see table below) |
+| `enableZoom` | `boolean` | No | `false` | Allow scroll-wheel zoom in third-person |
+| `enableOverShoulderView` | `boolean` | No | `false` | Enable over-the-shoulder camera offset |
+
+**thirdMouseMode values:**
+
+| Value | Behaviour |
+|-------|-----------|
+| `0` | Pointer locked — mouse controls both rotation and camera orbit |
+| `1` | Pointer locked — mouse controls camera orbit only (default) |
+| `2` | Pointer visible — drag to control rotation and camera orbit |
+| `3` | Pointer visible — drag to control camera orbit only |
 
 ---
 
-### Vehicle options
+### VehicleOptions
 
 ```ts
-type vehicleOptions = {
+type VehicleOptions = {
     url: string;
     position: THREE.Vector3;
     wheelsNames: string[];
@@ -206,29 +331,34 @@ type vehicleOptions = {
     seatOffset?: THREE.Vector3;
     chassisRatio?: number;
     suspensionRestLengthRatio?: number;
+    followVehicleDirection?: boolean;
+    speedMultiplier?: number;
 };
 ```
 
-### Vehicle fields
+### Field Reference
 
-| Field                       |            Type | Required |                    Default | Description                                                                                             |
-| --------------------------- | --------------: | :------: | -------------------------: | ------------------------------------------------------------------------------------------------------- |
-| `url`                       |        `string` |   yes    |                          — | Vehicle model URL (GLB/GLTF). CORS applies.                                                             |
-| `position`                  | `THREE.Vector3` |   yes    |                          — | Initial vehicle world position (e.g. `new THREE.Vector3(10,0,5)`).                                      |
-| `wheelsNames`               |      `string[]` |   yes    |                          — | Wheel node names in model: front-left, front-right, rear-left, rear-right.                              |
-| `scale`                     |        `number` |    no    |                        `1` | Model scale factor.                                                                                     |
-| `animations.openDoorAnim`   |        `string` |    no    |                          — | Open door animation clip name.                                                                          |
-| `boardingPoint`             | `THREE.Vector3` |   yes    |                          — | Boarding point **local coordinate** relative to the vehicle model, e.g. `new THREE.Vector3(0.8,1.0,0)`. |
-| `seatOffset`                | `THREE.Vector3` |    no    | `new THREE.Vector3(0,0,0)` | Offset from `boardingPoint` to the player's seat position (local coordinates).                          |
-| `chassisRatio`              |        `number` |    no    |                      `0.2` | Estimated chassis height ratio relative to wheel diameter (used to adjust model placement).             |
-| `suspensionRestLengthRatio` |        `number` |    no    |                      `0.2` | Ratio affecting actual chassis collision height (different from `chassisRatio`).                        |
+| Field | Type | Required | Default | Description |
+|-------|-----:|:--------:|:-------:|-------------|
+| `url` | `string` | Yes | — | Vehicle model path (GLB/GLTF) |
+| `position` | `THREE.Vector3` | Yes | — | Initial world position of the vehicle |
+| `wheelsNames` | `string[]` | Yes | — | Wheel node names: front-left, front-right, rear-left, rear-right |
+| `scale` | `number` | No | `1` | Model scale factor |
+| `animations.openDoorAnim` | `string` | No | — | Door-open animation clip name |
+| `boardingPoint` | `THREE.Vector3` | Yes | — | Boarding position in vehicle local space |
+| `seatOffset` | `THREE.Vector3` | No | `(0,0,0)` | Seat offset in vehicle local space for fine-tuning the seated position |
+| `chassisRatio` | `number` | No | `0.2` | Chassis height relative to wheel diameter (affects model vertical position) |
+| `suspensionRestLengthRatio` | `number` | No | `0.2` | Suspension rest length relative to wheel diameter (affects physics chassis height) |
+| `followVehicleDirection` | `boolean` | No | `true` | Whether the camera auto-rotates behind the vehicle when driving |
+| `speedMultiplier` | `number` | No | `1` | Speed multiplier for tuning speed differences between vehicles |
 
 ---
 
-## Acknowledgements
+# Credits
 
-- [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh)
-- [three](https://github.com/mrdoob/three.js)
+[three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh)
+
+[three](https://github.com/mrdoob/three.js)
 
 [npm]: https://img.shields.io/npm/v/three-player-controller
 [npm-url]: https://www.npmjs.com/package/three-player-controller

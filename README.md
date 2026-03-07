@@ -4,15 +4,11 @@
 
 [![NPM Package][npm]][npm-url]
 
-轻量的第三人称 / 第一人称玩家控制器，开箱即用，基于 three.js 和 three-mesh-bvh 实现人物胶囊体碰撞、BVH 碰撞检测、人物动画、第一/三人称切换与相机避障。
+轻量的第三人称 / 第一人称玩家控制器，开箱即用，基于 three.js 和 three-mesh-bvh 实现人物胶囊体碰撞、BVH 碰撞检测、人物动画、第一/三人称切换与相机避障，利用 three-mesh-bvh 优化碰撞检测性能，大场景下高性能运行。
 
 # 示例
 
-- [glb 场景](https://hh-hang.github.io/three-player-controller/index.html)
-
-- [3dtiles 场景](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
-
-- [3dtiles 自定义](https://hh-hang.github.io/three-player-controller/3dtilesCustomize.html)
+- [示例](https://hh-hang.github.io/three-player-controller/index.html)
 
 ### 普通控制
 
@@ -33,7 +29,21 @@
 # 安装
 
 ```bash
-npm install three-player-controller
+npm install three-player-controller three three-mesh-bvh
+```
+
+## 可选依赖
+
+如果需要使用**车辆控制**，请安装 Rapier：
+
+```bash
+npm install @dimforge/rapier3d-compat
+```
+
+如果需要使用**移动端控制**，请安装 nipplejs：
+
+```bash
+npm install nipplejs
 ```
 
 # 本地运行示例
@@ -60,19 +70,39 @@ import { playerController } from "three-player-controller";
 const player = playerController();
 
 // 初始化玩家控制器
-player.init({
+await player.init({
     scene, // three.js 场景
     camera, // three.js 相机
     controls, // three.js 控制器
     playerModel: {
         url: "./glb/person.glb", // 模型路径
-        scale: 0.001, // 模型缩放
-        idleAnim: "Idle_2", // 默认 Idle 动画名字
-        walkAnim: "Walking_11", // 默认 Walk 动画名字
-        runAnim: "Running_9", // 默认 Run 动画名字
-        jumpAnim: "Jump_3", // 默认 Jump 动画名字
+        scale: 0.001,            // 模型缩放
+        idleAnim: "idle",        // Idle 动画名
+        walkAnim: "walk",        // Walk 动画名
+        runAnim: "run",          // Run 动画名
+        jumpAnim: "jump",        // Jump 动画名
     },
-    initPos: pos, // 初始位置
+    initPos: new THREE.Vector3(0, 0, 0), // 初始位置
+});
+
+// 加入车辆控制
+await player.loadVehicleModel({
+    url: "./glb/bugatti.glb",
+    scale: 0.1,
+    position: new Vector3(22, 3.69, 14.5),
+    wheelsNames: [
+        "Wheel_LF", // 前左
+        "Wheel_RF", // 前右
+        "Wheel_LR", // 后左
+        "Wheel_RR", // 后右
+    ],
+    animations: {
+        openDoorAnim: "openDoorLF",
+    },
+    boardingPoint: new Vector3(0.5, 0, 1.8),
+    seatOffset: new Vector3(0, 0.6, 0),
+    chassisRatio: 0.15,
+    suspensionRestLengthRatio: 0.2,
 });
 
 // 渲染循环调用
@@ -87,41 +117,77 @@ player.update();
 
 ```ts
 export function playerController(): {
+    // 初始化
     init: (opts: PlayerControllerOptions, callback?: () => void) => void;
-    loadVehicleModel: (params: vehicleOptions) => void;
+    // 加载车辆模型
+    loadVehicleModel: (params: VehicleOptions) => void;
+    // 切换人物模型
+    switchPlayerModel: (model: PlayerControllerOptions["playerModel"]) => void;
+    // 切换第一/第三人称
     changeView: () => void;
+    // 复位玩家位置
     reset: (pos?: THREE.Vector3) => void;
+    // 每帧调用
     update: (dt?: number) => void;
+    // 销毁控制器
     destroy: () => void;
-    getposition: () => THREE.Vector3;
+    // 外部输入控制
+    setInput: (input: PlayerInput) => void;
+    // 获取人物当前位置
+    getPosition: () => THREE.Vector3;
+    // 获取屏幕中心射线与场景的交点
+    getCenterScreenRaycastHit: () => THREE.Intersection | undefined;
+    // 获取人物模型
     getPerson: () => THREE.Object3D | null;
+    // 获取当前驾驶的车辆实例
     getActiveVehicle: () => VehicleInstance | null;
+    // 获取所有车辆实例
     getAllVehicles: () => VehicleInstance[];
+    // 动态参数调整
+    setMouseSensitivity: (mouseSensity: number) => void;
+    setGravity: (gravity: number) => void;
+    setJumpHeight: (jumpHeight: number) => void;
+    setPlayerSpeed: (playerSpeed: number) => void;
+    setPlayerFlySpeed: (playerFlySpeed: number) => void;
+    setMinCamDistance: (minCamDistance: number) => void;
+    setMaxCamDistance: (maxCamDistance: number) => void;
+    setThirdMouseMode: (thirdMouseMode: 0 | 1 | 2 | 3) => void;
+    setEnableZoom: (enableZoom: boolean) => void;
+    setOverShoulderView: (enable: boolean) => void;
+    setPlayerScale: (scale: number) => void;
+    setDebug: (debug: boolean) => void;
 };
 ```
 
 ### 方法说明
 
-- `init(opts, callback?)`  
-  初始化控制器。`callback` 在资源加载完成后调用。
-- `loadVehicleModel(params?)`  
-  初始化车辆。
-- `changeView()`  
-  在第一/第三人称间切换。
-- `reset(pos?)`  
-  复位玩家到指定位置。
-- `update(dt?)`  
-  每帧调用。
-- `destroy()`  
-  销毁控制器。
-- `getposition()`  
-  获取人物当前位置。
-- `getPerson()`  
-  获取人物模型。
-- `getActiveVehicle()`  
-  获取当前车辆实例。
-- `getAllVehicles()`  
-  获取所有车辆实例。。
+| 方法 | 说明 |
+|------|------|
+| `init(opts, callback?)` | 初始化控制器，`callback` 在资源加载完成后调用 |
+| `loadVehicleModel(params)` | 加载并初始化一辆车辆，可多次调用加载多辆 |
+| `switchPlayerModel(model)` | 运行时切换人物模型，保留当前位置与朝向 |
+| `changeView()` | 在第一/第三人称间切换 |
+| `reset(pos?)` | 复位玩家到指定位置（默认初始位置） |
+| `update(dt?)` | 每帧调用，驱动物理与动画 |
+| `destroy()` | 销毁控制器，释放所有资源 |
+| `setInput(input)` | 外部传入输入状态，适用于自定义按键或手柄接入 |
+| `getPosition()` | 获取人物当前世界坐标 |
+| `getCenterScreenRaycastHit()` | 获取屏幕中心射线与碰撞体的交点，可用于瞄准/交互检测 |
+| `getPerson()` | 获取人物模型对象 |
+| `getActiveVehicle()` | 获取当前正在驾驶的车辆实例 |
+| `getAllVehicles()` | 获取所有已加载的车辆实例数组 |
+| `setMouseSensitivity(v)` | 设置鼠标灵敏度 |
+| `setGravity(v)` | 设置重力（传入基准值，内部自动乘以 scale） |
+| `setJumpHeight(v)` | 设置跳跃高度（传入基准值，内部自动乘以 scale） |
+| `setPlayerSpeed(v)` | 设置移动速度（传入基准值，内部自动乘以 scale） |
+| `setPlayerFlySpeed(v)` | 设置飞行速度（传入基准值，内部自动乘以 scale） |
+| `setMinCamDistance(v)` | 设置第三人称最小相机距离 |
+| `setMaxCamDistance(v)` | 设置第三人称最大相机距离 |
+| `setThirdMouseMode(v)` | 设置第三人称鼠标模式（0~3） |
+| `setEnableZoom(v)` | 设置第三人称是否允许滚轮缩放 |
+| `setOverShoulderView(v)` | 开启/关闭过肩视角偏移 |
+| `setPlayerScale(scale)` | 动态设置人物缩放，同步更新碰撞体与所有相关物理参数 |
+| `setDebug(v)` | 开启/关闭碰撞体调试显示 |
 
 ---
 
@@ -130,16 +196,32 @@ export function playerController(): {
 ### 全局事件开关
 
 ```ts
-export function onAllEvent(): void; // 打开所有输入事件
+export function onAllEvent(): void;  // 打开所有输入事件
 export function offAllEvent(): void; // 关闭所有输入事件
 ```
 
-### 说明
-
 - `onAllEvent()`：确保控制器存在并打开输入监听。
-- `offAllEvent()`：关闭输入监听（用于显示 UI 或暂停时禁止玩家输入）。
+- `offAllEvent()`：关闭输入监听，用于显示 UI 或暂停时禁止玩家输入。
 
-    默认处理包括：WASD 移动、奔跑、跳跃、鼠标视角等。
+默认处理包括：WASD 移动、奔跑、跳跃、鼠标视角等。
+
+### setInput 外部输入
+
+可通过 `setInput` 接管输入，适用于自定义按键映射或手柄：
+
+```ts
+player.setInput({
+    moveX: 1 | 0 | -1,       // 横向移动：1 右，-1 左，0 停
+    moveY: 1 | 0 | -1,       // 纵向移动：1 前，-1 后，0 停
+    lookDeltaX: number,       // 视角横向偏移量
+    lookDeltaY: number,       // 视角纵向偏移量
+    jump: boolean,            // 跳跃
+    shift: boolean,           // 奔跑
+    toggleView: boolean,      // 切换第一/第三人称
+    toggleFly: boolean,       // 切换飞行模式
+    toggleVehicle: boolean,   // 上车/下车
+});
+```
 
 ---
 
@@ -154,6 +236,7 @@ type PlayerControllerOptions = {
     controls: OrbitControls;
     playerModel: {
         url: string;
+        scale: number;
         idleAnim: string;
         walkAnim: string;
         runAnim: string;
@@ -163,10 +246,15 @@ type PlayerControllerOptions = {
         backwardAnim?: string;
         flyAnim?: string;
         flyIdleAnim?: string;
-        scale: number;
+        enterCarAnim?: string;
+        exitCarAnim?: string;
         gravity?: number;
         jumpHeight?: number;
         speed?: number;
+        playerFlySpeed?: number;
+        rotateY?: number;
+        headObjName?: string;
+        flyEnabled?: boolean;
     };
     initPos?: THREE.Vector3;
     mouseSensity?: number;
@@ -174,41 +262,64 @@ type PlayerControllerOptions = {
     maxCamDistance?: number;
     colliderMeshUrl?: string;
     isShowMobileControls?: boolean;
-    thirdMouseMode?: number;
+    thirdMouseMode?: 0 | 1 | 2 | 3;
     enableZoom?: boolean;
+    enableOverShoulderView?: boolean;
 };
 ```
 
 ### 关键字段说明
 
-| 字段                                                         |                      类型 | 默认 / 说明                                                                                                                                            |
-| ------------------------------------------------------------ | ------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `scene`                                                      |             `THREE.Scene` | three.js 场景（必填）                                                                                                                                  |
-| `camera`                                                     | `THREE.PerspectiveCamera` | three.js 相机（必填）                                                                                                                                  |
-| `controls`                                                   |           `OrbitControls` | 外部相机控制器（必填）                                                                                                                                 |
-| `playerModel.url`                                            |                  `string` | 人物模型路径（GLB/GLTF，必填）                                                                                                                         |
-| `playerModel.scale`                                          |                  `number` | 人物模型缩放（必填）                                                                                                                                   |
-| `playerModel.idleAnim` / `walkAnim` / `runAnim` / `jumpAnim` |                  `string` | 人物动画名，需与人物模型中动画名称一致（必填）                                                                                                         |
-| `playerModel.enterCarAnim` / `exitCarAnim`                   |                  `string` | 上车/下车动画名（可选）                                                                                                                                |
-| `playerModel.rotateY`                                        |                  `number` | 模型绕 Y 轴的额外旋转偏移（可选）                                                                                                                      |
-| `playerModel.headObjName`                                    |                  `string` | 头部对象名称（用于相机绑定或查找头部节点）（可选）                                                                                                     |
-| `playerModel.speed`                                          |                  `number` | 基准速度，默认`400`                                                                                                                                    |
-| `playerModel.gravity`                                        |                  `number` | 重力加速度，默认`-2400`                                                                                                                                |
-| `playerModel.jumpHeight`                                     |                  `number` | 跳跃高度，默认`800`                                                                                                                                    |
-| `initPos`                                                    |           `THREE.Vector3` | 初始位置，默认`(0,0,0)`                                                                                                                                |
-| `mouseSensity`                                               |                  `number` | 鼠标灵敏度，默认`5`                                                                                                                                    |
-| `minCamDistance` / `maxCamDistance`                          |                  `number` | 第三人称相机距离限制，默认分别为`100`、`440`                                                                                                           |
-| `colliderMeshUrl`                                            |                  `string` | 自制碰撞体模型路径，默认`""`                                                                                                                           |
-| `isShowMobileControls`                                       |                 `boolean` | 移动端运行时，是否自动显示移动端控制器，默认`true`                                                                                                     |
-| `thirdMouseMode`                                             |            `[0, 1, 2, 3]` | 第三人称视角下的不同鼠标控制模式 ，默认`1`(0: 隐藏鼠标控制朝向及视角，1: 隐藏鼠标仅控制视角，2: 显示鼠标拖拽控制朝向及视角, 3: 显示鼠标拖拽仅控制视角) |
-| `enableZoom`                                                 |                 `boolean` | 第三人称模式下是否允许缩放，默认`false`                                                                                                                |
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|------|-----:|:----:|:----:|------|
+| `scene` | `THREE.Scene` | 是 | — | three.js 场景 |
+| `camera` | `THREE.PerspectiveCamera` | 是 | — | three.js 相机 |
+| `controls` | `OrbitControls` | 是 | — | 外部相机控制器 |
+| `playerModel.url` | `string` | 是 | — | 人物模型路径（GLB/GLTF） |
+| `playerModel.scale` | `number` | 是 | — | 人物模型缩放 |
+| `playerModel.idleAnim` | `string` | 是 | — | Idle 动画名，需与模型内动画名一致 |
+| `playerModel.walkAnim` | `string` | 是 | — | Walk 动画名，需与模型内动画名一致 |
+| `playerModel.runAnim` | `string` | 是 | — | Run 动画名，需与模型内动画名一致 |
+| `playerModel.jumpAnim` | `string` | 是 | — | Jump 动画名，需与模型内动画名一致 |
+| `playerModel.leftWalkAnim` | `string` | 否 | `walkAnim` | 左走动画名，不填则复用 `walkAnim` |
+| `playerModel.rightWalkAnim` | `string` | 否 | `walkAnim` | 右走动画名，不填则复用 `walkAnim` |
+| `playerModel.backwardAnim` | `string` | 否 | `walkAnim` | 后退动画名，不填则复用 `walkAnim` |
+| `playerModel.flyAnim` | `string` | 否 | `idleAnim` | 飞行动画名，不填则复用 `idleAnim` |
+| `playerModel.flyIdleAnim` | `string` | 否 | `idleAnim` | 飞行待机动画名，不填则复用 `idleAnim` |
+| `playerModel.enterCarAnim` | `string` | 否 | — | 上车动画名（使用车辆功能时必填） |
+| `playerModel.exitCarAnim` | `string` | 否 | — | 下车动画名（使用车辆功能时必填） |
+| `playerModel.rotateY` | `number` | 否 | `0` | 模型绕 Y 轴的额外旋转偏移 |
+| `playerModel.headObjName` | `string` | 否 | — | 头部节点名称，用于第一人称相机绑定 |
+| `playerModel.speed` | `number` | 否 | `300` | 移动速度基准值 |
+| `playerModel.gravity` | `number` | 否 | `-2400` | 重力加速度基准值 |
+| `playerModel.jumpHeight` | `number` | 否 | `600` | 跳跃高度基准值 |
+| `playerModel.playerFlySpeed` | `number` | 否 | `2100` | 飞行速度基准值 |
+| `playerModel.flyEnabled` | `boolean` | 否 | `true` | 是否允许飞行模式 |
+| `initPos` | `THREE.Vector3` | 否 | `(0,0,0)` | 初始位置 |
+| `mouseSensity` | `number` | 否 | `5` | 鼠标灵敏度 |
+| `minCamDistance` | `number` | 否 | `100` | 第三人称最小相机距离 |
+| `maxCamDistance` | `number` | 否 | `440` | 第三人称最大相机距离 |
+| `colliderMeshUrl` | `string` | 否 | — | 自定义碰撞体模型路径，默认使用场景中所有网格 |
+| `isShowMobileControls` | `boolean` | 否 | `true` | 移动端是否自动显示虚拟摇杆 |
+| `thirdMouseMode` | `0\|1\|2\|3` | 否 | `1` | 第三人称鼠标模式（见下表） |
+| `enableZoom` | `boolean` | 否 | `false` | 第三人称是否允许滚轮缩放 |
+| `enableOverShoulderView` | `boolean` | 否 | `false` | 是否开启过肩视角偏移 |
+
+**thirdMouseMode 说明：**
+
+| 值 | 行为 |
+|----|------|
+| `0` | 隐藏鼠标，鼠标同时控制朝向和视角 |
+| `1` | 隐藏鼠标，鼠标仅控制视角（默认） |
+| `2` | 显示鼠标，拖拽控制朝向和视角 |
+| `3` | 显示鼠标，拖拽仅控制视角 |
 
 ---
 
 ### 车辆类型定义
 
 ```ts
-type vehicleOptions = {
+type VehicleOptions = {
     url: string;
     position: THREE.Vector3;
     wheelsNames: string[];
@@ -220,22 +331,26 @@ type vehicleOptions = {
     seatOffset?: THREE.Vector3;
     chassisRatio?: number;
     suspensionRestLengthRatio?: number;
+    followVehicleDirection?: boolean;
+    speedMultiplier?: number;
 };
 ```
 
 ### 关键字段说明
 
-| 字段                        |            类型 | 必填 |            默认            | 说明                                                                                      |
-| --------------------------- | --------------: | :--: | :------------------------: | ----------------------------------------------------------------------------------------- |
-| `url`                       |        `string` |  是  |             —              | 车辆模型路径（GLB/GLTF）。CORS。                                                          |
-| `position`                  | `THREE.Vector3` |  是  |             —              | 车辆在场景中的初始位置（世界坐标）。示例：`new THREE.Vector3(10,0,5)`。                   |
-| `wheelsNames`               |      `string[]` |  是  |             —              | 车辆模型中车轮节点的名称数组。顺序为前左、前右、后左、后右。                              |
-| `scale`                     |        `number` |  否  |            `1`             | 模型缩放系数。                                                                            |
-| `animations.openDoorAnim`   |        `string` |  否  |             —              | 打开车门的动画片段名称。                                                                  |
-| `boardingPoint`             | `THREE.Vector3` |  是  |             —              | 上车点 **局部坐标**（相对于车辆模型的本地坐标）。例：`new THREE.Vector3(0.8,1.0,0)`。     |
-| `seatOffset`                | `THREE.Vector3` |  否  | `new THREE.Vector3(0,0,0)` | 从 `boardingPoint` 到玩家座位的位置偏移（局部坐标）。可用于微调人物进入车辆后的具体位置。 |
-| `chassisRatio`              |        `number` |  否  |           `0.2`            | 观察车辆原始模型预估底盘高度相较于轮胎直径的比例系数填入（实际作用为调整车辆模型位置）。  |
-| `suspensionRestLengthRatio` |        `number` |  否  |           `0.2`            | 底盘高度相较于轮胎直径的比例系数，与`chassisRatio`不同， 直接影响实际碰撞的底盘高度       |
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|------|-----:|:----:|:----:|------|
+| `url` | `string` | 是 | — | 车辆模型路径（GLB/GLTF） |
+| `position` | `THREE.Vector3` | 是 | — | 车辆初始世界坐标 |
+| `wheelsNames` | `string[]` | 是 | — | 车轮节点名称数组，顺序为前左、前右、后左、后右 |
+| `scale` | `number` | 否 | `1` | 模型缩放系数 |
+| `animations.openDoorAnim` | `string` | 否 | — | 车门打开动画片段名称 |
+| `boardingPoint` | `THREE.Vector3` | 是 | — | 上车点局部坐标（相对车辆模型坐标系） |
+| `seatOffset` | `THREE.Vector3` | 否 | `(0,0,0)` | 座位偏移，用于微调人物坐入后的位置 |
+| `chassisRatio` | `number` | 否 | `0.2` | 底盘高度相对于轮胎直径的比例（影响模型位置） |
+| `suspensionRestLengthRatio` | `number` | 否 | `0.2` | 悬架弹簧静止长度相对于轮胎直径的比例（影响碰撞底盘高度） |
+| `followVehicleDirection` | `boolean` | 否 | `true` | 行驶时相机是否跟随车辆速度方向自动转向车辆正后方 |
+| `speedMultiplier` | `number` | 否 | `1` | 车辆速度倍率，用于调节不同车辆的速度差异 |
 
 ---
 

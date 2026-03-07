@@ -7,8 +7,10 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import breakIconModule from "../assets/imgs/break.png";
 import flyIconModule from "../assets/imgs/fly.png";
 import jumpIconModule from "../assets/imgs/jump.png";
+import vehicleIconModule from "../assets/imgs/vehicle.png";
 import viewIconModule from "../assets/imgs/view.png";
 import { ObstacleChecker, PathPlanner } from "./utils/pathPlanner";
 import { createVehicleController } from "./utils/useVehicleController";
@@ -18,6 +20,7 @@ THREE.Mesh.prototype.raycast = acceleratedRaycast;
 let controllerInstance: PlayerController | null = null;
 const clock = new THREE.Clock();
 
+// ==================== 玩家控制器类型 ====================
 export type PlayerControllerOptions = {
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -39,8 +42,10 @@ export type PlayerControllerOptions = {
         gravity?: number;
         jumpHeight?: number;
         speed?: number;
+        playerFlySpeed?: number;
         rotateY?: number;
         headObjName?: string;
+        flyEnabled?: boolean;
     };
     initPos?: THREE.Vector3;
     mouseSensity?: number;
@@ -50,9 +55,11 @@ export type PlayerControllerOptions = {
     isShowMobileControls?: boolean;
     thirdMouseMode?: 0 | 1 | 2 | 3;
     enableZoom?: boolean;
+    enableOverShoulderView?: boolean;
 };
 
-export type vehicleOptions = {
+// ==================== 车辆类型 ====================
+export type VehicleOptions = {
     url: string;
     position: THREE.Vector3;
     wheelsNames: string[];
@@ -64,6 +71,8 @@ export type vehicleOptions = {
     seatOffset?: THREE.Vector3;
     chassisRatio?: number;
     suspensionRestLengthRatio?: number;
+    followVehicleDirection?: boolean;
+    speedMultiplier?: number;
 };
 
 // ==================== 多车辆实例类型 ====================
@@ -89,6 +98,7 @@ export type VehicleInstance = {
         w: number;
         h: number;
     };
+    speedMultiplier: number;
 };
 
 class PlayerController {
@@ -101,14 +111,17 @@ class PlayerController {
     initPos!: THREE.Vector3;
     gravity!: number;
     jumpHeight!: number;
+    curPlayerSpeed!: number;
+    playerFlySpeed!: number;
     playerSpeed!: number;
     mouseSensity!: number;
-    originPlayerSpeed!: number;
     colliderMeshUrl!: string;
+    playerFlyEnabled!: boolean;
     isShowMobileControls!: boolean;
     thirdMouseMode!: 0 | 1 | 2 | 3;
     enableZoom!: boolean;
     controllerMode: 0 | 1 = 0; // 0: 人物 1: 车辆
+    enableOverShoulderView: boolean = false;
     isChangeControllerTransitionTimer: any = null;
 
     // ==================== 玩家基本属性 ====================
@@ -146,7 +159,7 @@ class PlayerController {
     // 全局车辆共享参数
     vehicleParams = {
         debug: {
-            showPhysicsBox: false,
+            showPhysicsBox: true,
         },
         chassis: {
             linearDamping: 0.5,
@@ -165,6 +178,7 @@ class PlayerController {
             steerSpeed: 0.5,
             steerReturnSpeed: 1,
         },
+        followVehicleDirection: true,
     };
 
     camBehindDir = new THREE.Vector3(0, 0, 1);
@@ -176,10 +190,16 @@ class PlayerController {
     boardingTargetDir: THREE.Vector3 | null = null;
     boardingMoveSpeed: number = 300;
     boardingRotateSpeed: number = 10;
-    flip180Quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
-    enterVehicleTimer: any | null = null;
+    flip180Quat = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        Math.PI,
+    );
     closeVehicleDoorTimer: any | null = null;
     boardingPointWorld: THREE.Vector3 | null = null;
+    isBoardingAnimPlaying: boolean = false;
+    closeDoorTriggered: boolean = false;
+    isExitAnimPlaying: boolean = false;
+    closeExitDoorTriggered: boolean = false;
 
     // ==================== 状态开关 ====================
     playerIsOnGround: boolean = false;
@@ -204,16 +224,20 @@ class PlayerController {
     jumpBtnEl: HTMLButtonElement | null = null;
     flyBtnEl: HTMLButtonElement | null = null;
     viewBtnEl: HTMLButtonElement | null = null;
+    vehicleBtnEl: HTMLButtonElement | null = null;
     lookPointerId: number | null = null;
     isLookDown = false;
     lastTouchX = 0;
     lastTouchY = 0;
+    nearCheckLocal = new THREE.Vector3();
+    nearCheckWorld = new THREE.Vector3();
+    isNearVehicle = false;
 
     // ==================== 第三人称相机参数 ====================
     _camCollisionLerp: number = 0.18;
     _camEpsilon: number = 0.35;
-    _minCamDistance: number = 1.0;
-    _maxCamDistance: number = 4.4;
+    minCamDistance: number = 1.0;
+    maxCamDistance: number = 4.4;
     orginMaxCamDistance: number = 4.4;
 
     // ==================== 物理/运动 ====================
@@ -257,8 +281,17 @@ class PlayerController {
     // ==================== 射线检测 ====================
     readonly _personToCam = new THREE.Vector3();
     readonly _originTmp = new THREE.Vector3();
-    readonly _raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
-    readonly _raycasterPersonToCam = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3());
+    readonly _raycaster = new THREE.Raycaster(
+        new THREE.Vector3(),
+        new THREE.Vector3(0, -1, 0),
+    );
+    readonly _raycasterPersonToCam = new THREE.Raycaster(
+        new THREE.Vector3(),
+        new THREE.Vector3(),
+    );
+
+    centerRay = new THREE.Raycaster();
+    centerMouse = new THREE.Vector2();
 
     constructor() {
         (this._raycaster as any).firstHitOnly = true;
@@ -279,20 +312,26 @@ class PlayerController {
         const s = this.playerModel.scale;
         this.gravity = (opts.playerModel.gravity ?? -2400) * s;
         this.jumpHeight = (opts.playerModel.jumpHeight ?? 600) * s;
-        this.originPlayerSpeed = (opts.playerModel.speed ?? 300) * s;
-        this.playerSpeed = this.originPlayerSpeed;
+        this.playerSpeed = (opts.playerModel.speed ?? 300) * s;
+        this.playerFlySpeed = (opts.playerModel.playerFlySpeed ?? 2100) * s;
+        this.curPlayerSpeed = this.playerSpeed;
         this.playerModel.rotateY = opts.playerModel.rotateY ?? 0;
+        this.playerFlyEnabled = opts.playerModel.flyEnabled ?? true;
 
         this._camCollisionLerp = 0.18;
         this._camEpsilon = 35 * s;
-        this._minCamDistance = (opts.minCamDistance ?? 100) * s;
-        this._maxCamDistance = (opts.maxCamDistance ?? 440) * s;
-        this.orginMaxCamDistance = this._maxCamDistance;
+        this.minCamDistance = (opts.minCamDistance ?? 100) * s;
+        this.maxCamDistance = (opts.maxCamDistance ?? 440) * s;
+        this.orginMaxCamDistance = this.maxCamDistance;
         this.thirdMouseMode = opts.thirdMouseMode ?? 1;
         this.enableZoom = opts.enableZoom ?? false;
 
-        const isMobileDevice = () => (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) || "ontouchstart" in window || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-        this.isShowMobileControls = (opts.isShowMobileControls ?? true) && isMobileDevice();
+        const isMobileDevice = () =>
+            (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+            "ontouchstart" in window ||
+            /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        this.isShowMobileControls =
+            (opts.isShowMobileControls ?? true) && isMobileDevice();
         if (this.isShowMobileControls) {
             await this.initMobileControls();
         }
@@ -304,6 +343,23 @@ class PlayerController {
         this.setCameraPos();
         this.setControls();
         if (callback) callback();
+
+        this.enableOverShoulderView = opts.enableOverShoulderView ?? false;
+        this.setOverShoulderView(this.enableOverShoulderView)
+    }
+
+    setOverShoulderView(enable: boolean) {
+        if (!enable || this.controllerMode == 1) {
+            this.camera.clearViewOffset();
+            return;
+        }
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        this.camera.setViewOffset(
+            w, h,
+            -w * -0.15, 0,
+            w, h
+        );
     }
 
     async initLoader() {
@@ -322,8 +378,14 @@ class PlayerController {
         this.world = new this.RAPIER.World(gravity) as World;
         (this.world as any).maxCcdSubsteps = 2;
 
-        const addGeometryAsTrimesh = (RAPIER: any, world: any, geom: THREE.BufferGeometry) => {
-            let geometry = geom.index ? geom.clone().toNonIndexed() : geom.clone();
+        const addGeometryAsTrimesh = (
+            RAPIER: any,
+            world: any,
+            geom: THREE.BufferGeometry,
+        ) => {
+            let geometry = geom.index
+                ? geom.clone().toNonIndexed()
+                : geom.clone();
             const posAttr = geometry.attributes.position;
             const vertexCount = posAttr.count;
             if (vertexCount % 3 !== 0) {
@@ -337,13 +399,18 @@ class PlayerController {
                 vertices[i * 3 + 1] = tmp.y;
                 vertices[i * 3 + 2] = tmp.z;
             }
-            const indices = vertexCount > 65535 ? new Uint32Array(vertexCount) : new Uint16Array(vertexCount);
+            const indices =
+                vertexCount > 65535
+                    ? new Uint32Array(vertexCount)
+                    : new Uint16Array(vertexCount);
             for (let i = 0; i < vertexCount; i++) indices[i] = i;
 
             const bodyDesc = RAPIER.RigidBodyDesc.fixed();
             const body = world.createRigidBody(bodyDesc);
             // const flags = RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES;
-            const colliderDesc = RAPIER.ColliderDesc.trimesh(vertices, indices).setRestitution(0).setFriction(0.8);
+            const colliderDesc = RAPIER.ColliderDesc.trimesh(vertices, indices)
+                .setRestitution(0)
+                .setFriction(0.8);
             world.createCollider(colliderDesc, body);
         };
 
@@ -360,7 +427,9 @@ class PlayerController {
 
     async loadPersonGLB() {
         try {
-            const gltf: GLTF = await this.loader.loadAsync(this.playerModel.url);
+            const gltf: GLTF = await this.loader.loadAsync(
+                this.playerModel.url,
+            );
             this.person = gltf.scene;
             const { size } = this.getBbox(this.person);
             const ratio = this.playerHeight / size.y;
@@ -382,11 +451,17 @@ class PlayerController {
 
             const r = this.playerRadius * scale;
             const h = this.playerHeight * scale;
-            this.player = new THREE.Mesh(new RoundedBoxGeometry(r * 2, h, r * 2, 1, 75), material);
+            this.player = new THREE.Mesh(
+                new RoundedBoxGeometry(r * 2, h, r * 2, 1, 75),
+                material,
+            );
             this.player.geometry.translate(0, -h * 0.25, 0);
             this.player.capsuleInfo = {
                 radius: r,
-                segment: new THREE.Line3(new THREE.Vector3(), new THREE.Vector3(0, -h * 0.5, 0)),
+                segment: new THREE.Line3(
+                    new THREE.Vector3(),
+                    new THREE.Vector3(0, -h * 0.5, 0),
+                ),
             };
             this.player.name = "capsule";
             this.scene.add(this.player);
@@ -405,14 +480,15 @@ class PlayerController {
 
             this.personMixer = new THREE.AnimationMixer(this.person);
             const animations = gltf.animations ?? [];
+            console.log('animations', animations)
             this.personActions = new Map<string, THREE.AnimationAction>();
 
             const animationMappings: [string, string][] = [
                 [this.playerModel.idleAnim, "idle"],
                 [this.playerModel.walkAnim, "walking"],
-                [this.playerModel.leftWalkAnim || this.playerModel.walkAnim, "left_walking"],
-                [this.playerModel.rightWalkAnim || this.playerModel.walkAnim, "right_walking"],
-                [this.playerModel.backwardAnim || this.playerModel.walkAnim, "walking_backward"],
+                [this.playerModel.leftWalkAnim || this.playerModel.walkAnim, "left_walking",],
+                [this.playerModel.rightWalkAnim || this.playerModel.walkAnim, "right_walking",],
+                [this.playerModel.backwardAnim || this.playerModel.walkAnim, "walking_backward",],
                 [this.playerModel.jumpAnim, "jumping"],
                 [this.playerModel.runAnim, "running"],
                 [this.playerModel.flyIdleAnim || this.playerModel.idleAnim, "flyidle"],
@@ -458,7 +534,9 @@ class PlayerController {
                 const finishedAction: THREE.AnimationAction = ev.action;
                 if (finishedAction === this.jumpAction) {
                     if (this.fwdPressed) {
-                        this.playPersonAnimationByName(this.shiftPressed ? "running" : "walking");
+                        this.playPersonAnimationByName(
+                            this.shiftPressed ? "running" : "walking",
+                        );
                         return;
                     }
                     if (this.bkdPressed) {
@@ -471,10 +549,67 @@ class PlayerController {
                     }
                     this.playPersonAnimationByName("idle");
                 }
+                if (finishedAction === this.personActions?.get("enterCar")) {
+                    this.onEnterCarAnimFinished();
+                }
+                if (finishedAction === this.personActions?.get("exitCar")) {
+                    // this._onExitCarAnimFinished();
+                }
             });
         } catch (error) {
             console.error("加载玩家模型失败:", error);
         }
+    }
+
+    async switchPlayerModel(newPlayerModel: PlayerControllerOptions["playerModel"]) {
+        const savedPos = this.player.position.clone();
+        const savedQuat = this.player.quaternion.clone();
+
+        const wasFirstPerson = this.isFirstPerson;
+        if (wasFirstPerson) {
+            this.scene.attach(this.camera);
+        }
+
+        if (this.player) {
+            this.scene.remove(this.player);
+        }
+
+        if (this.person) {
+            this.player.remove(this.person);
+            this.person = null;
+            this.personHead = null;
+        }
+
+        if (this.personMixer) {
+            this.personMixer.stopAllAction();
+            this.personMixer.uncacheRoot(this.personMixer.getRoot());
+            this.personMixer = undefined;
+            this.personActions = undefined;
+        }
+
+        const ratio = newPlayerModel.scale / this.playerModel.scale;
+        this.playerModel = { ...this.playerModel, ...newPlayerModel };
+
+        this.gravity *= ratio;
+        this.jumpHeight *= ratio;
+        this.playerSpeed *= ratio;
+        this.playerFlySpeed *= ratio;
+        this.curPlayerSpeed *= ratio;
+        this._camEpsilon *= ratio;
+        this.minCamDistance *= ratio;
+        this.maxCamDistance *= ratio;
+        this.orginMaxCamDistance *= ratio;
+
+        await this.loadPersonGLB();
+
+        this.player.position.copy(savedPos);
+        this.player.quaternion.copy(savedQuat);
+
+        if (wasFirstPerson) {
+            this.setFirstPersonCamera();
+        }
+
+        this.setDebug(this.displayCollider);
     }
 
     playPersonAnimationByName(name: string, fade = 0.18) {
@@ -512,7 +647,7 @@ class PlayerController {
     /**
      * 加载车辆模型
      */
-    async loadVehicleModel(opts: vehicleOptions) {
+    async loadVehicleModel(opts: VehicleOptions) {
         try {
             if (!this.playerModel.enterCarAnim) {
                 return console.warn("未配置上车动画，不执行车辆相关逻辑");
@@ -525,11 +660,14 @@ class PlayerController {
             const scale = opts.scale ?? 1;
             const chassisRatio = opts.chassisRatio ?? 0.2;
             const suspensionRestLengthRatio = opts.suspensionRestLengthRatio ?? 0.2;
+            const speedMultiplier = opts.speedMultiplier ?? 1;
+            const followVehicleDirection = opts.followVehicleDirection ?? true;
 
-            // 参数乘以系数
+            // 参数调整
             this.vehicleParams.power.accelerateForce = 50 * scale;
             this.vehicleParams.power.brakeForce = 200 * scale;
             this.vehicleParams.power.maxSpeed = 10000 * scale;
+            this.vehicleParams.followVehicleDirection = followVehicleDirection;
 
             // 加载模型
             const vehicleModel = await this.loader.loadAsync(opts.url);
@@ -544,7 +682,8 @@ class PlayerController {
             const animations = vehicleModel.animations ?? [];
             const vehicleActions = new Map<string, THREE.AnimationAction>();
 
-            const findClip = (name: string) => animations.find((a: any) => a.name === name);
+            const findClip = (name: string) =>
+                animations.find((a: any) => a.name === name);
             const openDoorClip = findClip(opts.animations?.openDoorAnim || "");
             if (openDoorClip) {
                 const action = vehicleMixer.clipAction(openDoorClip);
@@ -653,24 +792,36 @@ class PlayerController {
             halfExtents.z *= 0.95;
 
             const chassisDesc = this.RAPIER.RigidBodyDesc.dynamic()
-                .setTranslation(opts.position.x, opts.position.y, opts.position.z)
+                .setTranslation(
+                    opts.position.x,
+                    opts.position.y,
+                    opts.position.z,
+                )
                 .setLinearDamping(this.vehicleParams.chassis.linearDamping)
                 .setAngularDamping(this.vehicleParams.chassis.angularDamping)
-                .setCanSleep(false)
+                .setCanSleep(true)
                 .setAdditionalMass(10);
             const chassisBody = this.world.createRigidBody(chassisDesc);
-            const chassisCollider = this.RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z);
+            const chassisCollider = this.RAPIER.ColliderDesc.cuboid(
+                halfExtents.x,
+                halfExtents.y,
+                halfExtents.z,
+            );
             this.world.createCollider(chassisCollider, chassisBody);
 
             if (this.vehicleParams.debug.showPhysicsBox) {
                 const debugBox = new THREE.Mesh(
-                    new THREE.BoxGeometry(halfExtents.x * 2, halfExtents.y * 2, halfExtents.z * 2),
+                    new THREE.BoxGeometry(
+                        halfExtents.x * 2,
+                        halfExtents.y * 2,
+                        halfExtents.z * 2,
+                    ),
                     new THREE.MeshBasicMaterial({
                         color: 0xff0000,
                         wireframe: true,
                         transparent: true,
                         opacity: 0.3,
-                    })
+                    }),
                 );
                 vehicleGroup.add(debugBox);
             }
@@ -679,7 +830,12 @@ class PlayerController {
             vehicleGroup.updateMatrixWorld(true);
 
             // 创建车辆控制器
-            const { vehicle, updateWheelVisuals } = createVehicleController(this.world, chassisBody, wheelWrappers, wheelsInfo);
+            const { vehicle, updateWheelVisuals } = createVehicleController(
+                this.world,
+                chassisBody,
+                wheelWrappers,
+                wheelsInfo,
+            );
 
             // 组装 VehicleInstance
             const vehicleInstance: VehicleInstance = {
@@ -691,11 +847,14 @@ class PlayerController {
                 vehicleActions,
                 vehiclIsOpenDoor: false,
                 vehicleBBox: bbox.clone(),
-                pathPlanner: new PathPlanner(this._createObstacleCheckerFor(vehicleGroup, bbox, scale), {
-                    debugEnabled: false,
-                    scene: this.scene,
-                    scale: this.playerModel.scale,
-                }),
+                pathPlanner: new PathPlanner(
+                    this._createObstacleCheckerFor(vehicleGroup, bbox, scale),
+                    {
+                        debugEnabled: false,
+                        scene: this.scene,
+                        scale: this.playerModel.scale,
+                    },
+                ),
                 scale,
                 boardingPoint: opts.boardingPoint,
                 seatOffset: opts.seatOffset ?? new THREE.Vector3(0, 0, 0),
@@ -706,11 +865,15 @@ class PlayerController {
                     l: Math.max(size.x, size.z),
                     w: Math.min(size.x, size.z),
                     h: size.y,
-                },
+                }, 
+                speedMultiplier,
             };
 
             this.vehicles.push(vehicleInstance);
-            console.log(`车辆加载完成，当前共 ${this.vehicles.length} 辆车`, vehicleInstance);
+            // console.log(
+            //     `车辆加载完成，当前共 ${this.vehicles.length} 辆车`,
+            //     vehicleInstance,
+            // );
             // 初始化过渡
             this.setControllerTransition();
         } catch (error) {
@@ -730,7 +893,11 @@ class PlayerController {
     /**
      * 为指定车辆创建障碍物检测器
      */
-    private _createObstacleCheckerFor(vehicleGroup: THREE.Group, bbox: THREE.Box3, scale: number): ObstacleChecker {
+    private _createObstacleCheckerFor(
+        vehicleGroup: THREE.Group,
+        bbox: THREE.Box3,
+        scale: number,
+    ): ObstacleChecker {
         return {
             isBlocked: (start: THREE.Vector3, end: THREE.Vector3): boolean => {
                 const vehiclePos = vehicleGroup.position;
@@ -748,8 +915,14 @@ class PlayerController {
                 for (let x = -1; x <= 1; x += 2) {
                     for (let y = -1; y <= 1; y += 2) {
                         for (let z = -1; z <= 1; z += 2) {
-                            const localCorner = new THREE.Vector3(halfSize.x * x, halfSize.y * y, halfSize.z * z);
-                            const worldCorner = localCorner.applyQuaternion(vehicleQuat).add(center);
+                            const localCorner = new THREE.Vector3(
+                                halfSize.x * x,
+                                halfSize.y * y,
+                                halfSize.z * z,
+                            );
+                            const worldCorner = localCorner
+                                .applyQuaternion(vehicleQuat)
+                                .add(center);
                             corners.push(worldCorner);
                         }
                     }
@@ -766,16 +939,28 @@ class PlayerController {
                 const ray = new THREE.Ray(start, direction);
                 const intersection = new THREE.Vector3();
                 const intersects = ray.intersectBox(expandedBBox, intersection);
-                return intersects !== null && start.distanceTo(intersection) < length;
+                return (
+                    intersects !== null &&
+                    start.distanceTo(intersection) < length
+                );
             },
 
-            getNavigationNodes: (start: THREE.Vector3, _goal: THREE.Vector3): THREE.Vector3[] => {
+            getNavigationNodes: (
+                start: THREE.Vector3,
+                _goal: THREE.Vector3,
+            ): THREE.Vector3[] => {
                 const nodes: THREE.Vector3[] = [];
                 const vehiclePos = vehicleGroup.position;
                 const vehicleQuat = vehicleGroup.quaternion;
 
-                const vehicleForward = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleQuat);
-                const vehicleRight = new THREE.Vector3(1, 0, 0).applyQuaternion(vehicleQuat);
+                const vehicleForward = new THREE.Vector3(
+                    0,
+                    0,
+                    1,
+                ).applyQuaternion(vehicleQuat);
+                const vehicleRight = new THREE.Vector3(1, 0, 0).applyQuaternion(
+                    vehicleQuat,
+                );
 
                 const bboxSize = new THREE.Vector3();
                 bbox.getSize(bboxSize);
@@ -791,30 +976,62 @@ class PlayerController {
                     nodes.push(
                         vehiclePos
                             .clone()
-                            .add(vehicleForward.clone().multiplyScalar(halfLength + margin))
-                            .add(vehicleRight.clone().multiplyScalar(-halfWidth - margin))
-                            .setY(groundY)
+                            .add(
+                                vehicleForward
+                                    .clone()
+                                    .multiplyScalar(halfLength + margin),
+                            )
+                            .add(
+                                vehicleRight
+                                    .clone()
+                                    .multiplyScalar(-halfWidth - margin),
+                            )
+                            .setY(groundY),
                     );
                     nodes.push(
                         vehiclePos
                             .clone()
-                            .add(vehicleForward.clone().multiplyScalar(halfLength + margin))
-                            .add(vehicleRight.clone().multiplyScalar(halfWidth + margin))
-                            .setY(groundY)
+                            .add(
+                                vehicleForward
+                                    .clone()
+                                    .multiplyScalar(halfLength + margin),
+                            )
+                            .add(
+                                vehicleRight
+                                    .clone()
+                                    .multiplyScalar(halfWidth + margin),
+                            )
+                            .setY(groundY),
                     );
                     nodes.push(
                         vehiclePos
                             .clone()
-                            .add(vehicleForward.clone().multiplyScalar(-halfLength - margin))
-                            .add(vehicleRight.clone().multiplyScalar(-halfWidth - margin))
-                            .setY(groundY)
+                            .add(
+                                vehicleForward
+                                    .clone()
+                                    .multiplyScalar(-halfLength - margin),
+                            )
+                            .add(
+                                vehicleRight
+                                    .clone()
+                                    .multiplyScalar(-halfWidth - margin),
+                            )
+                            .setY(groundY),
                     );
                     nodes.push(
                         vehiclePos
                             .clone()
-                            .add(vehicleForward.clone().multiplyScalar(-halfLength - margin))
-                            .add(vehicleRight.clone().multiplyScalar(halfWidth + margin))
-                            .setY(groundY)
+                            .add(
+                                vehicleForward
+                                    .clone()
+                                    .multiplyScalar(-halfLength - margin),
+                            )
+                            .add(
+                                vehicleRight
+                                    .clone()
+                                    .multiplyScalar(halfWidth + margin),
+                            )
+                            .setY(groundY),
                     );
                 }
 
@@ -856,7 +1073,7 @@ class PlayerController {
      * 上车：自动寻找最近的车辆
      */
     enterVehicle() {
-        if (this.vehicles.length === 0) return;
+        if (this.vehicles.length === 0 || this.isMovingToBoardingPoint) return;
 
         // 遍历所有车辆，找距离最近的上车点
         let nearestVehicle: VehicleInstance | null = null;
@@ -865,9 +1082,13 @@ class PlayerController {
 
         for (const v of this.vehicles) {
             // 计算上车点世界坐标
-            const boardingPointLocal = v.boardingPoint.clone().multiplyScalar(v.scale);
+            const boardingPointLocal = v.boardingPoint
+                .clone()
+                .multiplyScalar(v.scale);
             const boardingPointWorld = new THREE.Vector3();
-            v.vehicleGroup.localToWorld(boardingPointWorld.copy(boardingPointLocal));
+            v.vehicleGroup.localToWorld(
+                boardingPointWorld.copy(boardingPointLocal),
+            );
 
             const dist = this.player.position.distanceTo(boardingPointWorld);
             if (dist < 800 * this.playerModel.scale && dist < nearestDist) {
@@ -882,13 +1103,21 @@ class PlayerController {
         // 锁定目标车辆
         this.activeVehicle = nearestVehicle;
         const v = nearestVehicle;
+        const vel = v.chassisBody.linvel();
+        const horizSpeed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+        if (horizSpeed > 0.1) return;
 
         this.boardingPointWorld = nearBoardingPointWorld;
         // 计算车辆朝向
-        const vehicleForward = new THREE.Vector3(0, 0, 1).applyQuaternion(v.vehicleGroup.quaternion).normalize();
+        const vehicleForward = new THREE.Vector3(0, 0, 1)
+            .applyQuaternion(v.vehicleGroup.quaternion)
+            .normalize();
 
         // 路径规划
-        const path = v.pathPlanner.findPath(this.player.position.clone(), this.boardingPointWorld);
+        const path = v.pathPlanner.findPath(
+            this.player.position.clone(),
+            this.boardingPointWorld,
+        );
         this.boardingWaypoints = path;
         this.currentWaypointIndex = 0;
         this.boardingTargetDir = vehicleForward;
@@ -901,7 +1130,11 @@ class PlayerController {
      * 走向上车点
      */
     updateMoveToBoardingPoint(delta: number) {
-        if (!this.isMovingToBoardingPoint || !this.boardingTargetDir || this.boardingWaypoints.length === 0) {
+        if (
+            !this.isMovingToBoardingPoint ||
+            !this.boardingTargetDir ||
+            this.boardingWaypoints.length === 0
+        ) {
             return;
         }
 
@@ -910,22 +1143,37 @@ class PlayerController {
             return;
         }
 
-        const currentWaypoint = this.boardingWaypoints[this.currentWaypointIndex];
+        const currentWaypoint =
+            this.boardingWaypoints[this.currentWaypointIndex];
         const currentPos = this.player.position.clone();
 
-        const horizontalDistance = new THREE.Vector2(currentWaypoint.x - currentPos.x, currentWaypoint.z - currentPos.z).length();
+        const horizontalDistance = new THREE.Vector2(
+            currentWaypoint.x - currentPos.x,
+            currentWaypoint.z - currentPos.z,
+        ).length();
 
         const isLastWaypoint = this.currentWaypointIndex === this.boardingWaypoints.length - 1;
         const waypointThreshold = isLastWaypoint ? 0 : 10 * this.playerModel.scale;
 
         if (horizontalDistance > waypointThreshold) {
-            const moveDir = new THREE.Vector3(currentWaypoint.x - currentPos.x, 0, currentWaypoint.z - currentPos.z).normalize();
+            const moveDir = new THREE.Vector3(
+                currentWaypoint.x - currentPos.x,
+                0,
+                currentWaypoint.z - currentPos.z,
+            ).normalize();
 
-            const moveDistance = Math.min(this.boardingMoveSpeed * this.playerModel.scale * delta, horizontalDistance);
+            const moveDistance = Math.min(
+                this.boardingMoveSpeed * this.playerModel.scale * delta,
+                horizontalDistance,
+            );
             this.player.position.add(moveDir.multiplyScalar(moveDistance));
 
             const lookTarget = this.player.position.clone().add(moveDir);
-            this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
+            this.targetMat.lookAt(
+                this.player.position,
+                lookTarget,
+                this.player.up,
+            );
             this.targetQuat.setFromRotationMatrix(this.targetMat);
             this.targetQuat.multiply(this.flip180Quat);
             const rotateAlpha = Math.min(1, this.boardingRotateSpeed * delta);
@@ -940,15 +1188,21 @@ class PlayerController {
      */
     finalizeBoarding(delta: number) {
         const v = this.activeVehicle;
-        if (!this.boardingTargetDir || !v) return;
+        if (!this.boardingTargetDir || !v || !this.isMovingToBoardingPoint) return;
 
-        const currentDir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.player.quaternion).normalize();
+        const currentDir = new THREE.Vector3(0, 0, -1)
+            .applyQuaternion(this.player.quaternion)
+            .normalize();
         const targetDir = this.boardingTargetDir.clone().normalize();
         const angleDiff = currentDir.angleTo(targetDir);
 
         if (angleDiff > 0.01) {
             const lookTarget = this.player.position.clone().add(targetDir);
-            this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
+            this.targetMat.lookAt(
+                this.player.position,
+                lookTarget,
+                this.player.up,
+            );
             this.targetQuat.setFromRotationMatrix(this.targetMat);
             const rotateAlpha = Math.min(1, this.boardingRotateSpeed * delta);
             this.player.quaternion.slerp(this.targetQuat, rotateAlpha);
@@ -960,36 +1214,30 @@ class PlayerController {
             v.pathPlanner?.clearVisualization();
 
             this.playPersonAnimationByName("enterCar");
+            this.isBoardingAnimPlaying = true;
+            this.closeDoorTriggered = false;
             if (!v.vehiclIsOpenDoor) this.openVehicleDoor();
             this.player.rotation.copy(v.vehicleGroup.rotation);
             this.player.quaternion.multiply(this.flip180Quat);
-
-            this.closeVehicleDoorTimer = setTimeout(
-                () => {
-                    this.openVehicleDoor(false);
-                },
-                v.enterVehicleTime * 1000 - 500
-            );
-
-            this.enterVehicleTimer = setTimeout(() => {
-                if (this.boardingPointWorld) {
-                    const offsetY = this.boardingPointWorld.y - this.player.position.y;
-                    this.controllerMode = 1;
-                    v.vehicleGroup.attach(this.player);
-                    this.player.position.add(
-                        v.seatOffset
-                            .clone()
-                            .multiplyScalar(v.scale)
-                            .add(new THREE.Vector3(0, offsetY, 0))
-                    );
-                    this.isMovingToBoardingPoint = false;
-                    if (this.isChangeControllerTransitionTimer) {
-                        clearTimeout(this.isChangeControllerTransitionTimer);
-                        this.isChangeControllerTransitionTimer = null;
-                    }
-                }
-            }, v.enterVehicleTime * 1000);
         }
+    }
+
+    onEnterCarAnimFinished() {
+        const v = this.activeVehicle;
+        if (!v || !this.isMovingToBoardingPoint) return;
+        this.player.updateMatrixWorld(true);
+        const offsetY = this.boardingPointWorld.y - this.player.position.y;
+        this.controllerMode = 1;
+        this.syncControllerModeBtnEl();
+        this.setOverShoulderView(false);
+        v.vehicleGroup.attach(this.player);
+        this.player.position.add(
+            v.seatOffset
+                .clone()
+                .multiplyScalar(v.scale)
+                .add(new THREE.Vector3(0, offsetY, 0)),
+        );
+        this.isMovingToBoardingPoint = false;
     }
 
     /**
@@ -1005,23 +1253,20 @@ class PlayerController {
         this.boardingTargetDir = null;
 
         const vel = v.chassisBody.linvel();
-        const velSpeed = new THREE.Vector3(vel.x, vel.y, vel.z).length();
-
-        if (velSpeed > 0.1) {
-            this.playPersonAnimationByName("idle");
-        } else {
+        const horizSpeed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+        const isStationary = horizSpeed < 0.1;
+        if (isStationary) {
             this.playPersonAnimationByName("exitCar");
+            this.isExitAnimPlaying = true;
+            this.closeExitDoorTriggered = false;
+        } else {
+            this.playPersonAnimationByName("idle");
         }
 
         this.openVehicleDoor(true);
-        this.closeVehicleDoorTimer = setTimeout(
-            () => {
-                this.openVehicleDoor(false);
-            },
-            v.enterVehicleTime * 1000 - 500
-        );
-
         this.controllerMode = 0;
+        this.syncControllerModeBtnEl();
+        this.setOverShoulderView(this.enableOverShoulderView);
         this.scene.attach(this.player);
 
         if (this.isFirstPerson) {
@@ -1038,34 +1283,52 @@ class PlayerController {
 
         if (this.isFirstPerson) {
             this.setFirstPersonCamera();
+            this.setOverShoulderView(false)
         } else {
+            this.controls.enabled = true;
             this.scene.attach(this.camera);
             const worldPos = this.player.position.clone();
-            const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.player.quaternion);
+            const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(
+                this.player.quaternion,
+            );
             const angle = Math.atan2(dir.z, dir.x);
-            const offset = new THREE.Vector3(Math.cos(angle) * 400 * this.playerModel.scale, 200 * this.playerModel.scale, Math.sin(angle) * 400 * this.playerModel.scale);
+            const offset = new THREE.Vector3(
+                Math.cos(angle) * 400 * this.playerModel.scale,
+                200 * this.playerModel.scale,
+                Math.sin(angle) * 400 * this.playerModel.scale,
+            );
             this.camera.position.copy(worldPos).add(offset);
             this.controls.target.copy(worldPos);
             this.controls.enableZoom = this.enableZoom;
+            this.setOverShoulderView(this.enableOverShoulderView);
         }
 
         this.setPointerLock();
     }
 
     setFirstPersonCamera() {
+        this.controls.enabled = false;
         if (this.personHead) {
             this.personHead?.attach(this.camera);
             this.camera.position.set(0, 10, 20);
         } else {
             this.player.attach(this.camera);
-            this.camera.position.set(0, 40 * this.playerModel.scale, 30 * this.playerModel.scale);
+            this.camera.position.set(
+                0,
+                40 * this.playerModel.scale,
+                30 * this.playerModel.scale,
+            );
         }
         this.camera.rotation.set(0, Math.PI, 0);
         this.controls.enableZoom = false;
     }
 
     setPointerLock() {
-        if (((this.thirdMouseMode === 0 || this.thirdMouseMode === 1) && !this.isFirstPerson) || this.isFirstPerson) {
+        if (
+            ((this.thirdMouseMode === 0 || this.thirdMouseMode === 1) &&
+                !this.isFirstPerson) ||
+            this.isFirstPerson
+        ) {
             document.body.requestPointerLock();
         } else {
             document.exitPointerLock();
@@ -1073,20 +1336,31 @@ class PlayerController {
     }
 
     setCameraPos() {
-        setTimeout(() => {
+        requestAnimationFrame(() => {
             if (this.isFirstPerson) {
                 this.person.add(this.camera);
-                this.camera.position.set(0, 40 * this.playerModel.scale, 30 * this.playerModel.scale);
+                this.camera.position.set(
+                    0,
+                    40 * this.playerModel.scale,
+                    30 * this.playerModel.scale,
+                );
             } else {
                 const worldPos = this.player.position.clone();
-                const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.player.quaternion);
+                const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(
+                    this.player.quaternion,
+                ); 
                 const angle = Math.atan2(dir.z, dir.x);
-                const offset = new THREE.Vector3(Math.cos(angle) * 400 * this.playerModel.scale, -100 * this.playerModel.scale, Math.sin(angle) * 400 * this.playerModel.scale);
+                const offset = new THREE.Vector3(
+                    Math.cos(angle) * 400 * this.playerModel.scale,
+                    200 * this.playerModel.scale,
+                    Math.sin(angle) * 400 * this.playerModel.scale,
+                );
                 this.camera.position.copy(worldPos).add(offset);
                 this.controls.enableZoom = this.enableZoom;
             }
             this.camera.updateProjectionMatrix();
-        }, 0);
+        });
+
     }
 
     setControls() {
@@ -1114,14 +1388,20 @@ class PlayerController {
                 const yaw = -dx * speed * this.mouseSensity;
                 const pitch = -dy * speed * this.mouseSensity;
                 this.player.rotateY(yaw);
-                this.camera.rotation.x = THREE.MathUtils.clamp(this.camera.rotation.x + pitch, -1.1, 1.4);
+                this.camera.rotation.x = THREE.MathUtils.clamp(
+                    this.camera.rotation.x + pitch,
+                    -1.1,
+                    1.4,
+                );
             } else {
                 const sensitivity = this.mouseSensity;
                 const deltaX = -dx * speed * sensitivity;
                 const deltaY = -dy * speed * sensitivity;
                 const target = this.player.position.clone();
                 const distance = this.camera.position.distanceTo(target);
-                const currentPosition = this.camera.position.clone().sub(target);
+                const currentPosition = this.camera.position
+                    .clone()
+                    .sub(target);
                 let theta = Math.atan2(currentPosition.x, currentPosition.z);
                 let phi = Math.acos(currentPosition.y / distance);
                 theta += deltaX;
@@ -1130,7 +1410,11 @@ class PlayerController {
                 const newX = distance * Math.sin(phi) * Math.sin(theta);
                 const newY = distance * Math.cos(phi);
                 const newZ = distance * Math.sin(phi) * Math.cos(theta);
-                this.camera.position.set(target.x + newX, target.y + newY, target.z + newZ);
+                this.camera.position.set(
+                    target.x + newX,
+                    target.y + newY,
+                    target.z + newZ,
+                );
                 this.camera.lookAt(target);
             }
         } else {
@@ -1139,15 +1423,25 @@ class PlayerController {
             if (this.isFirstPerson) {
                 const yaw = -dx * speed * this.mouseSensity;
                 const pitch = -dy * speed * this.mouseSensity;
-                this.camera.rotation.y = THREE.MathUtils.clamp(this.camera.rotation.y + yaw, Math.PI * (3 / 4), Math.PI * (5 / 4));
-                this.camera.rotation.x = THREE.MathUtils.clamp(this.camera.rotation.x + pitch, 0, Math.PI * (1 / 3));
+                this.camera.rotation.y = THREE.MathUtils.clamp(
+                    this.camera.rotation.y + yaw,
+                    Math.PI * (3 / 4),
+                    Math.PI * (5 / 4),
+                );
+                this.camera.rotation.x = THREE.MathUtils.clamp(
+                    this.camera.rotation.x + pitch,
+                    0,
+                    Math.PI * (1 / 3),
+                );
             } else {
                 const sensitivity = this.mouseSensity;
                 const deltaX = -dx * speed * sensitivity;
                 const deltaY = -dy * speed * sensitivity;
                 const target = v.vehicleGroup.position.clone();
                 const distance = this.camera.position.distanceTo(target);
-                const currentPosition = this.camera.position.clone().sub(target);
+                const currentPosition = this.camera.position
+                    .clone()
+                    .sub(target);
                 let theta = Math.atan2(currentPosition.x, currentPosition.z);
                 let phi = Math.acos(currentPosition.y / distance);
                 theta += deltaX;
@@ -1156,7 +1450,11 @@ class PlayerController {
                 const newX = distance * Math.sin(phi) * Math.sin(theta);
                 const newY = distance * Math.cos(phi);
                 const newZ = distance * Math.sin(phi) * Math.cos(theta);
-                this.camera.position.set(target.x + newX, target.y + newY, target.z + newZ);
+                this.camera.position.set(
+                    target.x + newX,
+                    target.y + newY,
+                    target.z + newZ,
+                );
                 this.camera.lookAt(target);
             }
         }
@@ -1164,7 +1462,9 @@ class PlayerController {
 
     // ==================== 物理与碰撞检测 ====================
 
-    ensureAttributesMinimal = (geom: THREE.BufferGeometry): THREE.BufferGeometry | null => {
+    ensureAttributesMinimal = (
+        geom: THREE.BufferGeometry,
+    ): THREE.BufferGeometry | null => {
         if (!geom.attributes.position) return null;
         if (!geom.attributes.normal) geom.computeVertexNormals();
         if (!geom.attributes.uv) {
@@ -1203,10 +1503,19 @@ class PlayerController {
                 const normalized = attr.normalized;
 
                 if (!attrMap.has(name)) {
-                    attrMap.set(name, { itemSize, arrayCtor: ctor, examples: 1, normalized });
+                    attrMap.set(name, {
+                        itemSize,
+                        arrayCtor: ctor,
+                        examples: 1,
+                        normalized,
+                    });
                 } else {
                     const m = attrMap.get(name)!;
-                    if (m.itemSize !== itemSize || m.arrayCtor !== ctor || m.normalized !== normalized) {
+                    if (
+                        m.itemSize !== itemSize ||
+                        m.arrayCtor !== ctor ||
+                        m.normalized !== normalized
+                    ) {
                         attrConflict.add(name);
                     } else {
                         m.examples++;
@@ -1232,7 +1541,14 @@ class PlayerController {
                     const meta = attrMap.get(name)!;
                     const len = count * meta.itemSize;
                     const array = new meta.arrayCtor(len);
-                    g.setAttribute(name, new THREE.BufferAttribute(array, meta.itemSize, meta.normalized));
+                    g.setAttribute(
+                        name,
+                        new THREE.BufferAttribute(
+                            array,
+                            meta.itemSize,
+                            meta.normalized,
+                        ),
+                    );
                 }
             }
         }
@@ -1248,7 +1564,6 @@ class PlayerController {
                 this.scene.remove(this.collider);
                 this.collider = null;
             }
-
             this.scene.traverse((c) => {
                 const mesh = c as THREE.Mesh;
                 if (mesh?.isMesh && mesh.geometry && c.name !== "capsule") {
@@ -1267,16 +1582,38 @@ class PlayerController {
             this.collected = this.unifiedAttribute(this.collected);
         } else {
             const gltf: GLTF = await this.loader.loadAsync(meshUrl);
-            const mesh = gltf.scene.children[0] as THREE.Mesh;
-            mesh.name = "BVH加载模型";
-            let geom = mesh.geometry.clone();
-            geom.applyMatrix4(mesh.matrixWorld);
-            if (geom.index) geom = geom.toNonIndexed();
-            const safe = this.ensureAttributesMinimal(geom);
-            if (safe) this.collected.push(safe);
+            const obj = gltf.scene.children[0] as any;
+            if (obj && obj?.geometry) {
+                const mesh = obj;
+                let geom = mesh.geometry.clone();
+                geom.applyMatrix4(mesh.matrixWorld);
+                if (geom.index) geom = geom.toNonIndexed();
+                const safe = this.ensureAttributesMinimal(geom);
+                if (safe) this.collected.push(safe);
+            } else {
+                obj.traverse((c: any) => {
+                    const mesh = c;
+                    if (mesh?.isMesh && mesh.geometry && c.name !== "capsule") {
+                        try {
+                            let geom = (mesh.geometry as THREE.BufferGeometry).clone();
+                            geom.applyMatrix4(mesh.matrixWorld);
+                            if (geom.index) geom = geom.toNonIndexed();
+                            const safe = this.ensureAttributesMinimal(geom);
+                            if (safe) this.collected.push(safe);
+                        } catch (e) {
+                            console.warn("处理网格时出错：", mesh, e);
+                        }
+                    }
+                });
+                if (!this.collected.length) return;
+                this.collected = this.unifiedAttribute(this.collected);
+            }
         }
 
-        const merged = BufferGeometryUtils.mergeGeometries(this.collected, false);
+        const merged = BufferGeometryUtils.mergeGeometries(
+            this.collected,
+            false,
+        );
         if (!merged) {
             console.error("合并几何失败");
             return;
@@ -1290,7 +1627,7 @@ class PlayerController {
                 transparent: true,
                 wireframe: true,
                 depthTest: true,
-            })
+            }),
         );
 
         if (this.displayCollider) this.scene.add(this.collider);
@@ -1314,7 +1651,9 @@ class PlayerController {
                 const mesh = c as THREE.Mesh;
                 if (mesh?.isMesh && mesh.geometry && c.name !== "capsule") {
                     try {
-                        let geom = (mesh.geometry as THREE.BufferGeometry).clone();
+                        let geom = (
+                            mesh.geometry as THREE.BufferGeometry
+                        ).clone();
                         geom.applyMatrix4(mesh.matrixWorld);
                         if (geom.index) geom = geom.toNonIndexed();
                         const safe = this.ensureAttributesMinimal(geom);
@@ -1329,7 +1668,10 @@ class PlayerController {
         if (!this.dynamicCollected.length) return;
         this.dynamicCollected = this.unifiedAttribute(this.dynamicCollected);
 
-        const merged = BufferGeometryUtils.mergeGeometries(this.dynamicCollected, false);
+        const merged = BufferGeometryUtils.mergeGeometries(
+            this.dynamicCollected,
+            false,
+        );
         if (!merged) {
             console.error("合并几何失败");
             return;
@@ -1342,15 +1684,18 @@ class PlayerController {
                 transparent: true,
                 wireframe: true,
                 depthTest: true,
-            })
+            }),
         );
         if (this.displayCollider) this.scene.add(this.dynamicCollider);
     }
 
     getAngleWithYAxis(normal: { x: number; y: number; z: number }): number {
         const yAxis = { x: 0, y: 1, z: 0 };
-        const dotProduct = normal.x * yAxis.x + normal.y * yAxis.y + normal.z * yAxis.z;
-        const normalMagnitude = Math.sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+        const dotProduct =
+            normal.x * yAxis.x + normal.y * yAxis.y + normal.z * yAxis.z;
+        const normalMagnitude = Math.sqrt(
+            normal.x * normal.x + normal.y * normal.y + normal.z * normal.z,
+        );
         const cosTheta = dotProduct / normalMagnitude;
         return Math.acos(cosTheta);
     }
@@ -1362,13 +1707,17 @@ class PlayerController {
             clearTimeout(this.isChangeControllerTransitionTimer);
             this.isChangeControllerTransitionTimer = null;
         }
+        // 先加一次碰撞体
+        let vGroups: THREE.Group[] = [];
+        for (const v of this.vehicles) {
+            vGroups.push(v.vehicleGroup);
+        }
+        this.createDynamicBVH(vGroups);
         this.isChangeControllerTransitionTimer = setTimeout(() => {
             this.isChangeControllerTransitionTimer = null;
             // 用 activeVehicle 创建动态碰撞体，并清除所有车辆速度
-            let vGroups: THREE.Group[] = [];
             for (const v of this.vehicles) {
                 this.clearVehicleVelocity(v);
-                vGroups.push(v.vehicleGroup);
             }
             this.createDynamicBVH(vGroups);
         }, 3000);
@@ -1412,13 +1761,14 @@ class PlayerController {
     async update(delta: number = clock.getDelta()) {
         if (!this.isupdate || !this.player || !this.collider) return;
 
-        delta = Math.min(delta, 1 / 30);
+        delta = Math.min(delta, 1 / 40);
 
         if (this.controllerMode == 1) {
             this.updateVehicle(delta);
         } else {
             this.updatePlayer(delta);
-            if (this.isChangeControllerTransitionTimer) this.updateVehicleInertia(delta);
+            if (this.isChangeControllerTransitionTimer)
+                this.updateVehicleInertia(delta);
         }
     }
 
@@ -1433,15 +1783,20 @@ class PlayerController {
 
         // 坡度检测与额外推力补偿
         const rotation = chassisBody.rotation();
-        const quat = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
+        const quat = new THREE.Quaternion(
+            rotation.x,
+            rotation.y,
+            rotation.z,
+            rotation.w,
+        );
         const forward = new THREE.Vector3(1, 0, 0).applyQuaternion(quat);
         const slopeAngle = Math.asin(forward.y);
         let factor = 1;
-        if (slopeAngle < -0.05 && this.fwdPressed) {
-            factor = -Math.sin(slopeAngle) * 10;
-        }
-        const engineForce = (Number(this.fwdPressed) * this.vehicleParams.power.accelerateForce - Number(this.bkdPressed) * this.vehicleParams.power.accelerateForce) * factor;
+        if (slopeAngle < -0.05 && this.fwdPressed) factor = -Math.sin(slopeAngle) * 10;
 
+        const accelerateForce = this.vehicleParams.power.accelerateForce * v.speedMultiplier;
+        const maxSpeed = this.vehicleParams.power.maxSpeed * v.speedMultiplier;
+        const engineForce = (Number(this.fwdPressed) * accelerateForce - Number(this.bkdPressed) * accelerateForce) * factor;
         vehicleController.setWheelEngineForce(0, engineForce);
         vehicleController.setWheelEngineForce(1, engineForce);
         vehicleController.setWheelEngineForce(2, engineForce);
@@ -1455,7 +1810,8 @@ class PlayerController {
 
         // 转向
         const currentSteering = vehicleController.wheelSteering(0) || 0;
-        const steerDirection = Number(this.lftPressed) - Number(this.rgtPressed);
+        const steerDirection =
+            Number(this.lftPressed) - Number(this.rgtPressed);
         let steerSpeed: number;
         if (steerDirection === 0) {
             steerSpeed = this.vehicleParams.steering.steerReturnSpeed || 0.15;
@@ -1463,8 +1819,13 @@ class PlayerController {
             steerSpeed = this.vehicleParams.steering.steerSpeed || 0.08;
         }
         const steerLerpFactor = 1.0 - Math.pow(1.0 - steerSpeed, delta);
-        const targetSteering = this.vehicleParams.steering.maxSteerAngle * steerDirection;
-        const steering = THREE.MathUtils.lerp(currentSteering, targetSteering, steerLerpFactor);
+        const targetSteering =
+            this.vehicleParams.steering.maxSteerAngle * steerDirection;
+        const steering = THREE.MathUtils.lerp(
+            currentSteering,
+            targetSteering,
+            steerLerpFactor,
+        );
         vehicleController.setWheelSteering(0, steering);
         vehicleController.setWheelSteering(1, steering);
 
@@ -1482,71 +1843,134 @@ class PlayerController {
 
         // 相机跟随
         if (!this.isFirstPerson) {
+            // 将相机跟随目标平移到车辆位置
             const lookTarget = vehicleGroup.position.clone();
             this.camera.position.sub(this.controls.target);
             this.controls.target.copy(lookTarget);
             this.camera.position.add(lookTarget);
             this.controls.update();
 
+            // 根据速度比例动态调整相机距离
             const velocity = chassisBody.linvel();
-            const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z);
-            const maxSpeed = this.vehicleParams.power.maxSpeed * v.scale;
+            const currentSpeed = Math.sqrt(
+                velocity.x * velocity.x +
+                velocity.y * velocity.y +
+                velocity.z * velocity.z,
+            );
+
             const speedRatio = Math.min(currentSpeed / maxSpeed, 1.0);
             const baseCamDistance = v.size.l * 0.8;
             const maxCamDistanceLimit = v.size.l * 5;
-            const targetDistance = THREE.MathUtils.lerp(baseCamDistance, maxCamDistanceLimit, speedRatio);
+            const targetDistance = THREE.MathUtils.lerp(
+                baseCamDistance,
+                maxCamDistanceLimit,
+                speedRatio,
+            );
 
-            this._personToCam.subVectors(this.camera.position, vehicleGroup.position);
-            const origin = vehicleGroup.position.clone().add(new THREE.Vector3(0, 0, 0));
+            // 射线检测：防止相机穿入碰撞体
+            this._personToCam.subVectors(
+                this.camera.position,
+                vehicleGroup.position,
+            );
+            const origin = vehicleGroup.position
+                .clone()
+                .add(new THREE.Vector3(0, 0, 0));
             const direction = this._personToCam.clone().normalize();
             const desiredDist = targetDistance;
             this._raycasterPersonToCam.set(origin, direction);
             this._raycasterPersonToCam.far = desiredDist;
-            const intersects = this._raycasterPersonToCam.intersectObject(this.collider as THREE.Object3D, false);
+            const intersects = this._raycasterPersonToCam.intersectObject(
+                this.collider as THREE.Object3D,
+                false,
+            );
             if (intersects.length > 0) {
+                // 有遮挡：缩短到碰撞点前方安全距离
                 const hit = intersects[0];
-                const safeDist = Math.max(hit.distance - this._camEpsilon, this._minCamDistance);
-                const targetCamPos = origin.clone().add(direction.clone().multiplyScalar(safeDist));
+                const safeDist = Math.max(
+                    hit.distance - this._camEpsilon,
+                    this.minCamDistance,
+                );
+                const targetCamPos = origin
+                    .clone()
+                    .add(direction.clone().multiplyScalar(safeDist));
                 this.camera.position.lerp(targetCamPos, this._camCollisionLerp);
             } else {
+                // 无遮挡：扩展到最大距离再做一次检测
                 this._raycasterPersonToCam.far = maxCamDistanceLimit;
-                const intersectsMaxDis = this._raycasterPersonToCam.intersectObject(this.collider as THREE.Object3D, false);
+                const intersectsMaxDis =
+                    this._raycasterPersonToCam.intersectObject(
+                        this.collider as THREE.Object3D,
+                        false,
+                    );
                 let safeDist = desiredDist;
                 if (intersectsMaxDis.length) {
                     const hitMax = intersectsMaxDis[0];
-                    safeDist = Math.min(desiredDist, hitMax.distance - this._camEpsilon);
+                    safeDist = Math.min(
+                        desiredDist,
+                        hitMax.distance - this._camEpsilon,
+                    );
                 }
-                const targetCamPos = origin.clone().add(direction.clone().multiplyScalar(safeDist));
+                const targetCamPos = origin
+                    .clone()
+                    .add(direction.clone().multiplyScalar(safeDist));
                 this.camera.position.lerp(targetCamPos, this._camCollisionLerp);
             }
 
-            if (this.fwdPressed || this.bkdPressed) {
+            // 行驶且跟随车辆参数开启时：相机跟随速度方向平滑移到车辆正后方
+            if (
+                (this.fwdPressed || this.bkdPressed) &&
+                this.vehicleParams.followVehicleDirection
+            ) {
                 const vel = chassisBody.linvel();
                 const velHorizontal = new THREE.Vector3(vel.x, vel.y, vel.z);
                 const velSpeed = velHorizontal.length();
                 if (velSpeed > 0.3) {
-                    const targetBehindDir = velHorizontal.clone().normalize().negate();
-                    this.camBehindDir.lerp(targetBehindDir, this._camCollisionLerp).normalize();
+                    const targetBehindDir = velHorizontal
+                        .clone()
+                        .normalize()
+                        .negate();
+                    this.camBehindDir
+                        .lerp(targetBehindDir, this._camCollisionLerp)
+                        .normalize();
                     const camHeightOffset = v.size.h;
                     const targetCamPos = lookTarget
                         .clone()
-                        .add(this.camBehindDir.clone().multiplyScalar(desiredDist))
+                        .add(
+                            this.camBehindDir
+                                .clone()
+                                .multiplyScalar(desiredDist),
+                        )
                         .add(new THREE.Vector3(0, camHeightOffset, 0));
-                    this.camera.position.lerp(targetCamPos, this._camCollisionLerp);
+                    this.camera.position.lerp(
+                        targetCamPos,
+                        this._camCollisionLerp,
+                    );
                     this.controls.update();
                 }
             }
         }
 
         // 翻车检测
-        const vehicleUp = this.upVector.clone().applyQuaternion(vehicleGroup.quaternion);
+        const vehicleUp = this.upVector
+            .clone()
+            .applyQuaternion(vehicleGroup.quaternion);
         const angleWithUp = vehicleUp.angleTo(this.upVector);
         if (angleWithUp > Math.PI / 2) {
             const size = new THREE.Vector3();
             v.vehicleBBox?.getSize(size);
             const translation2 = chassisBody.translation();
-            chassisBody.setTranslation(new this.RAPIER.Vector3(translation2.x, translation2.y + size.y, translation2.z), true);
-            chassisBody.setRotation(new this.RAPIER.Quaternion(0, 0, 0, 1), true);
+            chassisBody.setTranslation(
+                new this.RAPIER.Vector3(
+                    translation2.x,
+                    translation2.y + size.y,
+                    translation2.z,
+                ),
+                true,
+            );
+            chassisBody.setRotation(
+                new this.RAPIER.Quaternion(0, 0, 0, 1),
+                true,
+            );
             chassisBody.setLinvel(new this.RAPIER.Vector3(0, 0, 0), true);
             chassisBody.setAngvel(new this.RAPIER.Vector3(0, 0, 0), true);
         }
@@ -1567,21 +1991,67 @@ class PlayerController {
 
             vehicleController.updateVehicle(delta);
 
+            if (chassisBody.isSleeping()) continue;
+
             const velocity = chassisBody.linvel();
-            const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z);
-            const maxSpeed = this.vehicleParams.power.maxSpeed * v.scale;
+            const currentSpeed = Math.sqrt(
+                velocity.x * velocity.x +
+                velocity.y * velocity.y +
+                velocity.z * velocity.z,
+            );
+            const maxSpeed = this.vehicleParams.power.maxSpeed * v.speedMultiplier;
             if (currentSpeed > maxSpeed) {
                 const s = maxSpeed / currentSpeed;
-                chassisBody.setLinvel(new this.RAPIER.Vector3(velocity.x * s, velocity.y * s, velocity.z * s), true);
+                chassisBody.setLinvel(
+                    new this.RAPIER.Vector3(
+                        velocity.x * s,
+                        velocity.y * s,
+                        velocity.z * s,
+                    ),
+                    true,
+                );
             }
 
             const translation = chassisBody.translation();
             const rotationSync = chassisBody.rotation();
-            vehicleGroup.position.set(translation.x, translation.y, translation.z);
-            vehicleGroup.quaternion.set(rotationSync.x, rotationSync.y, rotationSync.z, rotationSync.w);
+            vehicleGroup.position.set(
+                translation.x,
+                translation.y,
+                translation.z,
+            );
+            vehicleGroup.quaternion.set(
+                rotationSync.x,
+                rotationSync.y,
+                rotationSync.z,
+                rotationSync.w,
+            );
 
             if (updateWheelVisuals) updateWheelVisuals();
         }
+    }
+
+    /**
+     * 设置人物缩放
+     */
+    setPlayerScale(newScale: number) {
+        if (newScale <= 0) return;
+        const ratio = newScale / this.playerModel.scale;
+
+        this.playerModel.scale = newScale;
+        this.gravity *= ratio;
+        this.jumpHeight *= ratio;
+        this.playerSpeed *= ratio;
+        this.playerFlySpeed *= ratio;
+        this.curPlayerSpeed *= ratio;
+        this._camEpsilon *= ratio;
+        this.minCamDistance *= ratio;
+        this.maxCamDistance *= ratio;
+        this.orginMaxCamDistance *= ratio;
+
+        if (this.isFirstPerson) this.scene.attach(this.camera);
+        this.player?.scale.multiplyScalar(ratio);
+        if (this.player?.capsuleInfo) this.player.capsuleInfo.radius *= ratio;
+        if (this.isFirstPerson) this.setFirstPersonCamera();
     }
 
     /**
@@ -1596,7 +2066,51 @@ class PlayerController {
             this.player.position.addScaledVector(this.playerVelocity, delta);
         }
 
+        // 上车衔接关门动画
+        if (this.isBoardingAnimPlaying) {
+            const action = this.personActions?.get("enterCar");
+            const duration = action.getClip().duration;
+            const timeScale = action.getEffectiveTimeScale();
+            const remaining = ((duration - action.time) / timeScale) * 1000;
+
+            // 剩余500ms执行关门动画
+            if (!this.closeDoorTriggered && remaining <= 500) {
+                this.closeDoorTriggered = true;
+                this.openVehicleDoor(false);
+            }
+
+            // 动画结束
+            if (action.time >= duration) {
+                this.isBoardingAnimPlaying = false;
+                this.closeDoorTriggered = false;
+                this.onEnterCarAnimFinished();
+                return;
+            }
+        }
+        // 下车衔接关门动画
+        if (this.isExitAnimPlaying) {
+            const action = this.personActions?.get("exitCar");
+            if (action) {
+                const duration = action.getClip().duration;
+                const timeScale = action.getEffectiveTimeScale();
+                const remaining = ((duration - action.time) / timeScale) * 1000;
+
+                // 剩余 500ms 时关门
+                if (!this.closeExitDoorTriggered && remaining <= 500) {
+                    this.closeExitDoorTriggered = true;
+                    this.openVehicleDoor(false);
+                }
+
+                // 动画结束
+                if (action.time >= duration) {
+                    this.isExitAnimPlaying = false;
+                    this.closeExitDoorTriggered = false;
+                }
+            }
+        }
+
         this.updateMixers(delta);
+        if (this.controllerMode === 1) return;
 
         this.camera.getWorldDirection(this.camDir);
         let angle = Math.atan2(this.camDir.z, this.camDir.x) + Math.PI / 2;
@@ -1615,22 +2129,33 @@ class PlayerController {
         }
 
         if (this.isFlying && this.fwdPressed) {
-            this.playerSpeed = this.shiftPressed ? this.originPlayerSpeed * 12 : this.originPlayerSpeed * 7;
+            this.curPlayerSpeed = this.shiftPressed ? this.playerFlySpeed * 2 : this.playerFlySpeed
         } else {
-            this.playerSpeed = this.shiftPressed ? this.originPlayerSpeed * 2 : this.originPlayerSpeed;
+            this.curPlayerSpeed = this.shiftPressed ? this.playerSpeed * 2 : this.playerSpeed;
         }
 
         this.moveDir.normalize().applyAxisAngle(this.upVector, angle);
-        this.player.position.addScaledVector(this.moveDir, this.playerSpeed * delta);
+        this.player.position.addScaledVector(
+            this.moveDir,
+            this.curPlayerSpeed * delta,
+        );
 
         // 向下射线检测地面
         let playerDistanceFromGround = Infinity;
-        this._originTmp.set(this.player.position.x, this.player.position.y, this.player.position.z);
+        this._originTmp.set(
+            this.player.position.x,
+            this.player.position.y,
+            this.player.position.z,
+        );
         this._raycaster.ray.origin.copy(this._originTmp);
-        const intersects = this._raycaster.intersectObject(this.collider as THREE.Object3D, false);
+        const intersects = this._raycaster.intersectObject(
+            this.collider as THREE.Object3D,
+            false,
+        );
 
         if (intersects.length > 0) {
-            playerDistanceFromGround = this.player.position.y - intersects[0].point.y;
+            playerDistanceFromGround =
+                this.player.position.y - intersects[0].point.y;
             const maxH = this.playerHeight * this.playerModel.scale * 0.9;
             const h = this.playerHeight * this.playerModel.scale * 0.75;
             const minH = this.playerHeight * this.playerModel.scale * 0.7;
@@ -1638,21 +2163,34 @@ class PlayerController {
             if (!this.isFlying) {
                 if (playerDistanceFromGround >= maxH) {
                     this.playerVelocity.y += delta * this.gravity;
-                    this.player.position.addScaledVector(this.playerVelocity, delta);
+                    this.player.position.addScaledVector(
+                        this.playerVelocity,
+                        delta,
+                    );
                     this.playerIsOnGround = false;
-                } else if (playerDistanceFromGround >= h && playerDistanceFromGround < maxH) {
+                } else if (
+                    playerDistanceFromGround >= h &&
+                    playerDistanceFromGround < maxH
+                ) {
                     if (!this.spacePressed) {
                         this.playerVelocity.set(0, 0, 0);
                         this.playerIsOnGround = true;
                         this.player.position.y = intersects[0].point.y + h;
                     }
-                } else if (playerDistanceFromGround >= minH && playerDistanceFromGround < h) {
+                } else if (
+                    playerDistanceFromGround >= minH &&
+                    playerDistanceFromGround < h
+                ) {
                     this.playerVelocity.set(0, 0, 0);
                     this.playerIsOnGround = true;
                     this.player.position.y = intersects[0].point.y + h;
                 } else if (playerDistanceFromGround < minH) {
                     this.playerVelocity.set(0, 0, 0);
-                    this.player.position.set(this.player.position.x, intersects[0].point.y + h, this.player.position.z);
+                    this.player.position.set(
+                        this.player.position.x,
+                        intersects[0].point.y + h,
+                        this.player.position.z,
+                    );
                     this.playerIsOnGround = true;
                 }
             }
@@ -1665,48 +2203,77 @@ class PlayerController {
         this.tempBox.makeEmpty();
         this.tempMat.copy(this.collider!.matrixWorld).invert();
         this.tempSegment.copy(capsuleInfo.segment);
-        this.tempSegment.start.applyMatrix4(this.player.matrixWorld).applyMatrix4(this.tempMat);
-        this.tempSegment.end.applyMatrix4(this.player.matrixWorld).applyMatrix4(this.tempMat);
+        this.tempSegment.start
+            .applyMatrix4(this.player.matrixWorld)
+            .applyMatrix4(this.tempMat);
+        this.tempSegment.end
+            .applyMatrix4(this.player.matrixWorld)
+            .applyMatrix4(this.tempMat);
         this.tempBox.expandByPoint(this.tempSegment.start);
         this.tempBox.expandByPoint(this.tempSegment.end);
         this.tempBox.expandByScalar(capsuleInfo.radius);
 
         if (!this.isMovingToBoardingPoint) {
             (this.collider?.geometry as any)?.boundsTree?.shapecast({
-                intersectsBounds: (box: THREE.Box3) => box.intersectsBox(this.tempBox),
+                intersectsBounds: (box: THREE.Box3) =>
+                    box.intersectsBox(this.tempBox),
                 intersectsTriangle: (tri: any) => {
                     const triPoint = this.tempVector;
                     const capsulePoint = this.tempVector2;
-                    const distance = tri.closestPointToSegment(this.tempSegment, triPoint, capsulePoint);
+                    const distance = tri.closestPointToSegment(
+                        this.tempSegment,
+                        triPoint,
+                        capsulePoint,
+                    );
                     if (distance < capsuleInfo.radius) {
                         const normal = tri.getNormal(new THREE.Vector3());
                         if (normal.y > 0.5 && !this.isFlying) return;
                         const depth = capsuleInfo.radius - distance;
-                        const direction = capsulePoint.sub(triPoint).normalize();
-                        this.tempSegment.start.addScaledVector(direction, depth);
+                        const direction = capsulePoint
+                            .sub(triPoint)
+                            .normalize();
+                        this.tempSegment.start.addScaledVector(
+                            direction,
+                            depth,
+                        );
                         this.tempSegment.end.addScaledVector(direction, depth);
                     }
                 },
             });
 
             (this.dynamicCollider?.geometry as any)?.boundsTree?.shapecast({
-                intersectsBounds: (box: THREE.Box3) => box.intersectsBox(this.tempBox),
+                intersectsBounds: (box: THREE.Box3) =>
+                    box.intersectsBox(this.tempBox),
                 intersectsTriangle: (tri: any) => {
                     const triPoint = this.tempVector;
                     const capsulePoint = this.tempVector2;
-                    const distance = tri.closestPointToSegment(this.tempSegment, triPoint, capsulePoint);
+                    const distance = tri.closestPointToSegment(
+                        this.tempSegment,
+                        triPoint,
+                        capsulePoint,
+                    );
                     if (distance < capsuleInfo.radius) {
                         const depth = capsuleInfo.radius - distance;
-                        const direction = capsulePoint.sub(triPoint).normalize();
-                        this.tempSegment.start.addScaledVector(direction, depth);
+                        const direction = capsulePoint
+                            .sub(triPoint)
+                            .normalize();
+                        this.tempSegment.start.addScaledVector(
+                            direction,
+                            depth,
+                        );
                         this.tempSegment.end.addScaledVector(direction, depth);
                     }
                 },
             });
         }
 
-        const newPosition = this.tempVector.copy(this.tempSegment.start).applyMatrix4(this.collider!.matrixWorld);
-        const deltaVector = this.tempVector2.subVectors(newPosition, this.player.position);
+        const newPosition = this.tempVector
+            .copy(this.tempSegment.start)
+            .applyMatrix4(this.collider!.matrixWorld);
+        const deltaVector = this.tempVector2.subVectors(
+            newPosition,
+            this.player.position,
+        );
         const offset = Math.max(0, deltaVector.length() - 1e-5);
         deltaVector.normalize().multiplyScalar(offset);
         this.player.position.add(deltaVector);
@@ -1726,14 +2293,25 @@ class PlayerController {
                 } else {
                     lookTarget = this.player.position.clone().add(this.camDir);
                 }
-                this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
+                this.targetMat.lookAt(
+                    this.player.position,
+                    lookTarget,
+                    this.player.up,
+                );
                 this.targetQuat.setFromRotationMatrix(this.targetMat);
                 const alpha = Math.min(1, this.rotationSpeed * delta);
                 this.player.quaternion.slerp(this.targetQuat, alpha);
             }
-            if ((this.thirdMouseMode === 1 || this.thirdMouseMode === 3) && this.moveDir.lengthSq() > 0) {
+            if (
+                (this.thirdMouseMode === 1 || this.thirdMouseMode === 3) &&
+                this.moveDir.lengthSq() > 0
+            ) {
                 lookTarget = this.player.position.clone().add(this.moveDir);
-                this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
+                this.targetMat.lookAt(
+                    this.player.position,
+                    lookTarget,
+                    this.player.up,
+                );
                 this.targetQuat.setFromRotationMatrix(this.targetMat);
                 const alpha = Math.min(1, this.rotationSpeed * delta);
                 this.player.quaternion.slerp(this.targetQuat, alpha);
@@ -1748,8 +2326,14 @@ class PlayerController {
                 this.camDir.negate();
                 this.moveDir.normalize();
                 this.moveDir.negate();
-                const lookTarget = this.player.position.clone().add(this.fwdPressed ? this.moveDir : this.camDir);
-                this.targetMat.lookAt(this.player.position, lookTarget, this.player.up);
+                const lookTarget = this.player.position
+                    .clone()
+                    .add(this.fwdPressed ? this.moveDir : this.camDir);
+                this.targetMat.lookAt(
+                    this.player.position,
+                    lookTarget,
+                    this.player.up,
+                );
                 this.targetQuat.setFromRotationMatrix(this.targetMat);
                 const alpha = Math.min(1, this.rotationSpeed * delta);
                 this.player.quaternion.slerp(this.targetQuat, alpha);
@@ -1759,7 +2343,7 @@ class PlayerController {
         // 第三人称-相机跟随
         if (!this.isFirstPerson) {
             const lookTarget = this.player.position.clone();
-            lookTarget.y += (this.playerHeight / 6) * this.playerModel.scale;
+            lookTarget.y += (this.playerHeight / 8) * this.playerModel.scale;
             this.camera.position.sub(this.controls.target);
             this.controls.target.copy(lookTarget);
             this.camera.position.add(lookTarget);
@@ -1767,48 +2351,132 @@ class PlayerController {
 
             // 当视线被遮挡时的处理
             if (!this.enableZoom) {
-                this._personToCam.subVectors(this.camera.position, this.player.position);
+                this._personToCam.subVectors(
+                    this.camera.position,
+                    this.player.position,
+                );
                 const origin = this.player.position.clone();
                 const direction = this._personToCam.clone().normalize();
                 const desiredDist = this._personToCam.length();
                 this._raycasterPersonToCam.set(origin, direction);
                 this._raycasterPersonToCam.far = desiredDist;
 
-                const intersectsCamera = this._raycasterPersonToCam.intersectObject(this.collider as THREE.Object3D, false);
+                const intersectsCamera =
+                    this._raycasterPersonToCam.intersectObject(
+                        this.collider as THREE.Object3D,
+                        false,
+                    );
 
                 if (intersectsCamera.length > 0) {
                     const hit = intersectsCamera[0];
-                    const safeDist = Math.max(hit.distance - this._camEpsilon, this._minCamDistance);
-                    const targetCamPos = origin.clone().add(direction.clone().multiplyScalar(safeDist));
-                    this.camera.position.lerp(targetCamPos, this._camCollisionLerp);
+                    const safeDist = Math.max(
+                        hit.distance - this._camEpsilon,
+                        this.minCamDistance,
+                    );
+                    const targetCamPos = origin
+                        .clone()
+                        .add(direction.clone().multiplyScalar(safeDist));
+                    this.camera.position.lerp(
+                        targetCamPos,
+                        this._camCollisionLerp,
+                    );
                 } else {
-                    this._raycasterPersonToCam.far = this._maxCamDistance;
-                    const intersectsMaxDis = this._raycasterPersonToCam.intersectObject(this.collider as THREE.Object3D, false);
-                    let safeDist = this._maxCamDistance;
+                    this._raycasterPersonToCam.far = this.maxCamDistance;
+                    const intersectsMaxDis =
+                        this._raycasterPersonToCam.intersectObject(
+                            this.collider as THREE.Object3D,
+                            false,
+                        );
+                    let safeDist = this.maxCamDistance;
                     if (intersectsMaxDis.length) {
                         const hitMax = intersectsMaxDis[0];
                         safeDist = hitMax.distance - this._camEpsilon;
                     }
-                    const targetCamPos = origin.clone().add(direction.clone().multiplyScalar(safeDist));
-                    this.camera.position.lerp(targetCamPos, this._camCollisionLerp);
+                    const targetCamPos = origin
+                        .clone()
+                        .add(direction.clone().multiplyScalar(safeDist));
+                    this.camera.position.lerp(
+                        targetCamPos,
+                        this._camCollisionLerp,
+                    );
                 }
             }
         }
 
         // 掉出场景重置
         if (this.player.position.y < this.boundingBoxMinY - 1) {
-            this._originTmp.set(this.player.position.x, 10000, this.player.position.z);
+            this._originTmp.set(
+                this.player.position.x,
+                10000,
+                this.player.position.z,
+            );
             this._raycaster.ray.origin.copy(this._originTmp);
-            const intersectsFall = this._raycaster.intersectObject(this.collider as THREE.Object3D, false);
+            const intersectsFall = this._raycaster.intersectObject(
+                this.collider as THREE.Object3D,
+                false,
+            );
 
             if (intersectsFall.length > 0) {
                 console.log("玩家为bug意外掉落");
-                this.reset(new THREE.Vector3(this.player.position.x, intersectsFall[0].point.y + 5, this.player.position.z));
+                this.reset(
+                    new THREE.Vector3(
+                        this.player.position.x,
+                        intersectsFall[0].point.y + 5,
+                        this.player.position.z,
+                    ),
+                );
             } else {
                 console.log("玩家正常掉落");
-                this.reset(new THREE.Vector3(this.player.position.x, this.player.position.y + 15, this.player.position.z));
+                this.reset(
+                    new THREE.Vector3(
+                        this.player.position.x,
+                        this.player.position.y + 15,
+                        this.player.position.z,
+                    ),
+                );
             }
         }
+
+        // 显示移动端按钮时检测
+        if (this.isShowMobileControls) {
+            if (this.vehicles.length) {
+                let near = false;
+                for (const v of this.vehicles) {
+                    this.nearCheckLocal
+                        .copy(v.boardingPoint)
+                        .multiplyScalar(v.scale);
+                    v.vehicleGroup.localToWorld(
+                        this.nearCheckWorld.copy(this.nearCheckLocal),
+                    );
+
+                    if (
+                        this.player.position.distanceTo(this.nearCheckWorld) <
+                        800 * this.playerModel.scale
+                    ) {
+                        near = true;
+                        this.syncVehicleBtnEl(near);
+                        break;
+                    }
+                }
+                if (near !== this.isNearVehicle) {
+                    this.isNearVehicle = near;
+                    this.syncVehicleBtnEl(near);
+                }
+            } else {
+                this.isNearVehicle = false;
+                this.syncVehicleBtnEl(false);
+            }
+        }
+    }
+
+    /**
+     * 获取屏幕中心点向前射线与碰撞体的交点
+     */
+    getCenterScreenRaycastHit(): THREE.Intersection | undefined {
+        this.camera.updateMatrixWorld();
+        this.centerRay.setFromCamera(this.centerMouse, this.camera);
+        const intersects = this.centerRay.intersectObject(this.collider, false);
+        return intersects[0];
     }
 
     /**
@@ -1829,7 +2497,7 @@ class PlayerController {
     }
 
     getPosition() {
-        return this.player.position;
+        return this.player?.position;
     }
 
     // ==================== 输入处理 ====================
@@ -1844,7 +2512,8 @@ class PlayerController {
             shift: boolean;
             toggleView: boolean;
             toggleFly: boolean;
-        }>
+            toggleVehicle: boolean;
+        }>,
     ) {
         if (typeof input.moveX === "number") {
             this.lftPressed = input.moveX === -1;
@@ -1857,13 +2526,23 @@ class PlayerController {
             this.setAnimationByPressed();
         }
 
-        if (typeof input.lookDeltaX === "number" && typeof input.lookDeltaY === "number") {
+        if (
+            typeof input.lookDeltaX === "number" &&
+            typeof input.lookDeltaY === "number"
+        ) {
             this.setToward(input.lookDeltaX, input.lookDeltaY, 0.002);
         }
 
         if (typeof input.jump === "boolean") {
             if (input.jump) {
+                if (this.isMovingToBoardingPoint) {
+                    this.isMovingToBoardingPoint = false;
+                    this.boardingWaypoints = [];
+                    this.currentWaypointIndex = 0;
+                    this.boardingTargetDir = null;
+                }
                 this.spacePressed = true;
+                if (this.controllerMode == 1) return;
                 if (!this.playerIsOnGround || this.isFlying) return;
                 this.playPersonAnimationByName("jumping");
                 this.playerVelocity.y = this.jumpHeight;
@@ -1881,28 +2560,41 @@ class PlayerController {
             this.changeView();
         }
 
-        if (input.toggleFly) {
+        if (input.toggleFly && this.playerFlyEnabled && this.controllerMode == 0) {
             this.isFlying = !this.isFlying;
             this.setAnimationByPressed();
             if (!this.isFlying && !this.playerIsOnGround) {
                 this.playPersonAnimationByName("jumping");
             }
         }
+
+        if (input.toggleVehicle) {
+            if (this.controllerMode == 0) {
+                this.enterVehicle();
+            } else {
+                this.exitVehicle();
+            }
+        }
     }
 
     private setAnimationByPressed = () => {
-        this._maxCamDistance = this.orginMaxCamDistance;
+        this.maxCamDistance = this.orginMaxCamDistance;
+        // 重置标志位
         if (this.isMovingToBoardingPoint) {
             this.isMovingToBoardingPoint = false;
             this.boardingWaypoints = [];
             this.currentWaypointIndex = 0;
             this.boardingTargetDir = null;
         }
-
-        if (this.enterVehicleTimer) {
-            clearTimeout(this.enterVehicleTimer);
-            this.enterVehicleTimer = null;
+        if (this.isExitAnimPlaying) {
+            this.isExitAnimPlaying = false;
+            this.closeExitDoorTriggered = false;
         }
+        if (this.isBoardingAnimPlaying) {
+            this.isBoardingAnimPlaying = false;
+            this.closeDoorTriggered = false;
+        }
+
         if (this.closeVehicleDoorTimer) {
             clearTimeout(this.closeVehicleDoorTimer);
             this.closeVehicleDoorTimer = null;
@@ -1914,23 +2606,35 @@ class PlayerController {
                 return;
             }
             this.playPersonAnimationByName("flying");
-            this._maxCamDistance = this.orginMaxCamDistance * 2;
+            this.maxCamDistance = this.orginMaxCamDistance * 2;
             return;
         }
 
         if (this.playerIsOnGround) {
-            if (!this.fwdPressed && !this.bkdPressed && !this.lftPressed && !this.rgtPressed) {
+            if (
+                !this.fwdPressed &&
+                !this.bkdPressed &&
+                !this.lftPressed &&
+                !this.rgtPressed
+            ) {
                 this.playPersonAnimationByName("idle");
                 return;
             }
 
             if (this.fwdPressed) {
-                this.playPersonAnimationByName(this.shiftPressed ? "running" : "walking");
+                this.playPersonAnimationByName(
+                    this.shiftPressed ? "running" : "walking",
+                );
                 return;
             }
 
-            if (!this.isFirstPerson && (this.lftPressed || this.rgtPressed || this.bkdPressed)) {
-                this.playPersonAnimationByName(this.shiftPressed ? "running" : "walking");
+            if (
+                !this.isFirstPerson &&
+                (this.lftPressed || this.rgtPressed || this.bkdPressed)
+            ) {
+                this.playPersonAnimationByName(
+                    this.shiftPressed ? "running" : "walking",
+                );
                 return;
             }
 
@@ -1991,7 +2695,14 @@ class PlayerController {
                 this.controls.mouseButtons = { LEFT: 2, MIDDLE: 1, RIGHT: 0 };
                 break;
             case "Space":
+                if (this.isMovingToBoardingPoint) {
+                    this.isMovingToBoardingPoint = false;
+                    this.boardingWaypoints = [];
+                    this.currentWaypointIndex = 0;
+                    this.boardingTargetDir = null;
+                }
                 this.spacePressed = true;
+                if (this.controllerMode == 1) return;
                 if (!this.playerIsOnGround || this.isFlying) return;
                 const next = this.personActions?.get("jumping");
                 if (next && this.actionState === next) return;
@@ -2006,11 +2717,12 @@ class PlayerController {
                 this.changeView();
                 break;
             case "KeyF":
-                if (this.controllerMode == 1) return;
-                this.isFlying = !this.isFlying;
-                this.setAnimationByPressed();
-                if (!this.isFlying && !this.playerIsOnGround) {
-                    this.playPersonAnimationByName("jumping");
+                if (this.controllerMode == 0 && this.playerFlyEnabled) {
+                    this.isFlying = !this.isFlying;
+                    this.setAnimationByPressed();
+                    if (!this.isFlying && !this.playerIsOnGround) {
+                        this.playPersonAnimationByName("jumping");
+                    }
                 }
                 break;
             case "KeyE":
@@ -2141,11 +2853,17 @@ class PlayerController {
         });
         container.appendChild(this.joystickZoneEl);
 
-        ["touchstart", "touchmove", "touchend", "touchcancel"].forEach((evtName) => {
-            this.joystickZoneEl?.addEventListener(evtName, (e) => e.preventDefault(), {
-                passive: false,
-            });
-        });
+        ["touchstart", "touchmove", "touchend", "touchcancel"].forEach(
+            (evtName) => {
+                this.joystickZoneEl?.addEventListener(
+                    evtName,
+                    (e) => e.preventDefault(),
+                    {
+                        passive: false,
+                    },
+                );
+            },
+        );
 
         this.joystickManager = nipple.create({
             zone: this.joystickZoneEl,
@@ -2170,14 +2888,27 @@ class PlayerController {
             const dirY = rawY > deadzone ? 1 : rawY < -deadzone ? -1 : 0;
             const sprintThreshold = JOY_SIZE / 2;
             const isSprinting = distance >= sprintThreshold;
-            const prev = this.prevJoyState || { dirX: 0, dirY: 0, shift: false };
-            if (dirX === prev.dirX && dirY === prev.dirY && isSprinting === prev.shift) return;
+            const prev = this.prevJoyState || {
+                dirX: 0,
+                dirY: 0,
+                shift: false,
+            };
+            if (
+                dirX === prev.dirX &&
+                dirY === prev.dirY &&
+                isSprinting === prev.shift
+            )
+                return;
             this.prevJoyState = { dirX, dirY, shift: isSprinting };
             this.setInput({ moveX: dirX, moveY: dirY, shift: isSprinting });
         });
 
         this.joystickManager.on("end", () => {
-            const prev = this.prevJoyState || { dirX: 0, dirY: 0, shift: false };
+            const prev = this.prevJoyState || {
+                dirX: 0,
+                dirY: 0,
+                shift: false,
+            };
             if (prev.dirX !== 0 || prev.dirY !== 0 || prev.shift !== false) {
                 this.prevJoyState = { dirX: 0, dirY: 0, shift: false };
                 this.setInput({ moveX: 0, moveY: 0, shift: false });
@@ -2198,18 +2929,36 @@ class PlayerController {
         });
         container.appendChild(this.lookAreaEl);
 
-        ["touchstart", "touchmove", "touchend", "touchcancel"].forEach((evtName) => {
-            this.lookAreaEl?.addEventListener(evtName, (e) => e.preventDefault(), {
-                passive: false,
-            });
+        ["touchstart", "touchmove", "touchend", "touchcancel"].forEach(
+            (evtName) => {
+                this.lookAreaEl?.addEventListener(
+                    evtName,
+                    (e) => e.preventDefault(),
+                    {
+                        passive: false,
+                    },
+                );
+            },
+        );
+
+        this.lookAreaEl.addEventListener("pointerdown", this.onPointerDown, {
+            passive: false,
+        });
+        this.lookAreaEl.addEventListener("pointermove", this.onPointerMove, {
+            passive: false,
+        });
+        this.lookAreaEl.addEventListener("pointerup", this.onPointerUp, {
+            passive: false,
+        });
+        this.lookAreaEl.addEventListener("pointercancel", this.onPointerUp, {
+            passive: false,
         });
 
-        this.lookAreaEl.addEventListener("pointerdown", this.onPointerDown, { passive: false });
-        this.lookAreaEl.addEventListener("pointermove", this.onPointerMove, { passive: false });
-        this.lookAreaEl.addEventListener("pointerup", this.onPointerUp, { passive: false });
-        this.lookAreaEl.addEventListener("pointercancel", this.onPointerUp, { passive: false });
-
-        const createBtn = (rightPx: number, bottomPx: number, bgUrl?: string) => {
+        const createBtn = (
+            rightPx: number,
+            bottomPx: number,
+            bgUrl?: string,
+        ) => {
             const btn = document.createElement("button");
             const styles: Partial<CSSStyleDeclaration> = {
                 position: "absolute",
@@ -2242,7 +2991,9 @@ class PlayerController {
             Object.assign(btn.style, styles);
             container.appendChild(btn);
             ["touchstart", "touchend", "touchcancel"].forEach((evtName) => {
-                btn.addEventListener(evtName, (e) => e.preventDefault(), { passive: false });
+                btn.addEventListener(evtName, (e) => e.preventDefault(), {
+                    passive: false,
+                });
             });
             return btn;
         };
@@ -2254,7 +3005,7 @@ class PlayerController {
                 e.preventDefault();
                 this.setInput({ jump: true });
             },
-            { passive: false }
+            { passive: false },
         );
         this.jumpBtnEl.addEventListener(
             "touchend",
@@ -2262,7 +3013,7 @@ class PlayerController {
                 e.preventDefault();
                 this.setInput({ jump: false });
             },
-            { passive: false }
+            { passive: false },
         );
         this.jumpBtnEl.addEventListener(
             "touchcancel",
@@ -2270,7 +3021,7 @@ class PlayerController {
                 e.preventDefault();
                 this.setInput({ jump: false });
             },
-            { passive: false }
+            { passive: false },
         );
 
         this.flyBtnEl = createBtn(14, 14 + 80, flyIconModule);
@@ -2280,7 +3031,7 @@ class PlayerController {
                 e.preventDefault();
                 this.setInput({ toggleFly: true });
             },
-            { passive: false }
+            { passive: false },
         );
 
         this.viewBtnEl = createBtn(14, 14 + 200, viewIconModule);
@@ -2290,7 +3041,17 @@ class PlayerController {
                 e.preventDefault();
                 this.setInput({ toggleView: true });
             },
-            { passive: false }
+            { passive: false },
+        );
+
+        this.vehicleBtnEl = createBtn(14 + 100, 14 + 120, vehicleIconModule);
+        this.vehicleBtnEl.addEventListener(
+            "touchstart",
+            (e) => {
+                e.preventDefault();
+                this.setInput({ toggleVehicle: true });
+            },
+            { passive: false },
         );
     }
 
@@ -2301,7 +3062,9 @@ class PlayerController {
                 this.joystickManager = null;
             }
             if (this.joystickZoneEl?.parentElement) {
-                this.joystickZoneEl.parentElement.removeChild(this.joystickZoneEl);
+                this.joystickZoneEl.parentElement.removeChild(
+                    this.joystickZoneEl,
+                );
                 this.joystickZoneEl = null;
             }
             if (this.lookAreaEl?.parentElement) {
@@ -2320,12 +3083,99 @@ class PlayerController {
                 this.viewBtnEl.parentElement.removeChild(this.viewBtnEl);
                 this.viewBtnEl = null;
             }
-            this.lookAreaEl?.removeEventListener("pointerdown", this.onPointerDown);
-            this.lookAreaEl?.removeEventListener("pointermove", this.onPointerMove);
+            if (this.vehicleBtnEl?.parentElement) {
+                this.vehicleBtnEl.parentElement.removeChild(this.vehicleBtnEl);
+                this.vehicleBtnEl = null;
+            }
+            this.lookAreaEl?.removeEventListener(
+                "pointerdown",
+                this.onPointerDown,
+            );
+            this.lookAreaEl?.removeEventListener(
+                "pointermove",
+                this.onPointerMove,
+            );
             this.lookAreaEl?.removeEventListener("pointerup", this.onPointerUp);
-            this.lookAreaEl?.removeEventListener("pointercancel", this.onPointerUp);
+            this.lookAreaEl?.removeEventListener(
+                "pointercancel",
+                this.onPointerUp,
+            );
         } catch (e) {
             console.warn("销毁移动端摇杆控制时出错：", e);
+        }
+    }
+
+    syncVehicleBtnEl(show: boolean) {
+        if (!this.vehicleBtnEl) return;
+        this.vehicleBtnEl.style.display = show ? "block" : "none";
+    }
+
+    syncControllerModeBtnEl() {
+        if (!this.isShowMobileControls) return;
+        if (this.controllerMode == 0) {
+            // 人物控制
+            this.flyBtnEl.style.display = "block";
+            const overlayColor = "rgba(0,0,0,0.5)";
+            this.jumpBtnEl.style.backgroundImage = `linear-gradient(${overlayColor}, ${overlayColor}), url("${jumpIconModule}")`;
+        } else {
+            // 车辆控制
+            this.flyBtnEl.style.display = "none";
+            const overlayColor = "rgba(0,0,0,0.5)";
+            this.jumpBtnEl.style.backgroundImage = `linear-gradient(${overlayColor}, ${overlayColor}), url("${breakIconModule}")`;
+            this.jumpBtnEl.style.backgroundImage = `url(${breakIconModule})`;
+        }
+    }
+
+    // ==================== 更新参数 ====================
+
+    setMouseSensitivity(mouseSensity: number) {
+        this.mouseSensity = mouseSensity;
+        this.controls.rotateSpeed = this.mouseSensity * 0.05;
+    }
+
+    setGravity(gravity: number) {
+        this.gravity = gravity * this.playerModel.scale;
+    }
+
+    setJumpHeight(jumpHeight: number) {
+        this.jumpHeight = jumpHeight * this.playerModel.scale;
+    }
+
+    setPlayerSpeed(playerSpeed: number) {
+        this.playerSpeed = playerSpeed * this.playerModel.scale;
+        this.curPlayerSpeed = this.playerSpeed;
+    }
+
+    setPlayerFlySpeed(playerFlySpeed: number) {
+        this.playerFlySpeed = playerFlySpeed * this.playerModel.scale;
+    }
+
+    setMinCamDistance(minCamDistance: number) {
+        this.minCamDistance = minCamDistance * this.playerModel.scale;
+    }
+
+    setMaxCamDistance(maxCamDistance: number) {
+        this.maxCamDistance = maxCamDistance * this.playerModel.scale;
+        this.orginMaxCamDistance = this.maxCamDistance;
+    }
+
+    setThirdMouseMode(thirdMouseMode: 0 | 1 | 2 | 3) {
+        this.thirdMouseMode = thirdMouseMode;
+        this.setPointerLock();
+    }
+
+    setEnableZoom(enableZoom: boolean) {
+        this.enableZoom = enableZoom;
+        this.controls.enableZoom = this.enableZoom;
+    }
+
+    setDebug(debug: boolean) {
+        if (this.collider) this.scene.remove(this.collider);
+        if (debug) {
+            this.scene.add(this.collider);
+            (this.player.material as THREE.Material).opacity = 0.5;
+        } else {
+            (this.player.material as THREE.Material).opacity = 0;
         }
     }
 
@@ -2375,18 +3225,34 @@ export function playerController() {
     const c = controllerInstance;
     return {
         init: (opts: PlayerControllerOptions, callback?: () => void) => c.init(opts, callback),
-        loadVehicleModel: (params: vehicleOptions) => c.loadVehicleModel(params),
+        loadVehicleModel: (params: VehicleOptions) => c.loadVehicleModel(params),
         changeView: () => c.changeView(),
         reset: (pos?: THREE.Vector3) => c.reset(pos),
         update: (dt?: number) => c.update(dt),
         destroy: () => c.destroy(),
         setInput: (i: any) => c.setInput(i),
-        getposition: () => c.getPosition(),
+        getPosition: () => c.getPosition(),
+        getCenterScreenRaycastHit: () => c.getCenterScreenRaycastHit(),
         getPerson: () => c.person,
         getActiveVehicle: () => c.activeVehicle,
         getAllVehicles: () => c.vehicles,
+        switchPlayerModel: (model: PlayerControllerOptions["playerModel"]) => c.switchPlayerModel(model),
+        setMouseSensitivity: (mouseSensity: number) => c.setMouseSensitivity(mouseSensity),
+        setGravity: (gravity: number) => c.setGravity(gravity),
+        setJumpHeight: (jumpHeight: number) => c.setJumpHeight(jumpHeight),
+        setPlayerSpeed: (playerSpeed: number) => c.setPlayerSpeed(playerSpeed),
+        setPlayerFlySpeed: (playerFlySpeed: number) => c.setPlayerFlySpeed(playerFlySpeed),
+        setMinCamDistance: (minCamDistance: number) => c.setMinCamDistance(minCamDistance),
+        setMaxCamDistance: (maxCamDistance: number) => c.setMaxCamDistance(maxCamDistance),
+        setThirdMouseMode: (thirdMouseMode: 0 | 1 | 2 | 3) => c.setThirdMouseMode(thirdMouseMode),
+        setEnableZoom: (enableZoom: boolean) => c.setEnableZoom(enableZoom),
+        setDebug: (debug: boolean) => c.setDebug(debug),
+        setOverShoulderView: (enable: boolean) => c.setOverShoulderView(enable),
+        setPlayerScale: (scale: number) => c.setPlayerScale(scale),
     };
 }
+
+export type playerController = ReturnType<typeof playerController>;
 
 export function onAllEvent(): void {
     if (!controllerInstance) controllerInstance = new PlayerController();
