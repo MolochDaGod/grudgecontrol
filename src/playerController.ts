@@ -159,7 +159,7 @@ class PlayerController {
     // 全局车辆共享参数
     vehicleParams = {
         debug: {
-            showPhysicsBox: true,
+            showPhysicsBox: false,
         },
         chassis: {
             linearDamping: 0.5,
