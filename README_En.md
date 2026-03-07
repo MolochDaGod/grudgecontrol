@@ -148,7 +148,7 @@ export function playerController(): {
     setGravity: (gravity: number) => void;
     setJumpHeight: (jumpHeight: number) => void;
     setPlayerSpeed: (playerSpeed: number) => void;
-    setPlayerFlySpeed: (playerFlySpeed: number) => void;
+    setflySpeed: (flySpeed: number) => void;
     setMinCamDistance: (minCamDistance: number) => void;
     setMaxCamDistance: (maxCamDistance: number) => void;
     setThirdMouseMode: (thirdMouseMode: 0 | 1 | 2 | 3) => void;
@@ -180,7 +180,7 @@ export function playerController(): {
 | `setGravity(v)` | Set gravity (base value — multiplied by scale internally). |
 | `setJumpHeight(v)` | Set jump height (base value — multiplied by scale internally). |
 | `setPlayerSpeed(v)` | Set movement speed (base value — multiplied by scale internally). |
-| `setPlayerFlySpeed(v)` | Set fly speed (base value — multiplied by scale internally). |
+| `setflySpeed(v)` | Set fly speed (base value — multiplied by scale internally). |
 | `setMinCamDistance(v)` | Set minimum third-person camera distance. |
 | `setMaxCamDistance(v)` | Set maximum third-person camera distance. |
 | `setThirdMouseMode(v)` | Set third-person mouse mode (0–3). |
@@ -251,7 +251,7 @@ type PlayerControllerOptions = {
         gravity?: number;
         jumpHeight?: number;
         speed?: number;
-        playerFlySpeed?: number;
+        flySpeed?: number;
         rotateY?: number;
         headObjName?: string;
         flyEnabled?: boolean;
@@ -293,7 +293,7 @@ type PlayerControllerOptions = {
 | `playerModel.speed` | `number` | No | `300` | Movement speed base value |
 | `playerModel.gravity` | `number` | No | `-2400` | Gravity base value |
 | `playerModel.jumpHeight` | `number` | No | `600` | Jump height base value |
-| `playerModel.playerFlySpeed` | `number` | No | `2100` | Fly speed base value |
+| `playerModel.flySpeed` | `number` | No | `2100` | Fly speed base value |
 | `playerModel.flyEnabled` | `boolean` | No | `true` | Whether fly mode is available |
 | `initPos` | `THREE.Vector3` | No | `(0,0,0)` | Initial position |
 | `mouseSensity` | `number` | No | `5` | Mouse sensitivity |
@@ -304,6 +304,7 @@ type PlayerControllerOptions = {
 | `thirdMouseMode` | `0\|1\|2\|3` | No | `1` | Mouse mode in third-person (see table below) |
 | `enableZoom` | `boolean` | No | `false` | Allow scroll-wheel zoom in third-person |
 | `enableOverShoulderView` | `boolean` | No | `false` | Enable over-the-shoulder camera offset |
+| `capsuleRadiusRatio` | `number` | No | `1.0` | Radius scale factor of the player's capsule collider. A larger value results in a wider collision range |
 
 **thirdMouseMode values:**
 

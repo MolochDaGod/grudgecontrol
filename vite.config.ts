@@ -5,6 +5,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
     base: "/three-player-controller/",
     root: resolve(__dirname, "example"),
+    server: { host: true },
     build: {
         outDir: resolve(__dirname, "docs"),
         emptyOutDir: true,

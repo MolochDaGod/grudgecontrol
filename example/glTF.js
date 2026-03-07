@@ -99,22 +99,21 @@ const VEHICLE_CONFIGS = {
     },
     landRover: {
         url: "./glb/landRover.glb",
-        scale: 0.115,
+        scale: 0.08,
         wheelsNames: ["WheelFL", "WheelFR", "WheelBL", "WheelBR"],
         animations: { openDoorAnim: "opendoor" },
-        boardingPoint: new Vector3(0.8, 0, 1.5),
-        seatOffset: new Vector3(0, 0.5, 0),
+        boardingPoint: new Vector3(0.95, 0, 2.15),
+        seatOffset: new Vector3(0, 0.7, 0),
         chassisRatio: 0.4,
         suspensionRestLengthRatio: 0.2,
     },
     tesla: {
         url: "./glb/tesla2.glb",
-        scale: 0.115,
-        position: new Vector3(80, 80, 80),
+        scale: 0.09,
         wheelsNames: ["WHEEL_LF", "WHEEL_RF", "WHEEL_LR", "WHEEL_RR"],
         animations: { openDoorAnim: "opendoor" },
-        boardingPoint: new Vector3(0.7, 0, 1.3),
-        seatOffset: new Vector3(0.1, 0.4, 0),
+        boardingPoint: new Vector3(1, 0, 1.9),
+        seatOffset: new Vector3(0.1, 0.5, 0),
         chassisRatio: 0.4,
         suspensionRestLengthRatio: 0.2,
         followVehicleDirection: false,
@@ -122,10 +121,6 @@ const VEHICLE_CONFIGS = {
 };
 
 init();
-
-function isMobileDevice() {
-    return (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) || "ontouchstart" in window || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
 
 function setupCSMMaterial(material) {
     if (!material || !csm) return;
@@ -139,8 +134,7 @@ async function init() {
     // 渲染器
     renderer = new WebGLRenderer({ antialias: true });
     renderer.setSize(cont.clientWidth, cont.clientHeight);
-    // renderer.shadowMap.enabled = !isMobileDevice();
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = false;
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1;
     renderer.setAnimationLoop(animate);
@@ -341,11 +335,12 @@ function initGUI() {
         playerModel: "person1",
         vehicleType: "bugatti",
         showFPS: true,
+        showShadow: false,
         mouseSensitivity: 5,
         gravity: -2400,
         jumpHeight: 600,
         playerSpeed: 300,
-        playerFlySpeed: 2100,
+        flySpeed: 2100,
         minCamDistance: 50,
         maxCamDistance: 220,
         thirdMouseMode: 1,
@@ -419,20 +414,20 @@ function initGUI() {
         spawnController.domElement.addEventListener(type, (e) => e.stopPropagation());
     });
 
-    gui.add(params, "showFPS").name("Show FPS")
-        .onChange((v) => {
-            if (v) {
-                stats.dom.style.display = "block";
-            } else {
-                stats.dom.style.display = "none";
+    gui.add(params, "showFPS").name("Show FPS").onChange((v) => stats.dom.style.display = v ? "block" : "none");
+    gui.add(params, "showShadow").name("Show Shadow").onChange((v) => {
+        renderer.shadowMap.enabled = v;
+        scene.traverse((child) => {
+            if (child.isMesh) {
+                child.material.needsUpdate = true;
             }
         });
-
+    });
     gui.add(params, "mouseSensitivity", 1, 20, 0.1).onChange((v) => player.setMouseSensitivity(v));
     gui.add(params, "gravity", -6000, 0, 50).onChange((v) => player.setGravity(v));
     gui.add(params, "jumpHeight", 0, 2000, 10).onChange((v) => player.setJumpHeight(v));
     gui.add(params, "playerSpeed", 0, 1000, 10).onChange((v) => player.setPlayerSpeed(v));
-    gui.add(params, "playerFlySpeed", 0, 5000, 10).onChange((v) => player.setPlayerFlySpeed(v));
+    gui.add(params, "flySpeed", 0, 5000, 10).onChange((v) => player.setPlayerFlySpeed(v));
     gui.add(params, "minCamDistance", 0, 200, 1).onChange((v) => player.setMinCamDistance(v));
     gui.add(params, "maxCamDistance", 50, 1000, 1).onChange((v) => player.setMaxCamDistance(v));
     gui.add(params, "thirdMouseMode", { 0: 0, 1: 1, 2: 2, 3: 3 }).onChange((v) => player.setThirdMouseMode(Number(v)));
@@ -456,7 +451,7 @@ function initGUI() {
                 player.setGravity(defaults.gravity);
                 player.setJumpHeight(defaults.jumpHeight);
                 player.setPlayerSpeed(defaults.playerSpeed);
-                player.setPlayerFlySpeed(defaults.playerFlySpeed);
+                player.setPlayerFlySpeed(defaults.flySpeed);
                 player.setMinCamDistance(defaults.minCamDistance);
                 player.setMaxCamDistance(defaults.maxCamDistance);
                 player.setThirdMouseMode(defaults.thirdMouseMode);

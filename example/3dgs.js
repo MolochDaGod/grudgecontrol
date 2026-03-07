@@ -27,8 +27,8 @@ let stats;
 
 const pos = new Vector3(1.235, 1.21, -3.9);
 
-const scaleNormal = 0.013;
-const scaleSmall = 0.0013;
+const scaleNormal = 0.01;
+const scaleSmall = 0.001;
 let isSmallScale = false;
 let scaleAnimFrame = null;
 let isScaling = false;
@@ -117,7 +117,9 @@ async function init() {
             flyIdleAnim: "flyIdle",
             headObjName: "mixamorigHead",
             speed: 150,
-            jumpHeight: 400
+            flySpeed: 1000,
+            jumpHeight: 400,
+            capsuleRadiusRatio: 0.5,
         },
         initPos: pos,
         minCamDistance: 50,
@@ -125,7 +127,8 @@ async function init() {
         colliderMeshUrl: "./glb/3dgsCollider.glb",
         enableOverShoulderView: true,
     });
-    // player.setDebug(true);
+
+    // 设置材质
     player.getPerson()?.traverse((child) => {
         if (child.isMesh) {
             // 设置金属材质
@@ -135,9 +138,10 @@ async function init() {
     });
 
     window.addEventListener("resize", onWindowResize, false);
+    // 监听按键
     window.addEventListener("keydown", (e) => {
         if (e.code !== "KeyZ") return;
-        if (isScaling) return; // ← 缩放期间忽略
+        if (isScaling) return; // 缩放中不运行
         isSmallScale = !isSmallScale;
         animateToScale(isSmallScale ? scaleSmall : scaleNormal, 1);
     });
@@ -151,7 +155,7 @@ function animateToScale(targetScale, duration = 0.5) {
         scaleAnimFrame = null;
     }
 
-    isScaling = true; // ← 开始
+    isScaling = true;
     const fromScale = player.getScale?.() ?? (isSmallScale ? scaleNormal : scaleSmall);
     const startTime = performance.now();
 
@@ -164,7 +168,7 @@ function animateToScale(targetScale, duration = 0.5) {
             scaleAnimFrame = requestAnimationFrame(tick);
         } else {
             scaleAnimFrame = null;
-            isScaling = false; // ← 结束
+            isScaling = false;
         }
     };
 

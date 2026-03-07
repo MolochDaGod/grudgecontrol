@@ -42,10 +42,11 @@ export type PlayerControllerOptions = {
         gravity?: number;
         jumpHeight?: number;
         speed?: number;
-        playerFlySpeed?: number;
+        flySpeed?: number;
         rotateY?: number;
         headObjName?: string;
         flyEnabled?: boolean;
+        capsuleRadiusRatio?: number;
     };
     initPos?: THREE.Vector3;
     mouseSensity?: number;
@@ -125,8 +126,9 @@ class PlayerController {
     isChangeControllerTransitionTimer: any = null;
 
     // ==================== 玩家基本属性 ====================
-    playerRadius: number = 45;
-    playerHeight: number = 180; // 玩家参考身高
+    playerCapsuleRadius: number = 45;
+    playerCapsuleRadiusRatio: number = 1;
+    playerCapsuleHeight: number = 180; // 玩家参考身高
     isFirstPerson: boolean = false;
     boundingBoxMinY: number = 0;
 
@@ -313,7 +315,7 @@ class PlayerController {
         this.gravity = (opts.playerModel.gravity ?? -2400) * s;
         this.jumpHeight = (opts.playerModel.jumpHeight ?? 600) * s;
         this.playerSpeed = (opts.playerModel.speed ?? 300) * s;
-        this.playerFlySpeed = (opts.playerModel.playerFlySpeed ?? 2100) * s;
+        this.playerFlySpeed = (opts.playerModel.flySpeed ?? 2100) * s;
         this.curPlayerSpeed = this.playerSpeed;
         this.playerModel.rotateY = opts.playerModel.rotateY ?? 0;
         this.playerFlyEnabled = opts.playerModel.flyEnabled ?? true;
@@ -325,6 +327,8 @@ class PlayerController {
         this.orginMaxCamDistance = this.maxCamDistance;
         this.thirdMouseMode = opts.thirdMouseMode ?? 1;
         this.enableZoom = opts.enableZoom ?? false;
+
+        this.playerCapsuleRadiusRatio = opts.playerModel.capsuleRadiusRatio ?? 1;
 
         const isMobileDevice = () =>
             (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
@@ -432,11 +436,11 @@ class PlayerController {
             );
             this.person = gltf.scene;
             const { size } = this.getBbox(this.person);
-            const ratio = this.playerHeight / size.y;
-            const power = Math.round(Math.log10(ratio));
-            const modelScale = Math.pow(10, power);
-            this.playerRadius = Number(Math.min(size.x, size.z).toFixed(0)) * modelScale;
-            this.playerHeight = Number(size.y.toFixed(0)) * modelScale;
+            const ratio = this.playerCapsuleHeight / size.y;
+            // const power = Math.round(Math.log10(ratio));
+            const modelScale = ratio;
+            this.playerCapsuleRadius = Number(Math.min(size.x, size.z).toFixed(0)) * modelScale * this.playerCapsuleRadiusRatio;
+            this.playerCapsuleHeight = Number(size.y.toFixed(0)) * modelScale;
 
             const scale = this.playerModel.scale;
             const material = new THREE.MeshStandardMaterial({
@@ -449,8 +453,8 @@ class PlayerController {
                 depthWrite: false,
             });
 
-            const r = this.playerRadius * scale;
-            const h = this.playerHeight * scale;
+            const r = this.playerCapsuleRadius * scale;
+            const h = this.playerCapsuleHeight * scale;
             this.player = new THREE.Mesh(
                 new RoundedBoxGeometry(r * 2, h, r * 2, 1, 75),
                 material,
@@ -674,8 +678,9 @@ class PlayerController {
 
             const { size: originalSize } = this.getBbox(vehicleModel.scene);
             const ratio = this.vehicleLength / Math.max(originalSize.x, originalSize.y, originalSize.z);
-            const power = Math.round(Math.log10(ratio));
-            const modelScale = Math.pow(10, power);
+            // const power = Math.round(Math.log10(ratio));
+            // const modelScale = Math.pow(10, power);
+            const modelScale = ratio;
 
             // 动画混合器
             const vehicleMixer = new THREE.AnimationMixer(vehicleModel.scene);
@@ -1324,6 +1329,7 @@ class PlayerController {
     }
 
     setPointerLock() {
+        if (!document.body.requestPointerLock) return; 
         if (
             ((this.thirdMouseMode === 0 || this.thirdMouseMode === 1) &&
                 !this.isFirstPerson) ||
@@ -2156,9 +2162,9 @@ class PlayerController {
         if (intersects.length > 0) {
             playerDistanceFromGround =
                 this.player.position.y - intersects[0].point.y;
-            const maxH = this.playerHeight * this.playerModel.scale * 0.9;
-            const h = this.playerHeight * this.playerModel.scale * 0.75;
-            const minH = this.playerHeight * this.playerModel.scale * 0.7;
+            const maxH = this.playerCapsuleHeight * this.playerModel.scale * 0.9;
+            const h = this.playerCapsuleHeight * this.playerModel.scale * 0.75;
+            const minH = this.playerCapsuleHeight * this.playerModel.scale * 0.7;
 
             if (!this.isFlying) {
                 if (playerDistanceFromGround >= maxH) {
@@ -2343,7 +2349,7 @@ class PlayerController {
         // 第三人称-相机跟随
         if (!this.isFirstPerson) {
             const lookTarget = this.player.position.clone();
-            lookTarget.y += (this.playerHeight / 8) * this.playerModel.scale;
+            lookTarget.y += (this.playerCapsuleHeight / 8) * this.playerModel.scale;
             this.camera.position.sub(this.controls.target);
             this.controls.target.copy(lookTarget);
             this.camera.position.add(lookTarget);

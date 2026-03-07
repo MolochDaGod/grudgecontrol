@@ -51,8 +51,8 @@ async function init() {
     light.shadow.camera.bottom = -40;
     light.shadow.camera.left = -40;
     light.shadow.camera.right = 40;
-    light.shadow.mapSize.width = 7680;
-    light.shadow.mapSize.height = 7680;
+    light.shadow.mapSize.width = 2048;
+    light.shadow.mapSize.height = 2048;
     light.shadow.bias = -0.0005;
     light.shadow.camera.near = 0;
     light.shadow.camera.far = 100;
@@ -134,7 +134,7 @@ async function initPlayer() {
 
     await player.loadVehicleModel({
         url: "./glb/tesla.glb",
-        scale: 1.15,
+        scale: 0.9,
         position: new Vector3(80, 80, 80),
         wheelsNames: [
             "WHEEL_LF", // 前左
@@ -145,8 +145,8 @@ async function initPlayer() {
         animations: {
             openDoorAnim: "opendoor",
         },
-        boardingPoint: new Vector3(0.7, 0, 1.3),
-        seatOffset: new Vector3(0.1, 0.4, 0),
+        boardingPoint: new Vector3(1, 0, 1.9),
+        seatOffset: new Vector3(0.1, 0.5, 0),
         chassisRatio: 0.4,
         suspensionRestLengthRatio: 0.2,
         followVehicleDirection: false,
