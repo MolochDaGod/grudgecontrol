@@ -117,33 +117,19 @@ player.update();
 
 ```ts
 export function playerController(): {
-    // 初始化
     init: (opts: PlayerControllerOptions, callback?: () => void) => void;
-    // 加载车辆模型
     loadVehicleModel: (params: VehicleOptions) => void;
-    // 切换人物模型
     switchPlayerModel: (model: PlayerControllerOptions["playerModel"]) => void;
-    // 切换第一/第三人称
     changeView: () => void;
-    // 复位玩家位置
     reset: (pos?: THREE.Vector3) => void;
-    // 每帧调用
     update: (dt?: number) => void;
-    // 销毁控制器
     destroy: () => void;
-    // 外部输入控制
     setInput: (input: PlayerInput) => void;
-    // 获取人物当前位置
     getPosition: () => THREE.Vector3;
-    // 获取屏幕中心射线与场景的交点
     getCenterScreenRaycastHit: () => THREE.Intersection | undefined;
-    // 获取人物模型
     getPerson: () => THREE.Object3D | null;
-    // 获取当前驾驶的车辆实例
     getActiveVehicle: () => VehicleInstance | null;
-    // 获取所有车辆实例
     getAllVehicles: () => VehicleInstance[];
-    // 动态参数调整
     setMouseSensitivity: (mouseSensity: number) => void;
     setGravity: (gravity: number) => void;
     setJumpHeight: (jumpHeight: number) => void;

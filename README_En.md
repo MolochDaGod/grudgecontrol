@@ -117,33 +117,19 @@ player.update();
 
 ```ts
 export function playerController(): {
-    // Initialize
     init: (opts: PlayerControllerOptions, callback?: () => void) => void;
-    // Load a vehicle model
     loadVehicleModel: (params: VehicleOptions) => void;
-    // Switch character model at runtime
     switchPlayerModel: (model: PlayerControllerOptions["playerModel"]) => void;
-    // Toggle first / third person
     changeView: () => void;
-    // Reset player position
     reset: (pos?: THREE.Vector3) => void;
-    // Call every frame
     update: (dt?: number) => void;
-    // Destroy the controller
     destroy: () => void;
-    // External input injection
     setInput: (input: PlayerInput) => void;
-    // Get current player world position
     getPosition: () => THREE.Vector3;
-    // Get center-screen raycast hit against the collider
     getCenterScreenRaycastHit: () => THREE.Intersection | undefined;
-    // Get the character model object
     getPerson: () => THREE.Object3D | null;
-    // Get the currently driven vehicle instance
     getActiveVehicle: () => VehicleInstance | null;
-    // Get all loaded vehicle instances
     getAllVehicles: () => VehicleInstance[];
-    // Runtime parameter setters
     setMouseSensitivity: (mouseSensity: number) => void;
     setGravity: (gravity: number) => void;
     setJumpHeight: (jumpHeight: number) => void;
