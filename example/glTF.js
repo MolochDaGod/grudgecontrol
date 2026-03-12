@@ -19,7 +19,6 @@ import { playerController } from "../src/playerController";
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { CSM } from "three/examples/jsm/csm/CSM.js";
-import { CSMHelper } from "three/examples/jsm/csm/CSMHelper.js"
 
 let player;
 const scene = new Scene();
@@ -33,10 +32,8 @@ let raycastSphere = null;
 
 let stats = null;
 let csm = null;
-let csmHelper = null;
 
 const modelUrl = "./glb/burnout_revenge_-_central_route_crash_junction.glb";
-
 const pos = new Vector3(21.5, 4, 15);
 
 // 人物模型配置
@@ -80,6 +77,18 @@ const PLAYER_MODELS = {
         flyIdleAnim: "flyidle",
         enterCarAnim: "enterCar",
         exitCarAnim: "exitCar",
+        headObjName: "mixamorigHead",
+        rotateY: Math.PI,
+    },
+    person6: {
+        url: "./glb/person6.glb",
+        scale: 0.001,
+        idleAnim: "idle",
+        walkAnim: "walk",
+        runAnim: "run",
+        jumpAnim: "jump",
+        flyAnim: "flying",
+        flyIdleAnim: "flyidle",
         headObjName: "mixamorigHead",
         rotateY: Math.PI,
     },
@@ -290,12 +299,10 @@ function animate() {
     }
 
     csm?.update();
-    csmHelper?.update();
 
     renderer.render(scene, camera);
 
     stats?.update();
-
 }
 
 // 更新中心射线交点
@@ -348,7 +355,6 @@ function initGUI() {
         debug: false,
         enableOverShoulderView: true,
         centerRaycast: false,
-        // playerScale: 1,
     };
 
     const defaults = { ...params };
@@ -362,7 +368,21 @@ function initGUI() {
                     child.castShadow = true;
                     child.receiveShadow = true;
                     setupCSMMaterial(child.material);
+                    if (v == "person6") {
+                        // 设置金属材质
+                        child.material.metalness = 0.8;
+                        child.material.roughness = 0.0;
+                    }
                 }
+            });
+            // 注册动画
+            player.registerAnimation("flyFight", "flyFight", {
+                loop: false,
+                clampWhenFinished: true,
+                duration: 1,
+                onFinished: () => {
+                    player.playAnimation("flyidle");
+                },
             });
         });
 
@@ -436,9 +456,6 @@ function initGUI() {
     gui.add(params, "enableOverShoulderView").onChange((v) => player.setOverShoulderView(v));
     gui.add(params, "centerRaycast").name("Center Raycast Debug")
         .onChange((v) => { if (!v) raycastSphere.visible = false; });
-    // gui.add(params, "playerScale", 0.001, 0.005, 0.0001)
-    //     .name("Player Scale")
-    //     .onChange((v) => player.setPlayerScale(v, params.playerScaleDuration));
 
     const resetController = gui.add(
         {
@@ -470,17 +487,12 @@ function initGUI() {
         resetController.domElement.addEventListener(type, (e) => e.stopPropagation());
     });
 
-    // gui.add({ csmDebug: false }, "csmDebug").name("CSM Debug").onChange((v) => {
-    //     if (v) {
-    //         csmHelper = new CSMHelper(csm);
-    //         csmHelper.displayFrustum = true;
-    //         csmHelper.displayPlanes = true;
-    //         scene.add(csmHelper);
-    //         console.log('csmHelper', csmHelper);
-    //     } else {
-    //         if (csmHelper) { scene.remove(csmHelper); csmHelper = null; }
-    //     }
-    // });
-
     guiParams = params;
 }
+
+// 鼠标左键
+window.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    if (player.getCurrentPersonAnimationName() !== "flyidle") return;
+    player.playAnimation("flyFight", { force: true });
+});
