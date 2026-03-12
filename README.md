@@ -8,11 +8,7 @@
 
 # 示例
 
-- [glb 场景](https://hh-hang.github.io/three-player-controller/index.html)
-
-- [3dtiles 场景](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
-
-- [3dtiles 自定义](https://hh-hang.github.io/three-player-controller/3dtilesCustomize.html)
+- [示例](https://hh-hang.github.io/three-player-controller/index.html)
 
 ### 普通控制
 

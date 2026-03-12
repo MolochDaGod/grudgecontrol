@@ -8,11 +8,7 @@ A lightweight, out-of-the-box third-person / first-person player controller buil
 
 # Demo
 
-- [GLB Scene](https://hh-hang.github.io/three-player-controller/index.html)
-
-- [3D Tiles Scene](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
-
-- [3D Tiles Custom](https://hh-hang.github.io/three-player-controller/3dtilesCustomize.html)
+- [Demo](https://hh-hang.github.io/three-player-controller/index.html)
 
 ### Standard Control
 
