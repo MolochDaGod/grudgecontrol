@@ -1,4 +1,4 @@
-[English](README_En.md)
+中文 | [English](README_En.md)
 
 # three-player-controller
 
@@ -8,7 +8,11 @@
 
 # 示例
 
-- [示例](https://hh-hang.github.io/three-player-controller/index.html)
+- [glb 场景](https://hh-hang.github.io/three-player-controller/index.html)
+
+- [3dtiles 场景](https://hh-hang.github.io/three-player-controller/3dtilesScene.html)
+
+- [3dtiles 自定义](https://hh-hang.github.io/three-player-controller/3dtilesCustomize.html)
 
 ### 普通控制
 
@@ -82,7 +86,7 @@ await player.init({
         runAnim: "run",          // Run 动画名
         jumpAnim: "jump",        // Jump 动画名
     },
-    initPos: new THREE.Vector3(0, 0, 0), // 初始位置
+    initPos: new THREE.Vector3(0, 0, 0),
 });
 
 // 加入车辆控制
@@ -134,7 +138,7 @@ export function playerController(): {
     setGravity: (gravity: number) => void;
     setJumpHeight: (jumpHeight: number) => void;
     setPlayerSpeed: (playerSpeed: number) => void;
-    setflySpeed: (flySpeed: number) => void;
+    setPlayerFlySpeed: (playerFlySpeed: number) => void;
     setMinCamDistance: (minCamDistance: number) => void;
     setMaxCamDistance: (maxCamDistance: number) => void;
     setThirdMouseMode: (thirdMouseMode: 0 | 1 | 2 | 3) => void;
@@ -142,6 +146,18 @@ export function playerController(): {
     setOverShoulderView: (enable: boolean) => void;
     setPlayerScale: (scale: number) => void;
     setDebug: (debug: boolean) => void;
+    getCurrentPersonAnimationName: () => string | null;
+    registerAnimation: (key: string, clipName: string, opts?: {
+        loop?: boolean;
+        timeScale?: number;
+        duration?: number;
+        clampWhenFinished?: boolean;
+        onFinished?: () => void;
+    }) => void;
+    playAnimation: (key: string, opts?: {
+        fade?: number;
+        force?: boolean;
+    }) => void;
 };
 ```
 
@@ -166,7 +182,7 @@ export function playerController(): {
 | `setGravity(v)` | 设置重力（传入基准值，内部自动乘以 scale） |
 | `setJumpHeight(v)` | 设置跳跃高度（传入基准值，内部自动乘以 scale） |
 | `setPlayerSpeed(v)` | 设置移动速度（传入基准值，内部自动乘以 scale） |
-| `setflySpeed(v)` | 设置飞行速度（传入基准值，内部自动乘以 scale） |
+| `setPlayerFlySpeed(v)` | 设置飞行速度（传入基准值，内部自动乘以 scale） |
 | `setMinCamDistance(v)` | 设置第三人称最小相机距离 |
 | `setMaxCamDistance(v)` | 设置第三人称最大相机距离 |
 | `setThirdMouseMode(v)` | 设置第三人称鼠标模式（0~3） |
@@ -174,6 +190,9 @@ export function playerController(): {
 | `setOverShoulderView(v)` | 开启/关闭过肩视角偏移 |
 | `setPlayerScale(scale)` | 动态设置人物缩放，同步更新碰撞体与所有相关物理参数 |
 | `setDebug(v)` | 开启/关闭碰撞体调试显示 |
+| `getCurrentPersonAnimationName()` | 获取当前正在播放的动画名称 |
+| `registerAnimation(key, clipName, opts?)` | 注册一个自定义动画，之后可通过 `playAnimation` 播放 |
+| `playAnimation(key, opts?)` | 播放已注册的自定义动画 |
 
 ---
 
@@ -197,15 +216,15 @@ export function offAllEvent(): void; // 关闭所有输入事件
 
 ```ts
 player.setInput({
-    moveX: 1 | 0 | -1,       // 横向移动：1 右，-1 左，0 停
-    moveY: 1 | 0 | -1,       // 纵向移动：1 前，-1 后，0 停
-    lookDeltaX: number,       // 视角横向偏移量
-    lookDeltaY: number,       // 视角纵向偏移量
-    jump: boolean,            // 跳跃
-    shift: boolean,           // 奔跑
-    toggleView: boolean,      // 切换第一/第三人称
-    toggleFly: boolean,       // 切换飞行模式
-    toggleVehicle: boolean,   // 上车/下车
+    moveX: 1 | 0 | -1,      // 横向移动：1 右，-1 左，0 停
+    moveY: 1 | 0 | -1,      // 纵向移动：1 前，-1 后，0 停
+    lookDeltaX: number,      // 视角横向偏移量
+    lookDeltaY: number,      // 视角纵向偏移量
+    jump: boolean,           // 跳跃
+    shift: boolean,          // 奔跑
+    toggleView: boolean,     // 切换第一/第三人称
+    toggleFly: boolean,      // 切换飞行模式
+    toggleVehicle: boolean,  // 上车/下车
 });
 ```
 
@@ -237,10 +256,11 @@ type PlayerControllerOptions = {
         gravity?: number;
         jumpHeight?: number;
         speed?: number;
-        flySpeed?: number;
+        playerFlySpeed?: number;
         rotateY?: number;
         headObjName?: string;
         flyEnabled?: boolean;
+        capsuleRadiusRatio?: number;
     };
     initPos?: THREE.Vector3;
     mouseSensity?: number;
@@ -279,7 +299,7 @@ type PlayerControllerOptions = {
 | `playerModel.speed` | `number` | 否 | `300` | 移动速度基准值 |
 | `playerModel.gravity` | `number` | 否 | `-2400` | 重力加速度基准值 |
 | `playerModel.jumpHeight` | `number` | 否 | `600` | 跳跃高度基准值 |
-| `playerModel.flySpeed` | `number` | 否 | `2100` | 飞行速度基准值 |
+| `playerModel.playerFlySpeed` | `number` | 否 | `2100` | 飞行速度基准值 |
 | `playerModel.flyEnabled` | `boolean` | 否 | `true` | 是否允许飞行模式 |
 | `initPos` | `THREE.Vector3` | 否 | `(0,0,0)` | 初始位置 |
 | `mouseSensity` | `number` | 否 | `5` | 鼠标灵敏度 |
@@ -290,14 +310,13 @@ type PlayerControllerOptions = {
 | `thirdMouseMode` | `0\|1\|2\|3` | 否 | `1` | 第三人称鼠标模式（见下表） |
 | `enableZoom` | `boolean` | 否 | `false` | 第三人称是否允许滚轮缩放 |
 | `enableOverShoulderView` | `boolean` | 否 | `false` | 是否开启过肩视角偏移 |
-| `capsuleRadiusRatio` | `number` | 否 | `1.0` | 玩家胶囊碰撞体的半径系数，值越大碰撞范围越宽 |
 
 **thirdMouseMode 说明：**
 
 | 值 | 行为 |
 |----|------|
-| `0` | 隐藏鼠标，鼠标同时控制朝向和视角 |
-| `1` | 隐藏鼠标，鼠标仅控制视角（默认） |
+| `0` | 隐藏鼠标，同时控制朝向和视角 |
+| `1` | 隐藏鼠标，仅控制视角（默认） |
 | `2` | 显示鼠标，拖拽控制朝向和视角 |
 | `3` | 显示鼠标，拖拽仅控制视角 |
 
@@ -340,6 +359,55 @@ type VehicleOptions = {
 | `speedMultiplier` | `number` | 否 | `1` | 车辆速度倍率，用于调节不同车辆的速度差异 |
 
 ---
+
+---
+
+## 四、自定义动画
+
+除内置动画外，可在加载模型后注册并播放自定义动画片段。
+
+### registerAnimation
+
+```ts
+player.registerAnimation(key, clipName, opts?)
+```
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `key` | `string` | 动画标识符，之后通过此 key 播放 |
+| `clipName` | `string` | GLB 模型内动画片段的原始名称 |
+| `opts.loop` | `boolean` | 是否循环，默认 `true` |
+| `opts.timeScale` | `number` | 播放速度倍率，默认 `1` |
+| `opts.duration` | `number` | 指定播放时长（秒），会自动计算 timeScale，与 `timeScale` 二选一 |
+| `opts.clampWhenFinished` | `boolean` | 单次播放结束后是否停在最后一帧，默认 `false` |
+| `opts.onFinished` | `() => void` | 动画播放完毕回调（仅单次播放时有效） |
+
+### playAnimation
+
+```ts
+player.playAnimation(key, opts?)
+```
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `key` | `string` | 已注册的动画标识符 |
+| `opts.fade` | `number` | 过渡时间（秒），默认 `0.18` |
+| `opts.force` | `boolean` | 是否强制从头重播（即使当前已在播放该动画） |
+
+**示例：**
+
+```ts
+// 注册一个单次播放、播完回调的动画
+player.registerAnimation("attack", "Attack_Clip", {
+    loop: false,
+    duration: 1.2,
+    clampWhenFinished: true,
+    onFinished: () => console.log("攻击结束"),
+});
+
+// 播放
+player.playAnimation("attack", { force: true });
+```
 
 # 感谢
 
