@@ -252,7 +252,7 @@ type PlayerControllerOptions = {
         gravity?: number;
         jumpHeight?: number;
         speed?: number;
-        playerFlySpeed?: number;
+        flySpeed?: number;
         rotateY?: number;
         headObjName?: string;
         flyEnabled?: boolean;
@@ -295,7 +295,7 @@ type PlayerControllerOptions = {
 | `playerModel.speed` | `number` | 否 | `300` | 移动速度基准值 |
 | `playerModel.gravity` | `number` | 否 | `-2400` | 重力加速度基准值 |
 | `playerModel.jumpHeight` | `number` | 否 | `600` | 跳跃高度基准值 |
-| `playerModel.playerFlySpeed` | `number` | 否 | `2100` | 飞行速度基准值 |
+| `playerModel.flySpeed` | `number` | 否 | `2100` | 飞行速度基准值 |
 | `playerModel.flyEnabled` | `boolean` | 否 | `true` | 是否允许飞行模式 |
 | `initPos` | `THREE.Vector3` | 否 | `(0,0,0)` | 初始位置 |
 | `mouseSensity` | `number` | 否 | `5` | 鼠标灵敏度 |
