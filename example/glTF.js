@@ -5,8 +5,10 @@ import {
     Mesh,
     MeshBasicMaterial,
     PerspectiveCamera,
+    Raycaster,
     Scene,
     SphereGeometry,
+    Vector2,
     Vector3,
     WebGLRenderer,
 } from "three";
@@ -32,6 +34,17 @@ let raycastSphere = null;
 
 let stats = null;
 let csm = null;
+let currentBlobUrl = null;
+
+let globalScale = 1;
+let previewMesh = null;
+let previewMode = false;
+let previewHintEl = null;
+
+// CSM 基准参数
+const CSM_BASE = { maxFar: 30, lightNear: 0.1, lightFar: 50, lightMargin: 30, lightIntensity: 10 };
+const previewRaycaster = new Raycaster();
+const previewMouse = new Vector2();
 
 const modelUrl = "./glb/burnout_revenge_-_central_route_crash_junction.glb";
 const pos = new Vector3(21.5, 4, 15);
@@ -80,18 +93,6 @@ const PLAYER_MODELS = {
         headObjName: "mixamorigHead",
         rotateY: Math.PI,
     },
-    person6: {
-        url: "./glb/person6.glb",
-        scale: 0.001,
-        idleAnim: "idle",
-        walkAnim: "walk",
-        runAnim: "run",
-        jumpAnim: "jump",
-        flyAnim: "flying",
-        flyIdleAnim: "flyidle",
-        headObjName: "mixamorigHead",
-        rotateY: Math.PI,
-    },
 };
 
 // 车辆配置
@@ -137,6 +138,51 @@ function setupCSMMaterial(material) {
     mats.forEach((m) => csm.setupMaterial(m));
 }
 
+function createCSM(shadowMapSize, scale) {
+    const c = new CSM({
+        maxFar: CSM_BASE.maxFar * scale,
+        cascades: 3,
+        mode: "practical",
+        parent: scene,
+        shadowMapSize,
+        shadowBias: -0.00001,
+        lightDirection: new Vector3(-1, -2, -1).normalize(),
+        lightIntensity: CSM_BASE.lightIntensity,
+        lightNear: CSM_BASE.lightNear * scale,
+        lightFar: CSM_BASE.lightFar * scale,
+        camera,
+        fade: true,
+        lightMargin: CSM_BASE.lightMargin * scale,
+    });
+    c.lights.forEach((light, index) => {
+        const biasMult = Math.pow(2, index);
+        light.shadow.bias = -0.0001 * biasMult;
+        light.shadow.normalBias = 0.002 * biasMult;
+    });
+    return c;
+}
+
+function recreateCSM(scale) {
+    csm.remove();
+    csm.dispose();
+    const maxTextureSize = renderer.capabilities.maxTextureSize;
+    csm = createCSM(Math.min(2048, maxTextureSize), scale);
+    // 重新绑定场景内所有网格的材质
+    scene.traverse((child) => {
+        if (child.isMesh) setupCSMMaterial(child.material);
+    });
+}
+
+function getScaledModel(key) {
+    const m = PLAYER_MODELS[key];
+    return { ...m, scale: m.scale * globalScale };
+}
+
+function getScaledVehicle(key) {
+    const v = VEHICLE_CONFIGS[key];
+    return { ...v, scale: v.scale * globalScale };
+}
+
 async function init() {
     const cont = document.querySelector("#container");
 
@@ -166,21 +212,7 @@ async function init() {
     const maxTextureSize = renderer.capabilities.maxTextureSize;
     const shadowMapSize = Math.min(2048, maxTextureSize);
     // 级联阴影
-    csm = new CSM({
-        maxFar: 30, // 阴影最远渲染距离
-        cascades: 3, // 级联层数
-        mode: "practical", // 分割算法
-        parent: scene,
-        shadowMapSize: shadowMapSize,
-        shadowBias: -0.00001,
-        lightDirection: new Vector3(-1, -2, -1).normalize(),
-        lightIntensity: 10,
-        lightNear: 0.1, // 光源视锥近裁剪面
-        lightFar: 50, // 光源视锥远裁剪面
-        camera: camera,
-        fade: true, // 级联边界淡入淡出过渡
-        lightMargin: 30, // 光源包围盒扩展余量
-    });
+    csm = createCSM(shadowMapSize, 1);
     csm.lights.forEach((light, index) => {
         const biasMult = Math.pow(2, index);
         light.shadow.bias = -0.0001 * biasMult;
@@ -270,12 +302,12 @@ function initGltfLoader() {
 }
 
 // 加载场景
-async function initGLBScene(url) {
+async function initGLBScene(url, modelScale = [10, 10, 10]) {
     try {
         const gltf = await gltfLoader.loadAsync(url);
         const model = gltf.scene;
         model.name = "sceneGLB";
-        model.scale.set(10, 10, 10);
+        model.scale.set(...modelScale);
         model.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
@@ -287,6 +319,188 @@ async function initGLBScene(url) {
     } catch (e) {
         console.error("GLB 加载失败：", e);
     }
+}
+
+// 更换场景
+async function replaceScene(file) {
+    const blobUrl = URL.createObjectURL(file);
+
+    // 退出指针锁定
+    if (document.pointerLockElement) {
+        await new Promise((resolve) => {
+            document.addEventListener("pointerlockchange", resolve, { once: true });
+            document.exitPointerLock();
+        });
+    }
+
+    // 移除旧场景并释放 GPU 资源
+    const old = scene.getObjectByName("sceneGLB");
+    if (old) {
+        old.traverse((child) => {
+            if (child.isMesh) {
+                child.geometry?.dispose();
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                mats.forEach((m) => m?.dispose());
+            }
+        });
+        scene.remove(old);
+    }
+
+    // 销毁旧玩家
+    player?.destroy();
+    player = null;
+
+    // 加载新场景
+    await initGLBScene(blobUrl, [1, 1, 1]);
+
+    // 释放上一个 blob URL，保存新的
+    if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+    currentBlobUrl = blobUrl;
+
+    // 进入预览模式
+    await enterPreviewMode(guiParams?.playerModel ?? "person1");
+}
+
+// 进入预览模式
+async function enterPreviewMode(playerModelKey) {
+    previewMode = true;
+
+    const modelConfig = PLAYER_MODELS[playerModelKey];
+    const gltf = await gltfLoader.loadAsync(modelConfig.url);
+    previewMesh = gltf.scene;
+    previewMesh.scale.setScalar(modelConfig.scale * globalScale);
+    previewMesh.visible = false;
+    previewMesh.traverse((child) => {
+        if (child.isMesh) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((m) => {
+                m.transparent = true;
+                m.opacity = 0.5;
+                m.depthWrite = false;
+            });
+        }
+    });
+    scene.add(previewMesh);
+
+    if (!previewHintEl) {
+        previewHintEl = document.createElement("div");
+        Object.assign(previewHintEl.style, {
+            position: "fixed", bottom: "20px", left: "50%",
+            transform: "translateX(-50%)", background: "rgba(0,0,0,0.65)",
+            color: "#fff", padding: "12px 24px", borderRadius: "8px",
+            fontSize: "14px", zIndex: "9999", textAlign: "center",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: "8px",
+        });
+        const tip = document.createElement("span");
+        tip.textContent = "移动鼠标预览人物位置 · 双击确认放置";
+        const sliderRow = document.createElement("div");
+        Object.assign(sliderRow.style, { display: "flex", alignItems: "center", gap: "8px" });
+        const label = document.createElement("span");
+        label.textContent = "人物比例：";
+        // 对数刻度：slider在log10空间线性滑动，0.01~100 各数量级间距相同
+        const slider = document.createElement("input");
+        slider.type = "range";
+        slider.min = "-2";   // log10(0.01)
+        slider.max = "2";    // log10(100)
+        slider.step = "0.01";
+        slider.value = String(Math.log10(globalScale));
+        slider.style.width = "160px";
+        const sliderVal = document.createElement("span");
+        sliderVal.textContent = globalScale.toFixed(2);
+        slider.addEventListener("input", () => {
+            globalScale = Math.pow(10, parseFloat(slider.value));
+            sliderVal.textContent = globalScale.toFixed(2);
+            if (previewMesh) {
+                previewMesh.scale.setScalar(modelConfig.scale * globalScale);
+            }
+        });
+        sliderRow.append(label, slider, sliderVal);
+        previewHintEl.append(tip, sliderRow);
+        document.body.appendChild(previewHintEl);
+    } else {
+        // 重置滑块值
+        const slider = previewHintEl.querySelector("input[type=range]");
+        const sliderVal = previewHintEl.querySelector("span:last-child");
+        if (slider) { slider.value = String(Math.log10(globalScale)); }
+        if (sliderVal) { sliderVal.textContent = globalScale.toFixed(2); }
+    }
+    previewHintEl.style.display = "flex";
+
+    renderer.domElement.addEventListener("mousemove", onPreviewMouseMove);
+    renderer.domElement.addEventListener("dblclick", onPreviewDblClick);
+}
+
+// 退出预览模式
+function exitPreviewMode() {
+    previewMode = false;
+    controls.enableZoom = true;
+
+    if (previewMesh) {
+        previewMesh.traverse((child) => {
+            if (child.isMesh) {
+                child.geometry?.dispose();
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                mats.forEach((m) => m?.dispose());
+            }
+        });
+        scene.remove(previewMesh);
+        previewMesh = null;
+    }
+
+    if (previewHintEl) previewHintEl.style.display = "none";
+
+    renderer.domElement.removeEventListener("mousemove", onPreviewMouseMove);
+    renderer.domElement.removeEventListener("dblclick", onPreviewDblClick);
+}
+
+// 预览：鼠标移动 → 射线交点跟随
+function onPreviewMouseMove(e) {
+    if (!previewMode || !previewMesh) return;
+    previewMouse.set(
+        (e.clientX / window.innerWidth) * 2 - 1,
+        -(e.clientY / window.innerHeight) * 2 + 1,
+    );
+    previewRaycaster.setFromCamera(previewMouse, camera);
+    const sceneModel = scene.getObjectByName("sceneGLB");
+    if (!sceneModel) return;
+    const hits = previewRaycaster.intersectObject(sceneModel, true);
+    if (hits.length > 0) {
+        previewMesh.position.copy(hits[0].point);
+        previewMesh.visible = true;
+    } else {
+        previewMesh.visible = false;
+    }
+}
+
+// 预览：双击 → 确认位置，初始化玩家
+async function onPreviewDblClick() {
+    if (!previewMode || !previewMesh?.visible) return;
+    const initPos = previewMesh.position.clone();
+    exitPreviewMode();
+
+    recreateCSM(globalScale);
+
+    player = playerController();
+    await player.init({
+        scene,
+        camera,
+        controls,
+        playerModel: getScaledModel(guiParams?.playerModel ?? "person1"),
+        initPos,
+        minCamDistance: 50,
+        maxCamDistance: 220,
+        colliderMeshUrl: currentBlobUrl,
+        enableOverShoulderView: guiParams?.enableOverShoulderView ?? true,
+        thirdMouseMode: guiParams?.thirdMouseMode ?? 1,
+    });
+
+    player.getPerson()?.traverse((child) => {
+        if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            setupCSMMaterial(child.material);
+        }
+    });
 }
 
 // 每帧调用
@@ -338,6 +552,20 @@ function initGUI() {
         gui.domElement.addEventListener(type, (e) => e.stopPropagation());
     });
 
+    // 上传场景按钮
+    const uploadInput = document.createElement("input");
+    uploadInput.type = "file";
+    uploadInput.accept = ".gltf,.glb";
+    uploadInput.style.display = "none";
+    document.body.appendChild(uploadInput);
+    uploadInput.addEventListener("change", async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        await replaceScene(file);
+        uploadInput.value = ""; // 允许重复上传同名文件
+    });
+    gui.add({ upload: () => uploadInput.click() }, "upload").name("Change Scene (.glb/.gltf)");
+
     const params = {
         playerModel: "person1",
         vehicleType: "bugatti",
@@ -362,7 +590,7 @@ function initGUI() {
     gui.add(params, "playerModel", Object.keys(PLAYER_MODELS))
         .name("Player Model")
         .onChange(async (v) => {
-            await player.switchPlayerModel(PLAYER_MODELS[v]);
+            await player.switchPlayerModel(getScaledModel(v));
             player.getPerson()?.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
@@ -414,7 +642,7 @@ function initGUI() {
                 const spawnPos = playerPos.clone().addScaledVector(camDir, 0.5);
                 spawnPos.y = playerPos.y;
 
-                await player.loadVehicleModel({ ...cfg, position: spawnPos });
+                await player.loadVehicleModel({ ...getScaledVehicle(params.vehicleType), position: spawnPos });
                 player.getAllVehicles().at(-1)?.vehicleGroup?.traverse((child) => {
                     if (child.isMesh) {
                         child.castShadow = true;
@@ -489,10 +717,3 @@ function initGUI() {
 
     guiParams = params;
 }
-
-// 鼠标左键
-window.addEventListener("mousedown", (e) => {
-    if (e.button !== 0) return;
-    if (player.getCurrentPersonAnimationName() !== "flyidle") return;
-    player.playAnimation("flyFight", { force: true });
-});
