@@ -13,7 +13,8 @@
     "exports": {
         ".": {
             "import": "./dist/index.mjs",
-            "require": "./dist/index.js"
+            "require": "./dist/index.js",
+            "types": "./dist/index.d.ts"
         }
     },
     "scripts": {
@@ -21,8 +22,7 @@
         "build": "tsup",
         "clean": "rimraf dist",
         "prepare": "npm run build",
-        "build:example": "vite build",
-        "dev:example": "vite example"
+        "build:example": "vite build"
     },
     "peerDependencies": {
         "@dimforge/rapier3d-compat": "^0.12.0",
