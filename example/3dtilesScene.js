@@ -1,6 +1,6 @@
 import { TilesRenderer } from "3d-tiles-renderer";
 import { CesiumIonAuthPlugin } from "3d-tiles-renderer/core/plugins";
-import { GLTFExtensionsPlugin, ReorientationPlugin, TileCompressionPlugin, TilesFadePlugin } from "3d-tiles-renderer/plugins";
+import { GLTFExtensionsPlugin, LoadRegionPlugin, ReorientationPlugin, SphereRegion, TileCompressionPlugin, TilesFadePlugin } from "3d-tiles-renderer/plugins";
 import { ACESFilmicToneMapping, AmbientLight, DirectionalLight, EquirectangularReflectionMapping, MathUtils, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
@@ -16,6 +16,14 @@ let tiles;
 let renderer;
 let scene;
 let stats;
+
+// 区域裁剪
+let nearRegionPlugin = null;
+let farRegionPlugin = null;
+let nearRegion = null;
+let farRegion = null;
+const NEAR_RADIUS = 5;
+const FAR_RADIUS = 20;
 
 init();
 
@@ -100,6 +108,26 @@ async function init() {
     window.hideLoader();
 }
 
+// 初始化区域裁剪插件
+function initRegionCull() {
+    nearRegionPlugin = new LoadRegionPlugin();
+    tiles.registerPlugin(nearRegionPlugin);
+    farRegionPlugin = new LoadRegionPlugin();
+    tiles.registerPlugin(farRegionPlugin);
+
+    nearRegion = new SphereRegion();
+    nearRegion.sphere.radius = NEAR_RADIUS;
+    nearRegion.errorTarget = 0;
+    nearRegionPlugin.addRegion(nearRegion);
+
+    farRegion = new SphereRegion();
+    farRegion.sphere.radius = FAR_RADIUS;
+    farRegion.errorTarget = 2;
+    farRegionPlugin.addRegion(farRegion);
+
+}
+
+// 初始化玩家控制器
 async function initPlayer() {
     player = playerController();
     renderer.render(scene, camera);
@@ -132,6 +160,8 @@ async function initPlayer() {
         enableOverShoulderView: true,
     });
 
+    initRegionCull();
+
     await player.loadVehicleModel({
         url: "./glb/tesla.glb",
         scale: 0.9,
@@ -154,6 +184,7 @@ async function initPlayer() {
     });
 }
 
+// 创建3DTiles渲染器
 function reinstantiateTiles() {
     tiles = new TilesRenderer();
     const apiToken =
@@ -184,6 +215,7 @@ function reinstantiateTiles() {
     tiles.setCamera(camera);
 }
 
+// 渲染循环更新
 function animate() {
     if (!tiles) return;
 
@@ -192,13 +224,21 @@ function animate() {
     camera.updateMatrixWorld();
     tiles.update();
 
-    if (player) player.update();
+    if (player) {
+        player.update();
+        if (nearRegion && farRegion) {
+            const pos = player.getPosition();
+            nearRegion.sphere.center.copy(pos).applyMatrix4(tiles.group.matrixWorldInverse);
+            farRegion.sphere.center.copy(pos).applyMatrix4(tiles.group.matrixWorldInverse);
+        }
+    }
 
     renderer.render(scene, camera);
 
     stats?.update();
 }
 
+// 响应窗口尺寸变化
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     renderer.setSize(window.innerWidth, window.innerHeight);
