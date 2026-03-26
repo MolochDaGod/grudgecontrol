@@ -241,8 +241,7 @@ class PlayerController {
     // 初始化加载器
     async initLoader() {
         const dracoLoader = new DRACOLoader();
-        dracoLoader.setDecoderPath("/draco/gltf/");
-        dracoLoader.setDecoderConfig({ type: "js" });
+        dracoLoader.setDecoderPath("https://unpkg.com/three@0.182.0/examples/jsm/libs/draco/gltf/");
         this.loader.setDRACOLoader(dracoLoader);
     }
 
