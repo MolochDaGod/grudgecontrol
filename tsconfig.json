@@ -4,8 +4,8 @@
         "moduleResolution": "NodeNext",
         "target": "ES2020",
         "declaration": true,
-        "emitDeclarationOnly": false,
-        "strict": false,
+        "strict": true,
         "skipLibCheck": true
-    }
+    },
+    "include": ["src"]
 }
