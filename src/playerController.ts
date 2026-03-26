@@ -125,6 +125,7 @@ class PlayerController {
     personActions?: Map<string, THREE.AnimationAction>;
     actionState!: THREE.AnimationAction;
     recheckAnimTimer: any | null = null;
+    allAnimations: THREE.AnimationClip[] = [];
 
     // ==================== 移动端控制 ====================
     mobileControls: MobileControls | null = null;
@@ -288,49 +289,11 @@ class PlayerController {
             const gltf = await this.loader.loadAsync(this.playerModel.url) as GLTF;
             this.person = gltf.scene;
 
-            // 计算胶囊体尺寸
-            const { size } = this.getBbox(this.person);
-            const modelScale = this.playerCapsuleHeight / size.y;
-            this.playerCapsuleRadius = Number(Math.min(size.x, size.z).toFixed(0)) * modelScale * this.playerCapsuleRadiusRatio;
-            this.playerCapsuleHeight = Number(size.y.toFixed(0)) * modelScale;
-
-            const s = this.playerModel.scale;
-            const r = this.playerCapsuleRadius * s;
-            const h = this.playerCapsuleHeight * s;
-
-            // 创建碰撞胶囊体
-            this.player = new THREE.Mesh(
-                new RoundedBoxGeometry(r * 2, h, r * 2, 1, 75),
-                new THREE.MeshStandardMaterial({
-                    color: new THREE.Color(1, 0, 0),
-                    shadowSide: THREE.DoubleSide,
-                    depthTest: false, transparent: true,
-                    opacity: this.displayPlayer ? 0.5 : 0,
-                    wireframe: true, depthWrite: false,
-                }),
-            );
-            this.player.geometry.translate(0, -h * 0.25, 0);
-            this.player.capsuleInfo = {
-                radius: r,
-                segment: new THREE.Line3(new THREE.Vector3(), new THREE.Vector3(0, -h * 0.5, 0)),
-            };
-            this.player.name = "capsule";
-            this.scene.add(this.player);
-            this.reset();
-            this.player.rotateY(this.playerModel.rotateY ?? 0);
-
-            // 摆放视觉模型
-            this.person.scale.multiplyScalar(modelScale * s);
-            this.person.position.set(0, -h * 0.75, 0);
-            this.person.traverse((child: any) => {
-                if (child.name === this.playerModel?.headObjName) this.personHead = child;
-            });
-            this.player.add(this.person);
-            this.reset();
-
             // 绑定动画
             this.personMixer = new THREE.AnimationMixer(this.person);
             const animations = gltf.animations ?? [];
+            // console.log('animations', animations)
+            this.allAnimations = animations;
             this.personActions = new Map();
 
             const mappings: [string, string][] = [
@@ -380,6 +343,53 @@ class PlayerController {
                 }
                 if (done === this.personActions?.get("enterCar")) this.onEnterCarAnimFinished();
             });
+
+            // 步进到第一帧，让骨骼更新到idle姿态
+            this.personMixer.update(0);
+            // 强制更新世界矩阵
+            this.person.updateMatrixWorld(true);
+
+            // 计算胶囊体尺寸
+            const { size } = this.getBbox(this.person);
+            const modelScale = this.playerCapsuleHeight / size.y;
+            this.playerCapsuleRadius = Number(Math.min(size.x, size.z).toFixed(0)) * modelScale * this.playerCapsuleRadiusRatio;
+            this.playerCapsuleHeight = Number(size.y.toFixed(0)) * modelScale;
+
+            const s = this.playerModel.scale;
+            const r = this.playerCapsuleRadius * s;
+            const h = this.playerCapsuleHeight * s;
+
+            // 创建碰撞胶囊体
+            this.player = new THREE.Mesh(
+                new RoundedBoxGeometry(r * 2, h, r * 2, 1, 75),
+                new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(1, 0, 0),
+                    shadowSide: THREE.DoubleSide,
+                    depthTest: false, transparent: true,
+                    opacity: this.displayPlayer ? 0.5 : 0,
+                    wireframe: true, depthWrite: false,
+                }),
+            );
+            this.player.geometry.translate(0, -h * 0.25, 0);
+            this.player.capsuleInfo = {
+                radius: r,
+                segment: new THREE.Line3(new THREE.Vector3(), new THREE.Vector3(0, -h * 0.5, 0)),
+            };
+            this.player.name = "capsule";
+            this.scene.add(this.player);
+            this.reset();
+            this.player.rotateY(this.playerModel.rotateY ?? 0);
+
+            // 摆放视觉模型
+            this.person.scale.multiplyScalar(modelScale * s);
+            this.person.position.set(0, -h * 0.75, 0);
+            this.person.traverse((child: any) => {
+                if (child.name === this.playerModel?.headObjName) this.personHead = child;
+            });
+            this.player.add(this.person);
+            this.reset();
+
+
         } catch (e) {
             console.error("加载玩家模型失败:", e);
         }
@@ -449,6 +459,57 @@ class PlayerController {
         else next.fadeIn(fade);
 
         this.actionState = next;
+    }
+
+    // 注册自定义动画
+    registerAnimation(key: string, clipName: string, opts?: {
+        loop?: boolean;
+        timeScale?: number;
+        duration?: number;
+        clampWhenFinished?: boolean;
+        onFinished?: () => void; // 播完回调
+    }) {
+        if (!this.personMixer || !this.personActions) return;
+
+        const mixer = this.personMixer;
+        const clip = this.allAnimations.find(c => c.name === clipName);
+        if (!clip) { console.warn(`找不到 "${clipName}" 动画`); return; }
+
+        const action = mixer.clipAction(clip);
+
+        const timeScale = opts?.duration
+            ? clip.duration / opts.duration
+            : (opts?.timeScale ?? 1);
+        action.setLoop(opts?.loop === false ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+        action.clampWhenFinished = opts?.clampWhenFinished ?? false;
+        action.setEffectiveTimeScale(timeScale);
+        action.enabled = true;
+        action.setEffectiveWeight(0);
+
+        this.personActions.set(key, action);
+
+        // 注册回调
+        if (opts?.onFinished) {
+            this.personMixer.addEventListener("finished", (ev: any) => {
+                if (ev.action === action) opts.onFinished!();
+            });
+        }
+    }
+
+    // 外部播放动画
+    playAnimation(key: string, opts?: {
+        fade?: number;           // 过渡时间
+        force?: boolean;         // 强制重置重播
+    }) {
+        if (!this.personActions) return;
+        if (!this.personActions.has(key)) {
+            console.warn(`playAnimation: "${key}" 未注册`); return;
+        }
+        if (opts?.force) {
+            const action = this.personActions.get(key)!;
+            action.reset();
+        }
+        this.playPersonAnimationByName(key, opts?.fade ?? 0.18);
     }
 
     // ==================== 车辆 ====================
@@ -1351,6 +1412,11 @@ class PlayerController {
         return this.centerRay.intersectObject(this.collider!, false)[0];
     }
 
+    // 获取当前人物动画名称
+    getCurrentPersonAnimationName(): string | null {
+        return (this.actionState as any)._clip.name;
+    }
+
     // 更新动画混合器
     private updateMixers(delta: number) {
         this.personMixer?.update(delta);
@@ -1628,8 +1694,8 @@ export function playerController() {
         changeView: () => c.changeView(),
         getPosition: () => c.getPosition(),
         getCenterScreenRaycastHit: () => c.getCenterScreenRaycastHit(),
+        getCurrentPersonAnimationName: () => c.getCurrentPersonAnimationName(),
         getPerson: () => c.person,
-        getPersonHead: () => c.personHead,
         getActiveVehicle: () => c.activeVehicle,
         getAllVehicles: () => c.vehicles,
         switchPlayerModel: (model: PlayerModelOptions) => c.switchPlayerModel(model),
@@ -1645,6 +1711,16 @@ export function playerController() {
         setEnableZoom: (v: boolean) => c.setEnableZoom(v),
         setDebug: (v: boolean) => c.setDebug(v),
         setOverShoulderView: (v: boolean) => c.setOverShoulderView(v),
+        registerAnimation: (key: string, clipName: string, opts?: {
+            loop?: boolean;
+            timeScale?: number;
+            clampWhenFinished?: boolean;
+            onFinished?: () => void;
+        }) => c.registerAnimation(key, clipName, opts),
+        playAnimation: (key: string, opts?: {
+            fade?: number;
+            force?: boolean;
+        }) => c.playAnimation(key, opts),
     };
 }
 
