@@ -241,7 +241,7 @@ class PlayerController {
     // 初始化加载器
     async initLoader() {
         const dracoLoader = new DRACOLoader();
-        dracoLoader.setDecoderPath("https://unpkg.com/three@0.180.0/examples/jsm/libs/draco/gltf/");
+        dracoLoader.setDecoderPath("/draco/gltf/");
         dracoLoader.setDecoderConfig({ type: "js" });
         this.loader.setDRACOLoader(dracoLoader);
     }
@@ -328,14 +328,14 @@ class PlayerController {
             }
 
             // 执行idle动画
-            this.personActions.get("idle").setEffectiveWeight(1);
-            this.personActions.get("idle").play();
-            this.actionState = this.personActions.get("idle");
+            this.personActions.get("idle")?.setEffectiveWeight(1);
+            this.personActions.get("idle")?.play();
+            this.actionState = this.personActions.get("idle")!;
 
             // 动画结束回调
             this.personMixer.addEventListener("finished", (ev: any) => {
                 const done: THREE.AnimationAction = ev.action;
-                if (done === this.personActions.get("jumping")) {
+                if (done === this.personActions?.get("jumping")) {
                     if (this.fwdPressed) { this.playPersonAnimationByName(this.shiftPressed ? "running" : "walking"); return; }
                     if (this.bkdPressed) { this.playPersonAnimationByName("walking_backward"); return; }
                     if (this.rgtPressed || this.lftPressed) { this.playPersonAnimationByName("walking"); return; }
@@ -716,20 +716,15 @@ class PlayerController {
     changeView() {
         this.isFirstPerson = !this.isFirstPerson;
         if (this.isFirstPerson) {
-            // 读取相机当前世界朝向，对齐到第一人称控制轴
-            const camWorldDir = new THREE.Vector3();
-            this.camera.getWorldDirection(camWorldDir);
-
+            // 读取人物当前世界朝向（本地+Z轴），对齐到第一人称控制轴
+            const playerFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.player.quaternion);
             // 水平分量
-            const flatDir = new THREE.Vector3(camWorldDir.x, 0, camWorldDir.z).normalize();
+            const flatDir = new THREE.Vector3(playerFwd.x, 0, playerFwd.z).normalize();
             if (flatDir.lengthSq() > 0.001) {
                 const yAngle = Math.atan2(flatDir.x, flatDir.z);
-                this.player.rotation.set(0, yAngle + Math.PI, 0);
+                this.player.rotation.set(0, yAngle, 0);
             }
-            // 垂直分量
-            const vertAngle = Math.asin(THREE.MathUtils.clamp(-camWorldDir.y, -1, 1));
-
-            this.setFirstPersonCamera(vertAngle);
+            this.setFirstPersonCamera();
             this.setOverShoulderView(false);
         } else {
             this.controls.enabled = true;
