@@ -476,6 +476,8 @@ function onPreviewMouseMove(e) {
 async function onPreviewDblClick() {
     if (!previewMode || !previewMesh?.visible) return;
     const initPos = previewMesh.position.clone();
+    const spawnModel = getScaledModel(guiParams?.playerModel ?? "person1");
+    initPos.y += 180 * spawnModel.scale * 0.75;
     exitPreviewMode();
 
     recreateCSM(globalScale);
