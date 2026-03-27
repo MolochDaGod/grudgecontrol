@@ -102,7 +102,7 @@ const VEHICLE_CONFIGS = {
         scale: 0.1,
         wheelsNames: ["Wheel_LF", "Wheel_RF", "Wheel_LR", "Wheel_RR"],
         animations: { openDoorAnim: "openDoorLF" },
-        boardingPoint: new Vector3(0.5, 0, 1.8),
+        boardingPoint: new Vector3(0.6, 0, 1.8),
         seatOffset: new Vector3(0, 0.6, 0),
         chassisRatio: 0.15,
         suspensionRestLengthRatio: 0.2,
