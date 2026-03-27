@@ -122,6 +122,7 @@ class PlayerController {
 
     // ==================== 动画系统 ====================
     personMixer?: THREE.AnimationMixer;
+    personMixerFinishedCb?: (ev: any) => void;
     personActions?: Map<string, THREE.AnimationAction>;
     actionState!: THREE.AnimationAction;
     recheckAnimTimer: any | null = null;
@@ -235,7 +236,7 @@ class PlayerController {
         if (!enable || this.controllerMode === 1) { this.camera.clearViewOffset(); return; }
         const w = window.innerWidth;
         const h = window.innerHeight;
-        this.camera.setViewOffset(w, h, -w * -0.15, 0, w, h);
+        this.camera.setViewOffset(w, h, w * 0.15, 0, w, h);
     }
 
     // 初始化加载器
@@ -332,7 +333,7 @@ class PlayerController {
             this.actionState = this.personActions.get("idle")!;
 
             // 动画结束回调
-            this.personMixer.addEventListener("finished", (ev: any) => {
+            this.personMixerFinishedCb = (ev: any) => {
                 const done: THREE.AnimationAction = ev.action;
                 if (done === this.personActions?.get("jumping")) {
                     if (this.fwdPressed) { this.playPersonAnimationByName(this.shiftPressed ? "running" : "walking"); return; }
@@ -341,7 +342,8 @@ class PlayerController {
                     this.playPersonAnimationByName("idle");
                 }
                 if (done === this.personActions?.get("enterCar")) this.onEnterCarAnimFinished();
-            });
+            };
+            this.personMixer.addEventListener("finished", this.personMixerFinishedCb);
 
             // 步进到第一帧，让骨骼更新到idle姿态
             this.personMixer.update(0);
@@ -406,6 +408,10 @@ class PlayerController {
         if (this.person) { this.player.remove(this.person); this.person = null; this.personHead = null; }
 
         if (this.personMixer) {
+            if (this.personMixerFinishedCb) {
+                this.personMixer.removeEventListener("finished", this.personMixerFinishedCb);
+                this.personMixerFinishedCb = undefined;
+            }
             this.personMixer.stopAllAction();
             this.personMixer.uncacheRoot(this.personMixer.getRoot());
             this.personMixer = undefined;
@@ -947,7 +953,7 @@ class PlayerController {
         if (!merged) { console.error("合并几何失败"); return; }
 
         (merged as any).boundsTree = new MeshBVH(merged, { maxDepth: 100 });
-        this.collider = new THREE.Mesh(merged, new THREE.MeshBasicMaterial({ opacity: 0.5, transparent: true, wireframe: true, depthTest: true }));
+        this.collider = new THREE.Mesh(merged, new THREE.MeshBasicMaterial({ opacity: 0.5, transparent: true, wireframe: true, depthTest: true, side: THREE.DoubleSide }));
 
         if (this.displayCollider) this.scene.add(this.collider);
         if (this.displayVisualizer) {
@@ -983,7 +989,7 @@ class PlayerController {
         const merged = BufferGeometryUtils.mergeGeometries(this.dynamicCollected, false);
         if (!merged) { console.error("合并几何失败"); return; }
         (merged as any).boundsTree = new MeshBVH(merged);
-        this.dynamicCollider = new THREE.Mesh(merged, new THREE.MeshBasicMaterial({ opacity: 0.5, transparent: true, wireframe: true, depthTest: true }));
+        this.dynamicCollider = new THREE.Mesh(merged, new THREE.MeshBasicMaterial({ opacity: 0.5, transparent: true, wireframe: true, depthTest: true, side: THREE.DoubleSide }));
         if (this.displayCollider) this.scene.add(this.dynamicCollider);
     }
 
@@ -1261,11 +1267,17 @@ class PlayerController {
                 this.player.position.addScaledVector(this.playerVelocity, delta);
                 this.playerIsOnGround = false;
             } else if (dist >= h && dist < maxH) {
-                if (!this.spacePressed) { this.playerVelocity.set(0, 0, 0); this.playerIsOnGround = true; this.player.position.y = hits[0].point.y + h; }
+                if (!this.spacePressed) {
+                    this.playerVelocity.set(0, 0, 0);
+                    this.playerIsOnGround = true;
+                    this.player.position.y = THREE.MathUtils.lerp(this.player.position.y, hits[0].point.y + h, Math.min(1, 15 * delta));
+                }
             } else if (dist >= minH) {
                 this.playerVelocity.set(0, 0, 0); this.playerIsOnGround = true; this.player.position.y = hits[0].point.y + h;
             } else {
-                this.playerVelocity.set(0, 0, 0); this.player.position.y = hits[0].point.y + h; this.playerIsOnGround = true;
+                const targetY = hits[0].point.y + h;
+                this.playerVelocity.set(0, 0, 0); this.playerIsOnGround = true;
+                this.player.position.y = THREE.MathUtils.lerp(this.player.position.y, targetY, Math.min(1, 15 * delta));
             }
         }
 
@@ -1290,7 +1302,15 @@ class PlayerController {
                         const distance = tri.closestPointToSegment(this.tempSegment, this.tempVector, this.tempVector2);
                         if (distance < capsuleInfo.radius) {
                             const normal = tri.getNormal(new THREE.Vector3());
-                            if (normal.y > 0.5 && !this.isFlying) return;
+                            if (!this.isFlying && Math.abs(normal.y) > 0.5) return;
+                            // 台阶排除：接触点低于 脚底+25%人物高 跳过
+                            if (!this.isFlying && Math.abs(normal.y) <= 0.5) {
+                                const e = this.collider!.matrixWorld.elements;
+                                const contactWorldY = e[1] * this.tempVector.x + e[5] * this.tempVector.y + e[9] * this.tempVector.z + e[13];
+                                const s = this.playerModel.scale;
+                                const feetY = this.player.position.y - this.playerCapsuleHeight * s * 0.75;
+                                if (contactWorldY < feetY + this.playerCapsuleHeight * s * 0.25) return;
+                            }
                             const dir = this.tempVector2.sub(this.tempVector).normalize();
                             const depth = capsuleInfo.radius - distance;
                             this.tempSegment.start.addScaledVector(dir, depth);
@@ -1401,14 +1421,15 @@ class PlayerController {
 
     // 屏幕中心射线
     getCenterScreenRaycastHit(): THREE.Intersection | undefined {
+        if (!this.collider) return undefined;
         this.camera.updateMatrixWorld();
         this.centerRay.setFromCamera(this.centerMouse, this.camera);
-        return this.centerRay.intersectObject(this.collider!, false)[0];
+        return this.centerRay.intersectObject(this.collider, false)[0];
     }
 
     // 获取当前人物动画名称
     getCurrentPersonAnimationName(): string | null {
-        return (this.actionState as any)._clip.name;
+        return this.actionState?.getClip()?.name ?? null;
     }
 
     // 更新动画混合器
@@ -1665,7 +1686,7 @@ class PlayerController {
         this.mobileControls = null;
 
         // 清理车辆
-        for (const v of this.vehicles) { this.scene.remove(v.vehicleGroup); v.pathPlanner?.dispose(); }
+        for (const v of this.vehicles) { this.scene.remove(v.vehicleGroup); v.pathPlanner?.dispose(); v.vehicleController?.destroy?.(); }
         this.vehicles = [];
         this.activeVehicle = null;
 
@@ -1684,7 +1705,7 @@ export function playerController() {
         update: (dt?: number) => c.update(dt),
         destroy: () => c.destroy(),
         reset: (pos?: THREE.Vector3) => c.reset(pos),
-        setInput: (i: any) => c.setInput(i),
+        setInput: (i: Parameters<typeof c.setInput>[0]) => c.setInput(i),
         changeView: () => c.changeView(),
         getPosition: () => c.getPosition(),
         getCenterScreenRaycastHit: () => c.getCenterScreenRaycastHit(),
