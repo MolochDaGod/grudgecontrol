@@ -397,11 +397,11 @@ async function enterPreviewMode(playerModelKey) {
         Object.assign(sliderRow.style, { display: "flex", alignItems: "center", gap: "8px" });
         const label = document.createElement("span");
         label.textContent = "人物比例：";
-        // 对数刻度：slider在log10空间线性滑动，0.01~100 各数量级间距相同
+        // 对数刻度：slider在log10空间线性滑动，0.01~1000 各数量级间距相同
         const slider = document.createElement("input");
         slider.type = "range";
         slider.min = "-2";   // log10(0.01)
-        slider.max = "2";    // log10(100)
+        slider.max = "3";    // log10(1000)
         slider.step = "0.01";
         slider.value = String(Math.log10(globalScale));
         slider.style.width = "160px";
