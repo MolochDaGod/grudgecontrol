@@ -47,6 +47,7 @@ class PlayerController {
     isShowMobileControls: boolean = true;
     enableOverShoulderView: boolean = false;
 
+
     // ==================== 玩家胶囊体 ====================
     playerCapsuleRadius: number = 45;
     playerCapsuleHeight: number = 180;
@@ -125,6 +126,7 @@ class PlayerController {
     personMixerFinishedCb?: (ev: any) => void;
     personActions?: Map<string, THREE.AnimationAction>;
     actionState!: THREE.AnimationAction;
+    animationSets: Map<string, Map<string, THREE.AnimationAction>> = new Map();
     recheckAnimTimer: any | null = null;
     allAnimations: THREE.AnimationClip[] = [];
 
@@ -327,6 +329,15 @@ class PlayerController {
                 this.personActions.set(actionName, action);
             }
 
+            // 保存默认动画集
+            const defaultSet = new Map<string, THREE.AnimationAction>();
+            const locomotionKeys = ["idle", "walking", "walking_backward", "running", "jumping", "flyidle", "flying"];
+            for (const key of locomotionKeys) {
+                const action = this.personActions.get(key);
+                if (action) defaultSet.set(key, action);
+            }
+            this.animationSets.set("default", defaultSet);
+
             // 执行idle动画
             this.personActions.get("idle")?.setEffectiveWeight(1);
             this.personActions.get("idle")?.play();
@@ -498,6 +509,50 @@ class PlayerController {
             this.personMixer.addEventListener("finished", (ev: any) => {
                 if (ev.action === action) opts.onFinished!();
             });
+        }
+    }
+
+    // 注册locomotion动画集（idle/walking/running/jumping等替换用）
+    registerLocomotionSet(setName: string, map: Partial<Record<"idle" | "walking" | "walking_backward" | "running" | "jumping" | "flyidle" | "flying", string>>) {
+        if (!this.personMixer) return;
+        const set = new Map<string, THREE.AnimationAction>();
+        for (const [key, clipName] of Object.entries(map) as [string, string][]) {
+            const clip = this.allAnimations.find(c => c.name === clipName);
+            if (!clip) { console.warn(`registerLocomotionSet: 找不到 "${clipName}"`); continue; }
+            const action = this.personMixer.clipAction(clip);
+            if (key === "jumping") {
+                action.setLoop(THREE.LoopOnce, 1);
+                action.clampWhenFinished = true;
+                action.setEffectiveTimeScale(1.2);
+            } else {
+                action.setLoop(THREE.LoopRepeat, Infinity);
+                action.setEffectiveTimeScale(1);
+            }
+            action.enabled = true;
+            action.setEffectiveWeight(0);
+            set.set(key, action);
+        }
+        this.animationSets.set(setName, set);
+    }
+
+    // 切换locomotion动画集
+    switchLocomotionSet(setName: string, fade = 0.18) {
+        if (!this.personActions) return;
+        const set = this.animationSets.get(setName);
+        if (!set) { console.warn(`switchLocomotionSet: 未找到集合 "${setName}"`); return; }
+        for (const [key, newAction] of set.entries()) {
+            const oldAction = this.personActions.get(key);
+            if (oldAction === newAction) continue;
+            if (oldAction) { oldAction.fadeOut(fade); }
+            this.personActions.set(key, newAction);
+            // 若当前正在播放该 key，立即接管
+            if (this.actionState === oldAction) {
+                newAction.reset();
+                newAction.setEffectiveWeight(1);
+                newAction.fadeIn(fade);
+                newAction.play();
+                this.actionState = newAction;
+            }
         }
     }
 
@@ -815,7 +870,7 @@ class PlayerController {
     setToward(dx: number, dy: number, speed: number) {
         const sens = this.mouseSensitivity;
         if (this.controllerMode === 0) {
-        // 人物模式
+            // 人物模式
             if (this.isFirstPerson) {
                 if (this.isMovingToBoardingPoint) return;
                 this.player.rotateY(-dx * speed * sens);
@@ -1482,7 +1537,7 @@ class PlayerController {
         }
 
         // 其他按键
-        if (typeof input.shift === "boolean") this.shiftPressed = input.shift;
+        if (typeof input.shift === "boolean") { this.shiftPressed = input.shift; this.setAnimationByPressed(); }
         if (input.toggleView) this.changeView();
 
         if (input.toggleFly && this.playerFlyEnabled && this.controllerMode === 0) {
@@ -1736,6 +1791,8 @@ export function playerController() {
             fade?: number;
             force?: boolean;
         }) => c.playAnimation(key, opts),
+        registerLocomotionSet: (setName: string, map: Partial<Record<"idle" | "walking" | "walking_backward" | "running" | "jumping" | "flyidle" | "flying", string>>) => c.registerLocomotionSet(setName, map),
+        switchLocomotionSet: (setName: string, fade?: number) => c.switchLocomotionSet(setName, fade),
     };
 }
 
