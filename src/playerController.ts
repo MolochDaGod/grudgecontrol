@@ -220,7 +220,7 @@ class PlayerController {
         // 移动端控制
         if (this.isShowMobileControls) {
             this.mobileControls = new MobileControls(i => this.setInput(i), this.controls);
-            await this.mobileControls.init();
+            await this.mobileControls.init(opts.mobileControls);
         }
 
         await this.createBVH(opts.colliderMeshUrl);
@@ -1801,4 +1801,4 @@ export type playerController = ReturnType<typeof playerController>;
 export function onAllEvent(): void { if (!controllerInstance) controllerInstance = new PlayerController(); controllerInstance.onAllEvent(); }
 export function offAllEvent(): void { controllerInstance?.offAllEvent(); }
 
-export type { PlayerControllerOptions, PlayerModelOptions, VehicleOptions, VehicleInstance } from "./types";
+export type { PlayerControllerOptions, PlayerModelOptions, VehicleOptions, VehicleInstance, MobileControlsOptions } from "./types";

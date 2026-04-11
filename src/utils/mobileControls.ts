@@ -154,7 +154,13 @@ export class MobileControls {
     }
 
     // 初始化移动端控制
-    async init() {
+    async init(opts?: { joystick?: boolean; jump?: boolean; fly?: boolean; view?: boolean; vehicle?: boolean }) {
+        const showJoystick = opts?.joystick ?? true;
+        const showJump = opts?.jump ?? true;
+        const showFly = opts?.fly ?? true;
+        const showView = opts?.view ?? true;
+        const showVehicle = opts?.vehicle ?? true;
+
         this.controls.maxPolarAngle = Math.PI * (300 / 360);
         this.controls.touches = { ONE: null as any, TWO: null as any };
 
@@ -162,48 +168,50 @@ export class MobileControls {
         const container = document.body;
 
         // 创建摇杆区域
-        this.joystickZoneEl = document.createElement("div");
-        this.joystickZoneEl.id = "joy-zone";
-        Object.assign(this.joystickZoneEl.style, {
-            position: "absolute",
-            left: "16px",
-            bottom: "16px",
-            width: `${JOY_SIZE + 40}px`,
-            height: `${JOY_SIZE + 40}px`,
-            touchAction: "none",
-            zIndex: "999",
-            pointerEvents: "auto",
-            WebkitUserSelect: "none",
-            userSelect: "none",
-        });
-        container.appendChild(this.joystickZoneEl);
-        this.blockTouch(this.joystickZoneEl);
+        if (showJoystick) {
+            this.joystickZoneEl = document.createElement("div");
+            this.joystickZoneEl.id = "joy-zone";
+            Object.assign(this.joystickZoneEl.style, {
+                position: "absolute",
+                left: "16px",
+                bottom: "16px",
+                width: `${JOY_SIZE + 40}px`,
+                height: `${JOY_SIZE + 40}px`,
+                touchAction: "none",
+                zIndex: "999",
+                pointerEvents: "auto",
+                WebkitUserSelect: "none",
+                userSelect: "none",
+            });
+            container.appendChild(this.joystickZoneEl);
+            this.blockTouch(this.joystickZoneEl);
 
-        // 初始化自定义摇杆
-        this.joystick = new VirtualJoystick(
-            this.joystickZoneEl,
-            JOY_SIZE,
-            (data) => {
-                const rawX = data.vector?.x ?? 0;
-                const rawY = data.vector?.y ?? 0;
-                const distance = data.distance ?? 0;
-                const deadzone = 0.2;
-                const dirX = rawX > deadzone ? 1 : rawX < -deadzone ? -1 : 0;
-                const dirY = rawY > deadzone ? 1 : rawY < -deadzone ? -1 : 0;
-                const isSprinting = distance >= JOY_SIZE / 2;
-                const prev = this.prevJoyState;
-                if (dirX === prev.dirX && dirY === prev.dirY && isSprinting === prev.shift) return;
-                this.prevJoyState = { dirX, dirY, shift: isSprinting };
-                this.setInput({ moveX: dirX as any, moveY: dirY as any, shift: isSprinting });
-            },
-            () => {
-                const prev = this.prevJoyState;
-                if (prev.dirX !== 0 || prev.dirY !== 0 || prev.shift) {
-                    this.prevJoyState = { dirX: 0, dirY: 0, shift: false };
-                    this.setInput({ moveX: 0, moveY: 0, shift: false });
-                }
-            },
-        );
+            // 初始化自定义摇杆
+            this.joystick = new VirtualJoystick(
+                this.joystickZoneEl,
+                JOY_SIZE,
+                (data) => {
+                    const rawX = data.vector?.x ?? 0;
+                    const rawY = data.vector?.y ?? 0;
+                    const distance = data.distance ?? 0;
+                    const deadzone = 0.2;
+                    const dirX = rawX > deadzone ? 1 : rawX < -deadzone ? -1 : 0;
+                    const dirY = rawY > deadzone ? 1 : rawY < -deadzone ? -1 : 0;
+                    const isSprinting = distance >= JOY_SIZE / 2;
+                    const prev = this.prevJoyState;
+                    if (dirX === prev.dirX && dirY === prev.dirY && isSprinting === prev.shift) return;
+                    this.prevJoyState = { dirX, dirY, shift: isSprinting };
+                    this.setInput({ moveX: dirX as any, moveY: dirY as any, shift: isSprinting });
+                },
+                () => {
+                    const prev = this.prevJoyState;
+                    if (prev.dirX !== 0 || prev.dirY !== 0 || prev.shift) {
+                        this.prevJoyState = { dirX: 0, dirY: 0, shift: false };
+                        this.setInput({ moveX: 0, moveY: 0, shift: false });
+                    }
+                },
+            );
+        }
 
         // 创建视角区域
         this.lookAreaEl = document.createElement("div");
@@ -228,19 +236,25 @@ export class MobileControls {
         this.lookAreaEl.addEventListener("pointercancel", this.onPointerUp, { passive: false });
 
         // 创建操作按钮
-        this.jumpBtnEl = this.createBtn(container, 14, 14, jumpIconModule);
-        this.flyBtnEl = this.createBtn(container, 14, 14 + 80, flyIconModule);
-        this.viewBtnEl = this.createBtn(container, 14, 14 + 200, viewIconModule);
-        this.vehicleBtnEl = this.createBtn(container, 14 + 100, 14 + 120, vehicleIconModule);
-        this.vehicleBtnEl.style.display = "none";
-
-        // 绑定按钮事件
-        this.jumpBtnEl.addEventListener("touchstart", (e) => { e.preventDefault(); this.setInput({ jump: true }); }, { passive: false });
-        this.jumpBtnEl.addEventListener("touchend", (e) => { e.preventDefault(); this.setInput({ jump: false }); }, { passive: false });
-        this.jumpBtnEl.addEventListener("touchcancel", (e) => { e.preventDefault(); this.setInput({ jump: false }); }, { passive: false });
-        this.flyBtnEl.addEventListener("touchstart", (e) => { e.preventDefault(); this.setInput({ toggleFly: true }); }, { passive: false });
-        this.viewBtnEl.addEventListener("touchstart", (e) => { e.preventDefault(); this.setInput({ toggleView: true }); }, { passive: false });
-        this.vehicleBtnEl.addEventListener("touchstart", (e) => { e.preventDefault(); this.setInput({ toggleVehicle: true }); }, { passive: false });
+        if (showJump) {
+            this.jumpBtnEl = this.createBtn(container, 14, 14, jumpIconModule);
+            this.jumpBtnEl.addEventListener("touchstart", (e) => { e.preventDefault(); this.setInput({ jump: true }); }, { passive: false });
+            this.jumpBtnEl.addEventListener("touchend", (e) => { e.preventDefault(); this.setInput({ jump: false }); }, { passive: false });
+            this.jumpBtnEl.addEventListener("touchcancel", (e) => { e.preventDefault(); this.setInput({ jump: false }); }, { passive: false });
+        }
+        if (showFly) {
+            this.flyBtnEl = this.createBtn(container, 14, 14 + 80, flyIconModule);
+            this.flyBtnEl.addEventListener("touchstart", (e) => { e.preventDefault(); this.setInput({ toggleFly: true }); }, { passive: false });
+        }
+        if (showView) {
+            this.viewBtnEl = this.createBtn(container, 14, 14 + 200, viewIconModule);
+            this.viewBtnEl.addEventListener("touchstart", (e) => { e.preventDefault(); this.setInput({ toggleView: true }); }, { passive: false });
+        }
+        if (showVehicle) {
+            this.vehicleBtnEl = this.createBtn(container, 14 + 100, 14 + 120, vehicleIconModule);
+            this.vehicleBtnEl.style.display = "none";
+            this.vehicleBtnEl.addEventListener("touchstart", (e) => { e.preventDefault(); this.setInput({ toggleVehicle: true }); }, { passive: false });
+        }
     }
 
     // 销毁移动端控制

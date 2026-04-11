@@ -28,6 +28,14 @@ export type PlayerModelOptions = {
     capsuleRadiusRatio?: number;
 };
 
+export type MobileControlsOptions = {
+    joystick?: boolean;
+    jump?: boolean;
+    fly?: boolean;
+    view?: boolean;
+    vehicle?: boolean;
+};
+
 export type PlayerControllerOptions = {
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -39,6 +47,7 @@ export type PlayerControllerOptions = {
     maxCamDistance?: number;
     colliderMeshUrl?: string;
     isShowMobileControls?: boolean;
+    mobileControls?: MobileControlsOptions;
     thirdMouseMode?: 0 | 1 | 2 | 3;
     enableZoom?: boolean;
     enableOverShoulderView?: boolean;
