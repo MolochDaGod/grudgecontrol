@@ -40,12 +40,6 @@ npm install three-player-controller three three-mesh-bvh
 npm install @dimforge/rapier3d-compat
 ```
 
-如果需要使用**移动端控制**，请安装 nipplejs：
-
-```bash
-npm install nipplejs
-```
-
 # 本地运行示例
 
 ```bash
@@ -113,50 +107,6 @@ player.update();
 
 ## 一、初始化
 
-### 导出函数
-
-```ts
-export function playerController(): {
-    init: (opts: PlayerControllerOptions, callback?: () => void) => void;
-    loadVehicleModel: (params: VehicleOptions) => void;
-    switchPlayerModel: (model: PlayerControllerOptions["playerModel"]) => void;
-    changeView: () => void;
-    reset: (pos?: THREE.Vector3) => void;
-    update: (dt?: number) => void;
-    destroy: () => void;
-    setInput: (input: PlayerInput) => void;
-    getPosition: () => THREE.Vector3;
-    getCenterScreenRaycastHit: () => THREE.Intersection | undefined;
-    getPerson: () => THREE.Object3D | null;
-    getActiveVehicle: () => VehicleInstance | null;
-    getAllVehicles: () => VehicleInstance[];
-    setMouseSensitivity: (mouseSensity: number) => void;
-    setGravity: (gravity: number) => void;
-    setJumpHeight: (jumpHeight: number) => void;
-    setPlayerSpeed: (playerSpeed: number) => void;
-    setPlayerFlySpeed: (playerFlySpeed: number) => void;
-    setMinCamDistance: (minCamDistance: number) => void;
-    setMaxCamDistance: (maxCamDistance: number) => void;
-    setThirdMouseMode: (thirdMouseMode: 0 | 1 | 2 | 3) => void;
-    setEnableZoom: (enableZoom: boolean) => void;
-    setOverShoulderView: (enable: boolean) => void;
-    setPlayerScale: (scale: number) => void;
-    setDebug: (debug: boolean) => void;
-    getCurrentPersonAnimationName: () => string | null;
-    registerAnimation: (key: string, clipName: string, opts?: {
-        loop?: boolean;
-        timeScale?: number;
-        duration?: number;
-        clampWhenFinished?: boolean;
-        onFinished?: () => void;
-    }) => void;
-    playAnimation: (key: string, opts?: {
-        fade?: number;
-        force?: boolean;
-    }) => void;
-};
-```
-
 ### 方法说明
 
 | 方法 | 说明 |
@@ -189,6 +139,8 @@ export function playerController(): {
 | `getCurrentPersonAnimationName()` | 获取当前正在播放的动画名称 |
 | `registerAnimation(key, clipName, opts?)` | 注册一个自定义动画，之后可通过 `playAnimation` 播放 |
 | `playAnimation(key, opts?)` | 播放已注册的自定义动画 |
+| `registerLocomotionSet(setName, map)` | 注册一套运动动画集（idle/walking/running/jumping 等），可替换内置运动动画 |
+| `switchLocomotionSet(setName, fade?)` | 切换到已注册的运动动画集，`fade` 为过渡时长（秒），默认 `0.18` |
 
 ---
 
@@ -204,7 +156,20 @@ export function offAllEvent(): void; // 关闭所有输入事件
 - `onAllEvent()`：确保控制器存在并打开输入监听。
 - `offAllEvent()`：关闭输入监听，用于显示 UI 或暂停时禁止玩家输入。
 
-默认处理包括：WASD 移动、奔跑、跳跃、鼠标视角等。
+默认键位如下：
+
+| 按键 | 功能 |
+|------|------|
+| W / ↑ | 前进 |
+| S / ↓ | 后退 |
+| A / ← | 左移 |
+| D / → | 右移 |
+| Shift | 奔跑 |
+| Space | 跳跃 |
+| V | 切换第一/第三人称 |
+| F | 切换飞行模式 |
+| E | 上车 / 下车 |
+| 鼠标移动 | 控制视角 |
 
 ### setInput 外部输入
 
@@ -231,6 +196,14 @@ player.setInput({
 ### 人物类型定义
 
 ```ts
+type MobileControlsOptions = {
+    joystick?: boolean;  // 是否显示摇杆，默认 true
+    jump?: boolean;      // 是否显示跳跃按钮，默认 true
+    fly?: boolean;       // 是否显示飞行按钮，默认 true
+    view?: boolean;      // 是否显示视角切换按钮，默认 true
+    vehicle?: boolean;   // 是否显示上下车按钮，默认 true
+};
+
 type PlayerControllerOptions = {
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -259,11 +232,12 @@ type PlayerControllerOptions = {
         capsuleRadiusRatio?: number;
     };
     initPos?: THREE.Vector3;
-    mouseSensity?: number;
+    mouseSensitivity?: number;
     minCamDistance?: number;
     maxCamDistance?: number;
     colliderMeshUrl?: string;
     isShowMobileControls?: boolean;
+    mobileControls?: MobileControlsOptions;
     thirdMouseMode?: 0 | 1 | 2 | 3;
     enableZoom?: boolean;
     enableOverShoulderView?: boolean;
@@ -297,12 +271,14 @@ type PlayerControllerOptions = {
 | `playerModel.jumpHeight` | `number` | 否 | `600` | 跳跃高度基准值 |
 | `playerModel.flySpeed` | `number` | 否 | `2100` | 飞行速度基准值 |
 | `playerModel.flyEnabled` | `boolean` | 否 | `true` | 是否允许飞行模式 |
+| `playerModel.capsuleRadiusRatio` | `number` | 否 | `1.0` | 胶囊碰撞体半径倍率，值越大碰撞范围越宽 |
 | `initPos` | `THREE.Vector3` | 否 | `(0,0,0)` | 初始位置 |
-| `mouseSensity` | `number` | 否 | `5` | 鼠标灵敏度 |
+| `mouseSensitivity` | `number` | 否 | `5` | 鼠标灵敏度 |
 | `minCamDistance` | `number` | 否 | `100` | 第三人称最小相机距离 |
 | `maxCamDistance` | `number` | 否 | `440` | 第三人称最大相机距离 |
-| `colliderMeshUrl` | `string` | 否 | — | 自定义碰撞体模型路径，默认使用场景中所有网格 |
-| `isShowMobileControls` | `boolean` | 否 | `true` | 移动端是否自动显示虚拟摇杆 |
+| `colliderMeshUrl` | `string` | 否 | — | 自定义碰撞体模型路径（GLB / GLTF），支持相对路径或绝对 URL；不填则使用场景中所有网格 |
+| `isShowMobileControls` | `boolean` | 否 | `true` | 移动端是否自动显示虚拟控制 UI；设为 `false` 时 `mobileControls` 同样不生效 |
+| `mobileControls` | `MobileControlsOptions` | 否 | 全部显示 | 精细控制各移动端按钮的显隐（摇杆、跳跃、飞行、视角、上下车），仅在 `isShowMobileControls` 为 `true` 时有效 |
 | `thirdMouseMode` | `0\|1\|2\|3` | 否 | `1` | 第三人称鼠标模式（见下表） |
 | `enableZoom` | `boolean` | 否 | `false` | 第三人称是否允许滚轮缩放 |
 | `enableOverShoulderView` | `boolean` | 否 | `false` | 是否开启过肩视角偏移 |
@@ -353,8 +329,6 @@ type VehicleOptions = {
 | `suspensionRestLengthRatio` | `number` | 否 | `0.2` | 悬架弹簧静止长度相对于轮胎直径的比例（影响碰撞底盘高度） |
 | `followVehicleDirection` | `boolean` | 否 | `true` | 行驶时相机是否跟随车辆速度方向自动转向车辆正后方 |
 | `speedMultiplier` | `number` | 否 | `1` | 车辆速度倍率，用于调节不同车辆的速度差异 |
-
----
 
 ---
 

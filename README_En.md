@@ -40,12 +40,6 @@ For **vehicle control**, install Rapier:
 npm install @dimforge/rapier3d-compat
 ```
 
-For **mobile controls**, install nipplejs:
-
-```bash
-npm install nipplejs
-```
-
 # Run the Example Locally
 
 ```bash
@@ -113,50 +107,6 @@ player.update();
 
 ## 1. Initialization
 
-### Exported Function
-
-```ts
-export function playerController(): {
-    init: (opts: PlayerControllerOptions, callback?: () => void) => void;
-    loadVehicleModel: (params: VehicleOptions) => void;
-    switchPlayerModel: (model: PlayerControllerOptions["playerModel"]) => void;
-    changeView: () => void;
-    reset: (pos?: THREE.Vector3) => void;
-    update: (dt?: number) => void;
-    destroy: () => void;
-    setInput: (input: PlayerInput) => void;
-    getPosition: () => THREE.Vector3;
-    getCenterScreenRaycastHit: () => THREE.Intersection | undefined;
-    getPerson: () => THREE.Object3D | null;
-    getActiveVehicle: () => VehicleInstance | null;
-    getAllVehicles: () => VehicleInstance[];
-    setMouseSensitivity: (mouseSensitivity: number) => void;
-    setGravity: (gravity: number) => void;
-    setJumpHeight: (jumpHeight: number) => void;
-    setPlayerSpeed: (playerSpeed: number) => void;
-    setPlayerFlySpeed: (flySpeed: number) => void;
-    setMinCamDistance: (minCamDistance: number) => void;
-    setMaxCamDistance: (maxCamDistance: number) => void;
-    setThirdMouseMode: (thirdMouseMode: 0 | 1 | 2 | 3) => void;
-    setEnableZoom: (enableZoom: boolean) => void;
-    setOverShoulderView: (enable: boolean) => void;
-    setPlayerScale: (scale: number) => void;
-    setDebug: (debug: boolean) => void;
-    getCurrentPersonAnimationName: () => string | null;
-    registerAnimation: (key: string, clipName: string, opts?: {
-        loop?: boolean;
-        timeScale?: number;
-        duration?: number;
-        clampWhenFinished?: boolean;
-        onFinished?: () => void;
-    }) => void;
-    playAnimation: (key: string, opts?: {
-        fade?: number;
-        force?: boolean;
-    }) => void;
-};
-```
-
 ### Method Reference
 
 | Method | Description |
@@ -189,6 +139,8 @@ export function playerController(): {
 | `getCurrentPersonAnimationName()` | Get the name of the currently playing animation clip. |
 | `registerAnimation(key, clipName, opts?)` | Register a custom animation clip for later playback via `playAnimation`. |
 | `playAnimation(key, opts?)` | Play a previously registered custom animation. |
+| `registerLocomotionSet(setName, map)` | Register a locomotion animation set (idle/walking/running/jumping, etc.) to replace the built-in locomotion clips. |
+| `switchLocomotionSet(setName, fade?)` | Switch to a registered locomotion set. `fade` is the crossfade duration in seconds (default `0.18`). |
 
 ---
 
@@ -204,7 +156,20 @@ export function offAllEvent(): void; // Disable all input listeners
 - `onAllEvent()`: Ensures the controller exists and activates input listeners.
 - `offAllEvent()`: Disables input listening — useful when showing UI or pausing.
 
-Built-in input covers: WASD movement, sprint, jump, mouse look, and more.
+Default keybindings:
+
+| Key | Action |
+|-----|--------|
+| W / ↑ | Move forward |
+| S / ↓ | Move backward |
+| A / ← | Strafe left |
+| D / → | Strafe right |
+| Shift | Sprint |
+| Space | Jump |
+| V | Toggle first / third-person view |
+| F | Toggle flight mode |
+| E | Enter / exit vehicle |
+| Mouse move | Control camera |
 
 ### External Input via setInput
 
@@ -231,6 +196,14 @@ player.setInput({
 ### PlayerControllerOptions Type
 
 ```ts
+type MobileControlsOptions = {
+    joystick?: boolean;  // show joystick, default true
+    jump?: boolean;      // show jump button, default true
+    fly?: boolean;       // show fly toggle button, default true
+    view?: boolean;      // show view toggle button, default true
+    vehicle?: boolean;   // show enter/exit vehicle button, default true
+};
+
 type PlayerControllerOptions = {
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -264,6 +237,7 @@ type PlayerControllerOptions = {
     maxCamDistance?: number;
     colliderMeshUrl?: string;
     isShowMobileControls?: boolean;
+    mobileControls?: MobileControlsOptions;
     thirdMouseMode?: 0 | 1 | 2 | 3;
     enableZoom?: boolean;
     enableOverShoulderView?: boolean;
@@ -302,8 +276,9 @@ type PlayerControllerOptions = {
 | `mouseSensitivity` | `number` | — | `5` | Mouse sensitivity |
 | `minCamDistance` | `number` | — | `100` | Minimum third-person camera distance |
 | `maxCamDistance` | `number` | — | `440` | Maximum third-person camera distance |
-| `colliderMeshUrl` | `string` | — | — | Custom collision mesh URL; defaults to all meshes in the scene |
-| `isShowMobileControls` | `boolean` | — | `true` | Show virtual joystick on mobile devices |
+| `colliderMeshUrl` | `string` | — | — | Path to a custom collision mesh (GLB / GLTF), accepts a relative path or absolute URL; defaults to all meshes in the scene |
+| `isShowMobileControls` | `boolean` | — | `true` | Show the mobile control UI; when `false`, `mobileControls` has no effect |
+| `mobileControls` | `MobileControlsOptions` | — | all shown | Fine-grained control over which mobile UI elements are visible (joystick, jump, fly, view, vehicle buttons). Only applies when `isShowMobileControls` is `true`. |
 | `thirdMouseMode` | `0\|1\|2\|3` | — | `1` | Third-person mouse mode (see table below) |
 | `enableZoom` | `boolean` | — | `false` | Allow scroll-wheel zoom in third-person |
 | `enableOverShoulderView` | `boolean` | — | `false` | Enable over-the-shoulder camera offset |
