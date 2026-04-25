@@ -285,7 +285,6 @@ type PlayerControllerOptions = {
     thirdMouseMode?: 0 | 1 | 2 | 3;
     enableZoom?: boolean;
     enableOverShoulderView?: boolean;
-    shoulderOffsetDist?: number;
     isFirstPerson?: boolean;
 };
 ```
@@ -369,7 +368,6 @@ type VehicleOptions = {
 | `thirdMouseMode` | `0 \| 1 \| 2 \| 3` | No | `1` | Third-person mouse mode. |
 | `enableZoom` | `boolean` | No | `false` | Whether wheel zoom is enabled. |
 | `enableOverShoulderView` | `boolean` | No | `false` | Whether over-shoulder view is enabled. |
-| `shoulderOffsetDist` | `number` | No | unused | Present in the type, but not currently consumed in `playerController.ts`. |
 | `isFirstPerson` | `boolean` | No | `false` | Whether to start directly in first-person mode. |
 
 ### `PlayerModelOptions`

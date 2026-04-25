@@ -285,7 +285,6 @@ type PlayerControllerOptions = {
     thirdMouseMode?: 0 | 1 | 2 | 3;
     enableZoom?: boolean;
     enableOverShoulderView?: boolean;
-    shoulderOffsetDist?: number;
     isFirstPerson?: boolean;
 };
 ```
@@ -370,7 +369,6 @@ type VehicleOptions = {
 | `thirdMouseMode` | `0 \| 1 \| 2 \| 3` | 否 | `1` | 第三人称鼠标模式。 |
 | `enableZoom` | `boolean` | 否 | `false` | 是否允许滚轮缩放。 |
 | `enableOverShoulderView` | `boolean` | 否 | `false` | 是否启用过肩视角。 |
-| `shoulderOffsetDist` | `number` | 否 | 未实际使用 | 类型中保留，但当前 `playerController.ts` 里没有实际读取。 |
 | `isFirstPerson` | `boolean` | 否 | `false` | 初始化时是否直接进入第一人称。 |
 
 ### `PlayerModelOptions`
