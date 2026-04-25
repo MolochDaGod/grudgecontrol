@@ -62,7 +62,7 @@ const PLAYER_MODELS = {
         flyIdleAnim: "flyidle",
         enterCarAnim: "enterCar",
         exitCarAnim: "exitCar",
-        headObjName: "mixamorigHead",
+        headBoneName: "mixamorigHead",
         rotateY: Math.PI,
     },
     person2: {
@@ -76,7 +76,7 @@ const PLAYER_MODELS = {
         flyIdleAnim: "flyidle",
         enterCarAnim: "enterCar",
         exitCarAnim: "exitCar",
-        headObjName: "mixamorigHead",
+        headBoneName: "mixamorigHead",
         rotateY: Math.PI,
     },
     person3: {
@@ -90,7 +90,7 @@ const PLAYER_MODELS = {
         flyIdleAnim: "flyidle",
         enterCarAnim: "enterCar",
         exitCarAnim: "exitCar",
-        headObjName: "mixamorigHead",
+        headBoneName: "mixamorigHead",
         rotateY: Math.PI,
     },
 };
@@ -264,15 +264,22 @@ async function init() {
         scene,
         camera,
         controls,
-        playerModel: PLAYER_MODELS.person1,
+        playerModelConfig: PLAYER_MODELS.person1,
         initPos: pos,
         minCamDistance: 50,
         maxCamDistance: 220,
         enableOverShoulderView: true,
+        mobileControls: {
+            joystick: true,
+            jump: false,
+            fly: false,
+            view: false,
+            vehicle: false
+        }
     });
 
     // 阴影
-    player.getPerson()?.traverse((child) => {
+    player.getPlayerModel()?.traverse((child) => {
         if (child.isMesh) {
             child.castShadow = true;
             child.receiveShadow = true;
@@ -487,7 +494,7 @@ async function onPreviewDblClick() {
         scene,
         camera,
         controls,
-        playerModel: getScaledModel(guiParams?.playerModel ?? "person1"),
+        playerModelConfig: getScaledModel(guiParams?.playerModel ?? "person1"),
         initPos,
         minCamDistance: 50,
         maxCamDistance: 220,
@@ -496,7 +503,7 @@ async function onPreviewDblClick() {
         thirdMouseMode: guiParams?.thirdMouseMode ?? 1,
     });
 
-    player.getPerson()?.traverse((child) => {
+    player.getPlayerModel()?.traverse((child) => {
         if (child.isMesh) {
             child.castShadow = true;
             child.receiveShadow = true;
@@ -593,7 +600,7 @@ function initGUI() {
         .name("Player Model")
         .onChange(async (v) => {
             await player.switchPlayerModel(getScaledModel(v));
-            player.getPerson()?.traverse((child) => {
+            player.getPlayerModel()?.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;

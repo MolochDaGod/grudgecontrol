@@ -1,6 +1,8 @@
 
 (function () {
-    const gifUrl = "./img/loader.gif";
+    const scriptSrc = document.currentScript?.src || "";
+    const baseUrl = scriptSrc.substring(0, scriptSrc.lastIndexOf("/") + 1);
+    const gifUrl = baseUrl + "img/loader.gif";
     const gifSize = 120;
     const title = "three-player-controller";
     const fade = 600;

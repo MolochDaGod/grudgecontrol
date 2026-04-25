@@ -14,6 +14,7 @@ export default defineConfig({
                 gltf: resolve(__dirname, "example", "glTF.html"),
                 tiles: resolve(__dirname, "example", "3dtilesScene.html"),
                 dgs: resolve(__dirname, "example", "3dgs.html"),
+                ShinChan: resolve(__dirname, "example", "ShinChan.html"),
             },
         },
     },

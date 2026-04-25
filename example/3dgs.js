@@ -106,7 +106,7 @@ async function init() {
         scene,
         camera,
         controls,
-        playerModel: {
+        playerModelConfig: {
             url: "./glb/person5.glb",
             scale: scaleNormal,
             idleAnim: "Idle_4",
@@ -115,7 +115,7 @@ async function init() {
             jumpAnim: "Jump_1",
             flyAnim: "flying",
             flyIdleAnim: "flyIdle",
-            headObjName: "mixamorigHead",
+            headBoneName: "mixamorigHead",
             speed: 150,
             flySpeed: 1000,
             jumpHeight: 400,
@@ -129,7 +129,7 @@ async function init() {
     });
 
     // 设置材质
-    player.getPerson()?.traverse((child) => {
+    player.getPlayerModel()?.traverse((child) => {
         if (child.isMesh) {
             // 设置金属材质
             child.material.metalness = 0.8;

@@ -138,7 +138,7 @@ async function initPlayer() {
         scene,
         camera,
         controls,
-        playerModel: {
+        playerModelConfig: {
             url: "./glb/person2.glb",
             scale: 0.01,
             idleAnim: "idle",
@@ -149,7 +149,7 @@ async function initPlayer() {
             flyIdleAnim: "flyidle",
             enterCarAnim: "enterCar",
             exitCarAnim: "exitCar",
-            headObjName: "mixamorigHead",
+            headBoneName: "mixamorigHead",
             rotateY: Math.PI,
         },
         initPos: new Vector3(100, 100, 100),

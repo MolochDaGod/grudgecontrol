@@ -76,6 +76,41 @@
                 margin-bottom: 2.5rem;
             }
 
+            .sections {
+                width: 100%;
+                max-width: 1200px;
+                display: flex;
+                flex-direction: column;
+                gap: 2.2rem;
+            }
+
+            .section {
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .section-head {
+                display: flex;
+                align-items: end;
+                justify-content: space-between;
+                gap: 1rem;
+                padding-bottom: 0.7rem;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            }
+
+            .section-title {
+                font-size: 1.1rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+            }
+
+            .section-desc {
+                font-size: 0.9rem;
+                color: #666;
+                text-align: right;
+            }
+
             /* ── grid ── */
             .grid {
                 display: grid;
@@ -202,6 +237,17 @@
             .card:nth-child(6) {
                 animation-delay: 0.4s;
             }
+
+            @media (max-width: 720px) {
+                .section-head {
+                    align-items: flex-start;
+                    flex-direction: column;
+                }
+
+                .section-desc {
+                    text-align: left;
+                }
+            }
         </style>
     </head>
     <body>
@@ -224,36 +270,61 @@
         <h1>three-player-controller</h1>
         <p class="desc">A lightweight character controller for Three.js, accelerated by three-mesh-bvh for smooth performance in large-scale 3D scenes.</p>
 
-        <div class="grid">
-            <a class="card" href="./glTF.html">
-                <div class="card-thumb">
-                    <img src="./img/glTF.gif" />
+        <div class="sections">
+            <section class="section">
+                <div class="section-head">
+                    <div class="section-title">Model Formats</div>
                 </div>
-                <div class="card-info">
-                    <span class="card-name">glTF Scene</span><em class="badge">Full Controls</em>
-                    <span class="play-btn"><svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" /></svg></span>
-                </div>
-            </a>
+                <div class="grid">
+                    <a class="card" href="./glTF.html">
+                        <div class="card-thumb">
+                            <img src="./img/glTF.gif" />
+                        </div>
+                        <div class="card-info">
+                            <span class="card-name">glTF Scene</span><em class="badge">Full Controls</em>
+                            <span class="play-btn"><svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" /></svg></span>
+                        </div>
+                    </a>
 
-            <a class="card" href="./3dtilesScene.html">
-                <div class="card-thumb">
-                    <img src="./img/3dtilesScene.gif" />
-                </div>
-                <div class="card-info">
-                    <span class="card-name">3DTiles Scene</span>
-                    <span class="play-btn"><svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" /></svg></span>
-                </div>
-            </a>
+                    <a class="card" href="./3dtilesScene.html">
+                        <div class="card-thumb">
+                            <img src="./img/3dtilesScene.gif" />
+                        </div>
+                        <div class="card-info">
+                            <span class="card-name">3DTiles Scene</span>
+                            <span class="play-btn"><svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" /></svg></span>
+                        </div>
+                    </a>
 
-            <a class="card" href="./3dgs.html">
-                <div class="card-thumb">
-                    <img src="./img/3dgs.gif" />
+                    <a class="card" href="./3dgs.html">
+                        <div class="card-thumb">
+                            <img src="./img/3dgs.gif" />
+                        </div>
+                        <div class="card-info">
+                            <span class="card-name">3DGS Scene</span>
+                            <span class="play-btn"><svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" /></svg></span>
+                        </div>
+                    </a>
                 </div>
-                <div class="card-info">
-                    <span class="card-name">3DGS Scene</span>
-                    <span class="play-btn"><svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" /></svg></span>
+            </section>
+
+            <section class="section">
+                <div class="section-head">
+                    <div class="section-title">Demo</div>
+                    <div class="section-desc">Practical examples built with the character controller.</div>
                 </div>
-            </a>
-        <div>
+                <div class="grid">
+                    <a class="card" href="./ShinChan.html">
+                        <div class="card-thumb">
+                            <img src="./img/ShinChan.gif" />
+                        </div>
+                        <div class="card-info">
+                            <span class="card-name">ShinChan</span>
+                            <span class="play-btn"><svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" /></svg></span>
+                        </div>
+                    </a>
+                </div>
+            </section>
+        </div>
     </body>
 </html>

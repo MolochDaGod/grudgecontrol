@@ -23,7 +23,8 @@ export type PlayerModelOptions = {
     speed?: number;
     flySpeed?: number;
     rotateY?: number;
-    headObjName?: string;
+    headBoneName?: string;
+    firstPersonCameraOffset?: [number, number, number];
     flyEnabled?: boolean;
     capsuleRadiusRatio?: number;
 };
@@ -40,7 +41,7 @@ export type PlayerControllerOptions = {
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
     controls: any;
-    playerModel: PlayerModelOptions;
+    playerModelConfig: PlayerModelOptions;
     initPos?: THREE.Vector3;
     mouseSensitivity?: number;
     minCamDistance?: number;
@@ -51,6 +52,8 @@ export type PlayerControllerOptions = {
     thirdMouseMode?: 0 | 1 | 2 | 3;
     enableZoom?: boolean;
     enableOverShoulderView?: boolean;
+    shoulderOffsetDist?: number;
+    isFirstPerson?: boolean;
 };
 
 // ==================== 车辆配置 ====================
