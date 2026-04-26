@@ -269,13 +269,6 @@ async function init() {
         minCamDistance: 50,
         maxCamDistance: 220,
         enableOverShoulderView: true,
-        mobileControls: {
-            joystick: true,
-            jump: false,
-            fly: false,
-            view: false,
-            vehicle: false
-        }
     });
 
     // 阴影
