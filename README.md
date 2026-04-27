@@ -78,9 +78,6 @@ await player.init({
         firstPersonCameraOffset: [0, 10, 20],
     },
     initPos: new THREE.Vector3(0, 0, 0),
-    colliderMeshUrl: "./glb/world-collider.glb",
-    isFirstPerson: false,
-    enableOverShoulderView: false,
 });
 
 await player.loadVehicleModel({
