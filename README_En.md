@@ -148,7 +148,7 @@ animate();
 | `setGravity(v)` | Set gravity. |
 | `setMinCamDistance(v)` | Set minimum third-person camera distance. |
 | `setMaxCamDistance(v)` | Set maximum third-person camera distance. |
-| `setThirdMouseMode(v)` | Set third-person mouse mode: `0 | 1 | 2 | 3`. |
+| `setThirdMouseMode(v)` | Set third-person mouse mode: [0 | 1 | 2 | 3]. |
 | `setEnableZoom(v)` | Enable or disable camera zoom. |
 | `setOverShoulderView(v)` | Enable or disable over-shoulder view offset. |
 | `setDebug(v)` | Show or hide collider debug display. |
@@ -362,7 +362,7 @@ type VehicleOptions = {
 | `colliderMeshUrl` | `string` | No | — | Custom collider GLB/GLTF path. If omitted, collider data is collected from scene meshes. |
 | `isShowMobileControls` | `boolean` | No | `true` | Whether to show virtual controls on mobile. |
 | `mobileControls` | `MobileControlsOptions` | No | all enabled | Mobile UI visibility config. |
-| `thirdMouseMode` | `0 \| 1 \| 2 \| 3` | No | `1` | Third-person mouse mode. |
+| thirdMouseMode | 0 \| 1 \| 2 \| 3 | No | 1 | Different mouse control modes in the third-person perspective, default is 1 (0: Hide the mouse to control both direction and view, 1: Hide the mouse to control the view only, 2: Show the mouse and drag to control both direction and view, 3: Show the mouse and drag to control the view only) |
 | `enableZoom` | `boolean` | No | `false` | Whether wheel zoom is enabled. |
 | `enableOverShoulderView` | `boolean` | No | `false` | Whether over-shoulder view is enabled. |
 | `isFirstPerson` | `boolean` | No | `false` | Whether to start directly in first-person mode. |

@@ -148,7 +148,7 @@ animate();
 | `setGravity(v)` | 设置重力。 |
 | `setMinCamDistance(v)` | 设置第三人称最小镜头距离。 |
 | `setMaxCamDistance(v)` | 设置第三人称最大镜头距离。 |
-| `setThirdMouseMode(v)` | 设置第三人称鼠标模式：`0 | 1 | 2 | 3`。 |
+| `setThirdMouseMode(v)` | 设置第三人称鼠标模式：[0 | 1 | 2 | 3]。 |
 | `setEnableZoom(v)` | 设置是否允许镜头缩放。 |
 | `setOverShoulderView(v)` | 开关过肩视角偏移。 |
 | `setDebug(v)` | 开关碰撞体调试显示。 |
@@ -363,7 +363,7 @@ type VehicleOptions = {
 | `colliderMeshUrl` | `string` | 否 | — | 自定义碰撞网格 GLB/GLTF 路径；不传时会从场景里收集网格生成碰撞体。 |
 | `isShowMobileControls` | `boolean` | 否 | `true` | 是否在移动端显示虚拟控制 UI。 |
 | `mobileControls` | `MobileControlsOptions` | 否 | 全部显示 | 移动端按钮显隐配置。 |
-| `thirdMouseMode` | `0 \| 1 \| 2 \| 3` | 否 | `1` | 第三人称鼠标模式。 |
+| `thirdMouseMode` | `0 \| 1 \| 2 \| 3` | 否 | `1` | 第三人称视角下的不同鼠标控制模式，默认1(0:隐藏鼠标控制朝向及视角，1:隐藏鼠标仅控制视角，2:显示鼠标拖拽控制朝向及视角，3:显示鼠标拖拽仅控制视角) |
 | `enableZoom` | `boolean` | 否 | `false` | 是否允许滚轮缩放。 |
 | `enableOverShoulderView` | `boolean` | 否 | `false` | 是否启用过肩视角。 |
 | `isFirstPerson` | `boolean` | 否 | `false` | 初始化时是否直接进入第一人称。 |
