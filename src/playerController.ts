@@ -1387,11 +1387,11 @@ class PlayerController {
         }
 
         // 地面检测
+        const s = this.playerModelConfig.scale;
         this.raycaster.ray.origin.copy(this.playerCapsule.position);
         const hits = this.raycaster.intersectObject(this.collider!, false);
         if (hits.length > 0 && !this.isFlying) {
             const dist = this.playerCapsule.position.y - hits[0].point.y;
-            const s = this.playerModelConfig.scale;
             const maxH = this.playerCapsuleHeight * s * 0.9;
             const h = this.playerCapsuleHeight * s * 0.75;
             const minH = this.playerCapsuleHeight * s * 0.7;
@@ -1413,6 +1413,8 @@ class PlayerController {
                 this.playerVelocity.set(0, 0, 0); this._setOnGround(true);
                 this.playerCapsule.position.y = THREE.MathUtils.lerp(this.playerCapsule.position.y, targetY, Math.min(1, 15 * delta));
             }
+        } else {
+            this.playerVelocity.y += delta * this.gravity;
         }
 
         // 地面检测可能修改 Y，刷新矩阵供后续朝向计算使用
@@ -1442,7 +1444,7 @@ class PlayerController {
         // 第三人称相机跟随
         if (!this.isFirstPerson) {
             const lookTarget = this.playerCapsule.position.clone();
-            lookTarget.y += (this.playerCapsuleHeight / 8) * this.playerModelConfig.scale;
+            lookTarget.y += (this.playerCapsuleHeight / 8) * s;
             this.camera.position.sub(this.controls.target);
             this.controls.target.copy(lookTarget);
             this.camera.position.add(lookTarget);
@@ -1457,15 +1459,9 @@ class PlayerController {
             }
         }
 
-        // 掉落重置
-        if (this.playerCapsule.position.y < this.boundingBoxMinY - 1) {
-            this.raycaster.ray.origin.set(this.playerCapsule.position.x, 10000, this.playerCapsule.position.z);
-            const fallHits = this.raycaster.intersectObject(this.collider!, false);
-            this.reset(new THREE.Vector3(
-                this.playerCapsule.position.x,
-                fallHits.length > 0 ? fallHits[0].point.y + 5 : this.playerCapsule.position.y + 15,
-                this.playerCapsule.position.z,
-            ));
+        // 掉落重置（掉落3倍自身高度重置）
+        if (this.playerCapsule.position.y < this.boundingBoxMinY - this.playerCapsuleHeight * s * 3 && !this.isFlying) {
+            this.reset();
         }
 
         // 移动端车辆按钮检测
