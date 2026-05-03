@@ -1,9 +1,13 @@
 import {
     ACESFilmicToneMapping,
     AmbientLight,
+    CircleGeometry,
+    DoubleSide,
+    Clock,
     EquirectangularReflectionMapping,
     Mesh,
     MeshBasicMaterial,
+    MeshStandardMaterial,
     PerspectiveCamera,
     Raycaster,
     Scene,
@@ -21,6 +25,7 @@ import { playerController } from "../src/playerController";
 import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { CSM } from "three/examples/jsm/csm/CSM.js";
+import { createVolumeCloud, disposeVolumeCloud, updateVolumeCloud } from "./volumeCloud.js";
 
 let player;
 const scene = new Scene();
@@ -35,6 +40,22 @@ let raycastSphere = null;
 let stats = null;
 let csm = null;
 let currentBlobUrl = null;
+let platform = null;
+let platformCloud = null;
+let dynamicPlatforms = [];
+const dynamicPlatformXPath = [
+    new Vector3(20.94, 3.74, 14.89),
+    new Vector3(-1.32, 7.65, 14.83),
+    new Vector3(-19.85, 14.38, 8.77),
+
+];
+const dynamicPlatformXSegments = dynamicPlatformXPath.slice(0, -1).map((point, index) => ({
+    from: point,
+    to: dynamicPlatformXPath[index + 1],
+    length: point.distanceTo(dynamicPlatformXPath[index + 1]),
+}));
+const dynamicPlatformXLength = dynamicPlatformXSegments.reduce((sum, segment) => sum + segment.length, 0);
+const animClock = new Clock();
 
 let globalScale = 1;
 let previewMesh = null;
@@ -50,6 +71,30 @@ const modelUrl = "./glb/burnout_revenge_-_central_route_crash_junction.glb";
 const pos = new Vector3(21.5, 4, 15);
 
 // 人物模型配置
+function easeEndsLinearMiddle(progress, easeRatio = 0.18) {
+    const ease = Math.min(Math.max(easeRatio, 0.001), 0.49);
+    const maxSpeed = 1 / (1 - ease);
+    if (progress < ease) return (maxSpeed * progress * progress) / (2 * ease);
+    if (progress > 1 - ease) return 1 - (maxSpeed * (1 - progress) * (1 - progress)) / (2 * ease);
+    return maxSpeed * (progress - ease / 2);
+}
+
+// 根据整条路径的总长度定位平台
+function setPositionOnXPath(mesh, progress) {
+    if (!dynamicPlatformXSegments.length || dynamicPlatformXLength <= 0) return;
+
+    let targetDistance = progress * dynamicPlatformXLength;
+    for (const segment of dynamicPlatformXSegments) {
+        if (targetDistance <= segment.length) {
+            mesh.position.lerpVectors(segment.from, segment.to, targetDistance / segment.length);
+            return;
+        }
+        targetDistance -= segment.length;
+    }
+
+    mesh.position.copy(dynamicPlatformXPath[dynamicPlatformXPath.length - 1]);
+}
+
 const PLAYER_MODELS = {
     person1: {
         url: "./glb/person1.glb",
@@ -183,6 +228,89 @@ function getScaledVehicle(key) {
     return { ...v, scale: v.scale * globalScale };
 }
 
+// 创建动态平台
+function createDynamicPlatform({
+    position,
+    radius = 0.16,
+    cloudScale = [0.32, 0.15, 0.32],
+    motion = null,
+}) {
+    // 网格
+    const mesh = new Mesh(
+        new CircleGeometry(radius, 32),
+        new MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.7, metalness: 0, roughness: 0.5, side: DoubleSide }),
+    );
+    mesh.position.copy(position);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.material.visible = false;
+    scene.add(mesh);
+    player.addDynamicCollider(mesh);
+
+    // 体积云
+    const cloud = createVolumeCloud({
+        scale: cloudScale,
+        opacity: 0.28,
+        steps: 80,
+    });
+    cloud.position.set(0, 0, 0);
+    cloud.rotation.x = Math.PI / 2;
+    mesh.add(cloud);
+
+    // 缓存数据
+    const entry = {
+        mesh,
+        cloud,
+        basePosition: position.clone(),
+        motion,
+    };
+    dynamicPlatforms.push(entry);
+    return entry;
+}
+
+// 更新动态平台
+function updateDynamicPlatforms() {
+    const t = animClock.getElapsedTime();
+    dynamicPlatforms.forEach((entry) => {
+        const { mesh, basePosition, motion, cloud } = entry;
+        if (motion) {
+            // 还原基点
+            if (motion.axis === "y") {
+                mesh.position.copy(basePosition);
+                const amount = Math.sin(t * motion.speed) * motion.distance;
+                // 纵向往返
+                mesh.position.y = basePosition.y + amount + motion.distance;
+            } else if (motion.axis === "x") {
+                if (player.getActiveDynamicCollider()?.source === mesh && player.getIsOnGround()) {
+                    const delta = entry.lastMotionTime === undefined ? 0 : t - entry.lastMotionTime;
+                    entry.motionElapsed = (entry.motionElapsed ?? 0) + delta;
+
+                    const phase = (entry.motionElapsed * motion.speed / Math.PI) % 2;
+                    const rawProgress = phase <= 1 ? phase : 2 - phase;
+                    const progress = easeEndsLinearMiddle(rawProgress);
+
+                    setPositionOnXPath(mesh, progress);
+                }
+                entry.lastMotionTime = t;
+            }
+        }
+        // 更新体积云
+        updateVolumeCloud(cloud, camera);
+    });
+}
+
+// 移除平台
+function removeDynamicPlatforms() {
+    dynamicPlatforms.forEach(({ mesh, cloud }) => {
+        // 清理碰撞
+        player?.removeDynamicCollider(mesh);
+        disposeVolumeCloud(cloud);
+        scene.remove(mesh);
+    });
+    dynamicPlatforms = [];
+    platform = null;
+    platformCloud = null;
+}
+
 async function init() {
     const cont = document.querySelector("#container");
 
@@ -259,7 +387,7 @@ async function init() {
     renderer.render(scene, camera);
 
     // 人物控制器
-    player = playerController();
+    player = new playerController();
     await player.init({
         scene,
         camera,
@@ -269,6 +397,19 @@ async function init() {
         minCamDistance: 50,
         maxCamDistance: 220,
         enableOverShoulderView: true,
+    });
+
+    // 创建动态平台
+    const liftPlatform = createDynamicPlatform({
+        position: new Vector3(22, 2.76, 9.7),
+        motion: { axis: "y", distance: 4, speed: 0.5 },
+    });
+    platform = liftPlatform.mesh;
+    platformCloud = liftPlatform.cloud;
+
+    createDynamicPlatform({
+        position: dynamicPlatformXPath[0],
+        motion: { axis: "x", distance: 3, speed: 0.1 },
     });
 
     // 阴影
@@ -347,6 +488,7 @@ async function replaceScene(file) {
     }
 
     // 销毁旧玩家
+    removeDynamicPlatforms();
     player?.destroy();
     player = null;
 
@@ -513,6 +655,8 @@ function animate() {
     } else {
         controls.update();
     }
+
+    updateDynamicPlatforms();
 
     csm?.update();
 

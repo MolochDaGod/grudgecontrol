@@ -4,6 +4,7 @@ import { GLTFExtensionsPlugin, LoadRegionPlugin, ReorientationPlugin, SphereRegi
 import { ACESFilmicToneMapping, AmbientLight, DirectionalLight, EquirectangularReflectionMapping, MathUtils, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import { playerController } from "../src/playerController";
 import Stats from 'three/examples/jsm/libs/stats.module.js';
@@ -129,11 +130,13 @@ function initRegionCull() {
 
 // 初始化玩家控制器
 async function initPlayer() {
-    player = playerController();
     renderer.render(scene, camera);
 
+    // 加载碰撞体
+    const colliderGltf = await new GLTFLoader().loadAsync("./glb/EiffelCollider.glb");
+
     // 初始化玩家控制器
-    player = playerController();
+    player = new playerController();
     await player.init({
         scene,
         camera,
@@ -155,7 +158,7 @@ async function initPlayer() {
         initPos: new Vector3(100, 100, 100),
         minCamDistance: 50,
         maxCamDistance: 250,
-        colliderMeshUrl: "./glb/EiffelCollider.glb",
+        staticCollider: colliderGltf.scene,
         thirdMouseMode: 1,
         enableOverShoulderView: true,
     });

@@ -61,7 +61,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
 const controls = new OrbitControls(camera, renderer.domElement);
 
-const player = playerController();
+const player = new playerController();
 
 await player.init({
     scene,
@@ -116,6 +116,11 @@ animate();
 | `switchPlayerModel(model)` | 运行时切换角色模型，并保留当前位置和朝向。 |
 | `loadVehicleModel(opts)` | 加载车辆，可重复调用加载多辆车。 |
 | `changeView()` | 切换第一 / 第三人称视角。 |
+| `setFirstPersonCamera(vertAngle?)` | 直接进入第一人称，可指定初始垂直角度。 |
+| `buildStaticCollider(sources?)` | 构建静态碰撞体；不传则遍历整个场景。 |
+| `addDynamicCollider(source)` | 注册动态碰撞体（如可移动平台）。 |
+| `removeDynamicCollider(source)` | 移除已注册的动态碰撞体。 |
+| `clearDynamicColliders()` | 移除所有动态碰撞体。 |
 
 ## 状态获取
 
@@ -158,6 +163,7 @@ animate();
 
 | 方法 | 说明 |
 | --- | --- |
+| `playPlayerAnimationByName(name, fade?)` | 按动画片段名直接播放角色动画。 |
 | `registerAnimation(key, clipName, opts?)` | 注册自定义动画片段。 |
 | `playAnimation(key, opts?)` | 播放已注册的自定义动画。 |
 | `registerLocomotionSet(setName, map)` | 注册一套移动动画集合，用于替换内置移动动画。 |
@@ -203,13 +209,13 @@ player.registerLocomotionSet("combat", {
 ## 事件
 
 ```ts
-player.onAnimationChange((name, action) => {});
-player.onBeforeViewChange((isFirstPerson) => {});
-player.onViewChange((isFirstPerson) => {});
-player.onGroundChange((onGround) => {});
-player.onVehicleEnter((vehicle) => {});
-player.onVehicleExit((vehicle) => {});
-player.onTowardChange((dx, dy, speed) => {});
+player.onAnimationChange = (name, action) => {};
+player.onBeforeViewChange = (isFirstPerson) => {};
+player.onViewChange = (isFirstPerson) => {};
+player.onGroundChange = (onGround) => {};
+player.onVehicleEnter = (vehicle) => {};
+player.onVehicleExit = (vehicle) => {};
+player.onTowardChange = (dx, dy, speed) => {};
 ```
 
 | 事件 | 说明 |
@@ -276,7 +282,8 @@ type PlayerControllerOptions = {
     mouseSensitivity?: number;
     minCamDistance?: number;
     maxCamDistance?: number;
-    colliderMeshUrl?: string;
+    staticCollider?: THREE.Object3D | THREE.Object3D[];
+    dynamicCollider?: THREE.Object3D | THREE.Object3D[];
     isShowMobileControls?: boolean;
     mobileControls?: MobileControlsOptions;
     thirdMouseMode?: 0 | 1 | 2 | 3;
@@ -360,7 +367,8 @@ type VehicleOptions = {
 | `mouseSensitivity` | `number` | 否 | `5` | 鼠标灵敏度。 |
 | `minCamDistance` | `number` | 否 | `100` | 第三人称最小镜头距离。 |
 | `maxCamDistance` | `number` | 否 | `440` | 第三人称最大镜头距离。 |
-| `colliderMeshUrl` | `string` | 否 | — | 自定义碰撞网格 GLB/GLTF 路径；不传时会从场景里收集网格生成碰撞体。 |
+| `staticCollider` | `THREE.Object3D \| THREE.Object3D[]` | 否 | — | 指定用于生成静态碰撞体的对象；不传则遍历整个场景。 |
+| `dynamicCollider` | `THREE.Object3D \| THREE.Object3D[]` | 否 | — | 初始化时注册的动态碰撞体（如可移动平台）。 |
 | `isShowMobileControls` | `boolean` | 否 | `true` | 是否在移动端显示虚拟控制 UI。 |
 | `mobileControls` | `MobileControlsOptions` | 否 | 全部显示 | 移动端按钮显隐配置。 |
 | `thirdMouseMode` | `0 \| 1 \| 2 \| 3` | 否 | `1` | 第三人称视角下的不同鼠标控制模式，默认1(0:隐藏鼠标控制朝向及视角，1:隐藏鼠标仅控制视角，2:显示鼠标拖拽控制朝向及视角，3:显示鼠标拖拽仅控制视角) |
@@ -421,11 +429,17 @@ type VehicleOptions = {
 | `followVehicleDirection` | `boolean` | 否 | `true` | 驾驶时镜头是否跟随车辆朝向。 |
 | `speedMultiplier` | `number` | 否 | `1` | 单车速度倍率。 |
 
+# 反馈
+
+如果你有任何问题或者好的想法欢迎提交[issue](https://github.com/hh-hang/three-player-controller/issues)
+
 # 致谢
 
 [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh)
 
 [three](https://github.com/mrdoob/three.js)
+
+
 
 [npm]: https://img.shields.io/npm/v/three-player-controller
 [npm-url]: https://www.npmjs.com/package/three-player-controller

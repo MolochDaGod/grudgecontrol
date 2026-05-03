@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { PathPlanner, type ObstacleChecker } from "./pathPlanner";
-import { createVehicleController } from "./useVehicleController";
+import { createVehicleController } from "./vehicleController";
 import type { VehicleOptions, VehicleInstance } from "../types";
 
 export type VehicleLoaderContext = {
@@ -232,13 +232,12 @@ export async function loadVehicleModel(
     );
     world.createCollider(RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z), chassisBody);
 
-    // 调试模式显示物理盒
-    if (vehicleParams.debug.showPhysicsBox) {
-        vehicleGroup.add(new THREE.Mesh(
-            new THREE.BoxGeometry(halfExtents.x * 2, halfExtents.y * 2, halfExtents.z * 2),
-            new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, transparent: true, opacity: 0.3 }),
-        ));
-    }
+    // 物理调试盒
+    const physicsBoxMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(halfExtents.x * 2, halfExtents.y * 2, halfExtents.z * 2),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.3 }),
+    );
+    if (vehicleParams.debug.showPhysicsBox) vehicleGroup.add(physicsBoxMesh);
 
     vehicleGroup.position.copy(opts.position);
     vehicleGroup.updateMatrixWorld(true);
@@ -266,5 +265,6 @@ export async function loadVehicleModel(
         suspensionRestLengthRatio,
         size: { l: Math.max(size.x, size.z), w: Math.min(size.x, size.z), h: size.y },
         speedMultiplier,
+        physicsBoxMesh,
     };
 }

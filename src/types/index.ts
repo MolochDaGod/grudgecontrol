@@ -46,7 +46,8 @@ export type PlayerControllerOptions = {
     mouseSensitivity?: number;
     minCamDistance?: number;
     maxCamDistance?: number;
-    colliderMeshUrl?: string;
+    staticCollider?: THREE.Object3D | THREE.Object3D[];
+    dynamicCollider?: THREE.Object3D | THREE.Object3D[];
     isShowMobileControls?: boolean;
     mobileControls?: MobileControlsOptions;
     thirdMouseMode?: 0 | 1 | 2 | 3;
@@ -90,4 +91,13 @@ export type VehicleInstance = {
     suspensionRestLengthRatio: number;
     size: { l: number; w: number; h: number };
     speedMultiplier: number;
+    physicsBoxMesh?: THREE.Mesh;
 };
+
+export type DynamicColliderEntry = {
+    source: THREE.Object3D; // 原始物体
+    mesh: THREE.Mesh; // BVH网格（本地空间几何）
+    prevWorldMatrix: THREE.Matrix4; // 上一帧世界矩阵
+    deltaPos: THREE.Vector3; // 本帧位移增量
+    deltaRotY: number; // 本帧 Y 轴旋转增量（弧度）
+}

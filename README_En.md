@@ -61,7 +61,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
 const controls = new OrbitControls(camera, renderer.domElement);
 
-const player = playerController();
+const player = new playerController();
 
 await player.init({
     scene,
@@ -116,6 +116,11 @@ animate();
 | `switchPlayerModel(model)` | Swap the current player model while preserving position and facing. |
 | `loadVehicleModel(opts)` | Load a vehicle. Can be called multiple times. |
 | `changeView()` | Toggle first-person / third-person. |
+| `setFirstPersonCamera(vertAngle?)` | Switch directly to first-person with an optional initial vertical angle. |
+| `buildStaticCollider(sources?)` | (Re)build the static collider. If omitted, traverses the whole scene. |
+| `addDynamicCollider(source)` | Register a dynamic collider (e.g. a moving platform). |
+| `removeDynamicCollider(source)` | Unregister a previously added dynamic collider. |
+| `clearDynamicColliders()` | Remove all dynamic colliders. |
 
 ## State Getters
 
@@ -158,6 +163,7 @@ animate();
 
 | Method | Description |
 | --- | --- |
+| `playPlayerAnimationByName(name, fade?)` | Play a player animation directly by clip name. |
 | `registerAnimation(key, clipName, opts?)` | Register a custom animation clip. |
 | `playAnimation(key, opts?)` | Play a registered custom animation. |
 | `registerLocomotionSet(setName, map)` | Register a locomotion set to replace built-in movement animations. |
@@ -203,13 +209,13 @@ player.registerLocomotionSet("combat", {
 ## Events
 
 ```ts
-player.onAnimationChange((name, action) => {});
-player.onBeforeViewChange((isFirstPerson) => {});
-player.onViewChange((isFirstPerson) => {});
-player.onGroundChange((onGround) => {});
-player.onVehicleEnter((vehicle) => {});
-player.onVehicleExit((vehicle) => {});
-player.onTowardChange((dx, dy, speed) => {});
+player.onAnimationChange = (name, action) => {};
+player.onBeforeViewChange = (isFirstPerson) => {};
+player.onViewChange = (isFirstPerson) => {};
+player.onGroundChange = (onGround) => {};
+player.onVehicleEnter = (vehicle) => {};
+player.onVehicleExit = (vehicle) => {};
+player.onTowardChange = (dx, dy, speed) => {};
 ```
 
 | Event | Description |
@@ -276,7 +282,8 @@ type PlayerControllerOptions = {
     mouseSensitivity?: number;
     minCamDistance?: number;
     maxCamDistance?: number;
-    colliderMeshUrl?: string;
+    staticCollider?: THREE.Object3D | THREE.Object3D[];
+    dynamicCollider?: THREE.Object3D | THREE.Object3D[];
     isShowMobileControls?: boolean;
     mobileControls?: MobileControlsOptions;
     thirdMouseMode?: 0 | 1 | 2 | 3;
@@ -359,7 +366,8 @@ type VehicleOptions = {
 | `mouseSensitivity` | `number` | No | `5` | Mouse sensitivity. |
 | `minCamDistance` | `number` | No | `100` | Minimum third-person camera distance. |
 | `maxCamDistance` | `number` | No | `440` | Maximum third-person camera distance. |
-| `colliderMeshUrl` | `string` | No | — | Custom collider GLB/GLTF path. If omitted, collider data is collected from scene meshes. |
+| `staticCollider` | `THREE.Object3D \| THREE.Object3D[]` | No | — | Objects used to build the static collider. If omitted, the whole scene is traversed. |
+| `dynamicCollider` | `THREE.Object3D \| THREE.Object3D[]` | No | — | Dynamic colliders registered at init time (e.g. moving platforms). |
 | `isShowMobileControls` | `boolean` | No | `true` | Whether to show virtual controls on mobile. |
 | `mobileControls` | `MobileControlsOptions` | No | all enabled | Mobile UI visibility config. |
 | thirdMouseMode | 0 \| 1 \| 2 \| 3 | No | 1 | Different mouse control modes in the third-person perspective, default is 1 (0: Hide the mouse to control both direction and view, 1: Hide the mouse to control the view only, 2: Show the mouse and drag to control both direction and view, 3: Show the mouse and drag to control the view only) |
@@ -432,6 +440,10 @@ type VehicleOptions = {
 [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh)
 
 [three](https://github.com/mrdoob/three.js)
+
+# Feedback
+
+If you have any questions or good ideas, feel free to submit an [issue](https://github.com/hh-hang/three-player-controller/issues)
 
 [npm]: https://img.shields.io/npm/v/three-player-controller
 [npm-url]: https://www.npmjs.com/package/three-player-controller

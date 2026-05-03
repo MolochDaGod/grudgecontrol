@@ -131,7 +131,7 @@ async function init() {
     renderer.render(scene, camera);
 
     // 人物控制器
-    player = playerController();
+    player = new playerController();
     await player.init({
         scene,
         camera,

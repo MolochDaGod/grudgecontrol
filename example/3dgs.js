@@ -100,8 +100,11 @@ async function init() {
     });
     scene.add(butterfly);
 
+    // 加载碰撞体
+    const colliderGltf = await gltfLoader.loadAsync("./glb/3dgsCollider.glb");
+
     // 人物控制器
-    player = playerController();
+    player = new playerController();
     await player.init({
         scene,
         camera,
@@ -124,7 +127,7 @@ async function init() {
         initPos: pos,
         minCamDistance: 50,
         maxCamDistance: 180,
-        colliderMeshUrl: "./glb/3dgsCollider.glb",
+        staticCollider: colliderGltf.scene,
         enableOverShoulderView: true,
     });
 
