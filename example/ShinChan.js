@@ -149,7 +149,7 @@ async function init() {
             exitCarAnim: "exitCar",
             headBoneName: "mixamorigHead",
             rotateY: Math.PI,
-            capsuleRadiusRatio: 0.5,
+            capsuleRadiusRatio: 0.3,
             firstPersonCameraOffset: [0, 220, 250],
         },
         initPos: pos,
