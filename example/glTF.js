@@ -624,7 +624,7 @@ async function onPreviewDblClick() {
 
     recreateCSM(globalScale);
 
-    player = playerController();
+    player = new playerController();
     await player.init({
         scene,
         camera,
