@@ -74,8 +74,6 @@ await player.init({
         walkAnim: "walk",
         runAnim: "run",
         jumpAnim: "jump",
-        headBoneName: "Head",
-        firstPersonCameraOffset: [0, 10, 20],
     },
     initPos: new THREE.Vector3(0, 0, 0),
 });
