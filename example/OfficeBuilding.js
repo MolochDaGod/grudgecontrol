@@ -333,7 +333,7 @@ async function initPlayer() {
         playerModelConfig: {
             url: "./glb/person2.glb",
             scale: 0.01,
-            idleAnim: "idle",
+            idleAnim: "idle1",
             walkAnim: "walk",
             runAnim: "run",
             jumpAnim: "jump",
@@ -341,9 +341,9 @@ async function initPlayer() {
             flyIdleAnim: "flyidle",
             enterCarAnim: "enterCar",
             exitCarAnim: "exitCar",
+            headBoneName: "mixamorigHead",
             rotateY: Math.PI,
-            capsuleRadiusRatio: 0.8
-
+            capsuleRadiusRatio: 0.9
         },
         initPos: new Vector3(1.27, -2.95, 11.524),
         minCamDistance: 50,
@@ -357,6 +357,11 @@ async function initPlayer() {
             child.receiveShadow = true;
         }
     });
+
+    player.onViewChange = (isFirstPerson) => {
+        camera.fov = isFirstPerson ? 75 : 60;
+        camera.updateProjectionMatrix();
+    };
 }
 
 // 更新灯光位置
