@@ -15,6 +15,7 @@ export default defineConfig({
                 tiles: resolve(__dirname, "example", "3dtilesScene.html"),
                 dgs: resolve(__dirname, "example", "3dgs.html"),
                 ShinChan: resolve(__dirname, "example", "ShinChan.html"),
+                OfficeBuilding: resolve(__dirname, "example", "OfficeBuilding.html")
             },
         },
     },

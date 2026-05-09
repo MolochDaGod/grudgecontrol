@@ -26,7 +26,7 @@
     },
     "peerDependencies": {
         "@dimforge/rapier3d-compat": "^0.12.0",
-        "three": "^0.182.0",
+        "three": "^0.184.0",
         "three-mesh-bvh": "^0.9.9"
     },
     "peerDependenciesMeta": {
@@ -35,10 +35,10 @@
         }
     },
     "devDependencies": {
-        "@types/node": "^25.0.6",
-        "@types/three": "^0.182.0",
-        "3d-tiles-renderer": "^0.4.19",
         "@sparkjsdev/spark": "^0.1.10",
+        "@types/node": "^25.0.6",
+        "@types/three": "^0.184.0",
+        "3d-tiles-renderer": "^0.4.24",
         "rimraf": "^6.0.0",
         "tsup": "^8.0.1",
         "typescript": "^5.9.3",
