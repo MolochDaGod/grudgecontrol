@@ -151,6 +151,7 @@ animate();
 | `setGravity(v)` | 设置重力。 |
 | `setMinCamDistance(v)` | 设置第三人称最小镜头距离。 |
 | `setMaxCamDistance(v)` | 设置第三人称最大镜头距离。 |
+| `setCamLookAtHeightRatio(v)` | 设置第三人称相机看向点高度比例（0=底部，1=顶部）。 |
 | `setThirdMouseMode(v)` | 设置第三人称鼠标模式：[0 | 1 | 2 | 3]。 |
 | `setEnableZoom(v)` | 设置是否允许镜头缩放。 |
 | `setOverShoulderView(v)` | 开关过肩视角偏移。 |
@@ -288,6 +289,7 @@ type PlayerControllerOptions = {
     enableZoom?: boolean;
     enableOverShoulderView?: boolean;
     isFirstPerson?: boolean;
+    camLookAtHeightRatio?: number;
 };
 ```
 
@@ -373,6 +375,7 @@ type VehicleOptions = {
 | `enableZoom` | `boolean` | 否 | `false` | 是否允许滚轮缩放。 |
 | `enableOverShoulderView` | `boolean` | 否 | `false` | 是否启用过肩视角。 |
 | `isFirstPerson` | `boolean` | 否 | `false` | 初始化时是否直接进入第一人称。 |
+| `camLookAtHeightRatio` | `number` | 否 | `0.8` | 第三人称相机看向点高度比例（0=胶囊底部，1=顶部）。 |
 
 ### `PlayerModelOptions`
 

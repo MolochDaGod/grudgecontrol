@@ -98,6 +98,18 @@ export class InputSystem {
             case "KeyS": case "ArrowDown": this.bkd = true; c.animation.setAnimationByPressed(); break;
             case "KeyD": case "ArrowRight": this.rgt = true; c.animation.setAnimationByPressed(); break;
             case "KeyA": case "ArrowLeft": this.lft = true; c.animation.setAnimationByPressed(); break;
+            case "KeyV": c.cam.changeView(); break;
+            case "KeyF":
+                if (c.controllerMode === 0 && c.playerFlyEnabled) {
+                    c.isFlying = !c.isFlying;
+                    c.animation.setAnimationByPressed();
+                    if (!c.isFlying && !c.playerIsOnGround) c.animation.playByName("jumping");
+                }
+                break;
+            case "KeyE":
+                if (c.isFlying) return;
+                if (c.controllerMode === 0) c.vehicle.enter(); else c.vehicle.exit();
+                break;
             case "ShiftLeft": case "ShiftRight":
                 this.shift = true;
                 c.animation.setAnimationByPressed();
@@ -114,18 +126,6 @@ export class InputSystem {
                 c.setOnGround(false);
                 break;
             case "ControlLeft": this.ctrlKey = true; break;
-            case "KeyV": c.cam.changeView(); break;
-            case "KeyF":
-                if (c.controllerMode === 0 && c.playerFlyEnabled) {
-                    c.isFlying = !c.isFlying;
-                    c.animation.setAnimationByPressed();
-                    if (!c.isFlying && !c.playerIsOnGround) c.animation.playByName("jumping");
-                }
-                break;
-            case "KeyE":
-                if (c.isFlying) return;
-                if (c.controllerMode === 0) c.vehicle.enter(); else c.vehicle.exit();
-                break;
         }
     }
 

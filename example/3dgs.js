@@ -122,11 +122,11 @@ async function init() {
             speed: 150,
             flySpeed: 1000,
             jumpHeight: 400,
-            capsuleRadiusRatio: 0.5,
         },
         initPos: pos,
         minCamDistance: 50,
         maxCamDistance: 180,
+        camLookAtHeightRatio: 0.9,
         staticCollider: colliderGltf.scene,
         enableOverShoulderView: true,
     });

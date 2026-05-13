@@ -46,6 +46,7 @@ export type PlayerControllerOptions = {
     mouseSensitivity?: number;
     minCamDistance?: number;
     maxCamDistance?: number;
+    camLookAtHeightRatio?: number;
     staticCollider?: THREE.Object3D | THREE.Object3D[];
     dynamicCollider?: THREE.Object3D | THREE.Object3D[];
     isShowMobileControls?: boolean;

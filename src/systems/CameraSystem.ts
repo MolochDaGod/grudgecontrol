@@ -12,6 +12,9 @@ export class CameraSystem {
     sensitivity = 5; // 鼠标灵敏度
     mouseMode: 0 | 1 | 2 | 3 = 1; // 鼠标控制模式
     zoomEnabled = false; // 是否允许缩放
+    lookAtHeightRatio = 0.8; // 第三人称看向点高度比例（0=底部，1=顶部）
+
+    private lookAtPoint = new THREE.Vector3(); // 预分配的看向点向量
 
     raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3()); // 相机碰撞射线
     centerRay = new THREE.Raycaster(); // 屏幕中心射线
@@ -21,6 +24,15 @@ export class CameraSystem {
     constructor(ctrl: playerController) {
         this.ctrl = ctrl;
         (this.raycaster as any).firstHitOnly = true;
+    }
+
+    // 第三人称相机看向点
+    getLookAtPoint(): THREE.Vector3 {
+        const capsuleInfo = this.ctrl.playerCapsule.capsuleInfo;
+        const r = capsuleInfo.radius;
+        const totalH = -capsuleInfo.segment.end.y + 2 * r;
+        const y = this.ctrl.playerCapsule.position.y + r - totalH * (1 - this.lookAtHeightRatio);
+        return this.lookAtPoint.copy(this.ctrl.playerCapsule.position).setY(y);
     }
 
     // 设置越肩视角
@@ -53,8 +65,8 @@ export class CameraSystem {
             const angle = Math.atan2(dir.z, dir.x);
             const s = this.ctrl.playerModelConfig.scale;
             const rawOffset = new THREE.Vector3(Math.cos(angle) * 400 * s, 200 * s, Math.sin(angle) * 400 * s);
-            this.ctrl.camera.position.copy(this.ctrl.playerCapsule.position).add(rawOffset.normalize().multiplyScalar(this.maxDist));
-            this.ctrl.controls.target.copy(this.ctrl.playerCapsule.position);
+            this.ctrl.controls.target.copy(this.getLookAtPoint());
+            this.ctrl.camera.position.copy(this.ctrl.controls.target).add(rawOffset.normalize().multiplyScalar(this.maxDist));
             this.ctrl.controls.enableZoom = this.zoomEnabled;
             this.setOverShoulder(this.ctrl.enableOverShoulderView);
         }
@@ -103,8 +115,8 @@ export class CameraSystem {
                 const angle = Math.atan2(dir.z, dir.x);
                 const s = this.ctrl.playerModelConfig.scale;
                 const rawOffset = new THREE.Vector3(Math.cos(angle) * 400 * s, 200 * s, Math.sin(angle) * 400 * s);
-                this.ctrl.camera.position.copy(this.ctrl.playerCapsule.position)
-                    .add(rawOffset.normalize().multiplyScalar(this.maxDist));
+                this.ctrl.controls.target.copy(this.getLookAtPoint());
+                this.ctrl.camera.position.copy(this.ctrl.controls.target).add(rawOffset.normalize().multiplyScalar(this.maxDist));
                 this.ctrl.controls.enableZoom = this.zoomEnabled;
             } else {
                 this.setFirstPerson();
@@ -147,7 +159,7 @@ export class CameraSystem {
                 );
             } else {
                 // 步行第三人称
-                this.orbit(this.ctrl.playerCapsule.position, -dx * speed * sens, -dy * speed * sens);
+                this.orbit(this.getLookAtPoint(), -dx * speed * sens, -dy * speed * sens);
             }
         } else {
             const v = this.ctrl.vehicle.active;

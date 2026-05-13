@@ -151,6 +151,7 @@ animate();
 | `setGravity(v)` | Set gravity. |
 | `setMinCamDistance(v)` | Set minimum third-person camera distance. |
 | `setMaxCamDistance(v)` | Set maximum third-person camera distance. |
+| `setCamLookAtHeightRatio(v)` | Set the third-person camera look-at height ratio (0 = bottom, 1 = top). |
 | `setThirdMouseMode(v)` | Set third-person mouse mode: [0 | 1 | 2 | 3]. |
 | `setEnableZoom(v)` | Enable or disable camera zoom. |
 | `setOverShoulderView(v)` | Enable or disable over-shoulder view offset. |
@@ -288,6 +289,7 @@ type PlayerControllerOptions = {
     enableZoom?: boolean;
     enableOverShoulderView?: boolean;
     isFirstPerson?: boolean;
+    camLookAtHeightRatio?: number;
 };
 ```
 
@@ -372,6 +374,7 @@ type VehicleOptions = {
 | `enableZoom` | `boolean` | No | `false` | Whether wheel zoom is enabled. |
 | `enableOverShoulderView` | `boolean` | No | `false` | Whether over-shoulder view is enabled. |
 | `isFirstPerson` | `boolean` | No | `false` | Whether to start directly in first-person mode. |
+| `camLookAtHeightRatio` | `number` | No | `0.8` | Third-person camera look-at height ratio (0 = capsule bottom, 1 = top). |
 
 ### `PlayerModelOptions`
 

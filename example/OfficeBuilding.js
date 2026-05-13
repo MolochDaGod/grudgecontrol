@@ -343,9 +343,8 @@ async function initPlayer() {
             exitCarAnim: "exitCar",
             headBoneName: "mixamorigHead",
             rotateY: Math.PI,
-            capsuleRadiusRatio: 0.9
         },
-        initPos: new Vector3(1.27, -2.95, 11.524),
+        initPos: new Vector3(1.27, 0, 11.524),
         minCamDistance: 50,
         maxCamDistance: 220,
         enableOverShoulderView: true,
@@ -628,7 +627,6 @@ function initClickPick() {
         const objects = [];
         tilesList.forEach((t) => t.group.traverse((c) => { if (c.isMesh) objects.push(c); }));
         const hits = _raycaster.intersectObjects(objects, false);
-        console.log('hits', hits)
         if (hits.length > 0) {
             const mesh = hits[0].object;
         }

@@ -43,9 +43,9 @@ export class playerController {
     private isShowMobileControls = true; // 显示移动端控件
 
     // ==================== 玩家胶囊体 ====================
-    private playerCapsuleRadius = 45; // 胶囊体半径
-    private playerCapsuleHeight = 180; // 胶囊体高度
+    private playerCapsuleRadius = 30; // 胶囊体半径
     private playerCapsuleRadiusRatio = 1; // 半径缩放比
+    private playerCapsuleHeight = 180; // 胶囊体高度
     isFirstPerson = false; // 第一人称状态
     private boundingBoxMinY = 0; // 碰撞体最低点
 
@@ -69,6 +69,10 @@ export class playerController {
     private dynamicColliders: DynamicColliderEntry[] = []; // 动态碰撞体列表
     activeDynamicCollider: DynamicColliderEntry | null = null; // 当前站立的动态碰撞体
 
+    // ==================== 碰撞阈值 ====================
+    private readonly slopeAngleThreshold = 50; // 斜坡阈值（度）
+    private readonly maxStepHeight = 40; // 可跨越台阶/立面高度阈值
+
     // ==================== 移动端 ====================
     mobileControls: MobileControls | null = null; // 移动端控件
     private isNearVehicle = false; // 靠近车辆
@@ -87,19 +91,23 @@ export class playerController {
     private DIR_BKD = new THREE.Vector3(0, 0, 1); // 后
     private DIR_LFT = new THREE.Vector3(-1, 0, 0); // 左
     private DIR_RGT = new THREE.Vector3(1, 0, 0); // 右
-    private DIR_UP = new THREE.Vector3(0, 1, 0); // 上
 
     playerVelocity = new THREE.Vector3(); // 玩家速度
     private camDir = new THREE.Vector3(); // 相机方向缓存
     private moveDir = new THREE.Vector3(); // 移动方向缓存
     targetQuat = new THREE.Quaternion(); // 目标四元数
     targetMat = new THREE.Matrix4(); // 目标变换矩阵
-    private tempVector = new THREE.Vector3(); // 临时向量1
-    private tempVector2 = new THREE.Vector3(); // 临时向量2
-    private tempBox = new THREE.Box3(); // 临时包围盒
-    private tempMat = new THREE.Matrix4(); // 临时矩阵
-    private tempSegment = new THREE.Line3(); // 临时线段
-    private raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0)); // 地面检测射线
+    private staticInvMat = new THREE.Matrix4(); // 静态碰撞体世界矩阵的逆矩阵
+    private staticLocalSeg = new THREE.Line3(); // 胶囊段在静态碰撞体本地空间的副本
+    private staticLocalBox = new THREE.Box3(); // 胶囊段在静态碰撞体本地空间的包围盒
+    private staticClosestSeg = new THREE.Vector3(); // 静态碰撞：胶囊段最近点
+    private staticClosestTri = new THREE.Vector3(); // 静态碰撞：三角面最近点
+    private dynInvMat = new THREE.Matrix4(); // 动态碰撞体世界矩阵的逆矩阵
+    private dynLocalSeg = new THREE.Line3(); // 胶囊段在动态碰撞体本地空间的副本
+    private dynLocalBox = new THREE.Box3(); // 胶囊段在动态碰撞体本地空间的包围盒
+    private dynClosestSeg = new THREE.Vector3(); // 动态碰撞：胶囊段最近点
+    private dynClosestTri = new THREE.Vector3(); // 动态碰撞：三角面最近点
+    private groundRaycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0)); // 地面检测射线
 
     // ==================== 事件回调 ====================
     onAnimationChange?: (name: string, action: THREE.AnimationAction) => void; // 动画切换回调
@@ -117,7 +125,7 @@ export class playerController {
     vehicle = new VehicleSystem(this); // 载具系统
 
     constructor() {
-        (this.raycaster as any).firstHitOnly = true;
+        (this.groundRaycaster as any).firstHitOnly = true;
     }
 
     // ==================== 初始化 ====================
@@ -153,6 +161,7 @@ export class playerController {
         this.cam.zoomEnabled = opts.enableZoom ?? this.cam.zoomEnabled;
         this.cam.minDist = (opts.minCamDistance ?? this.cam.minDist) * s;
         this.cam.maxDist = (opts.maxCamDistance ?? this.cam.maxDist) * s;
+        this.cam.lookAtHeightRatio = opts.camLookAtHeightRatio ?? this.cam.lookAtHeightRatio;
         this.cam.originMaxDist = this.cam.maxDist;
         this.cam.epsilon = this.cam.epsilon * s;
 
@@ -267,11 +276,9 @@ export class playerController {
             // 计算胶囊体尺寸
             const { size } = this.getBbox(this.playerModel);
             const modelScale = this.playerCapsuleHeight / size.y;
-            this.playerCapsuleRadius = Number(Math.min(size.x, size.z).toFixed(0)) * modelScale * this.playerCapsuleRadiusRatio;
-            this.playerCapsuleHeight = Number(size.y.toFixed(0)) * modelScale;
 
             const s = this.playerModelConfig.scale;
-            const r = this.playerCapsuleRadius * s;
+            const r = this.playerCapsuleRadius * s * this.playerCapsuleRadiusRatio;
             const h = this.playerCapsuleHeight * s;
 
             // 创建胶囊体网格
@@ -280,15 +287,16 @@ export class playerController {
                 new THREE.MeshStandardMaterial({
                     color: new THREE.Color(1, 0, 0),
                     shadowSide: THREE.DoubleSide,
-                    depthTest: false, transparent: true,
-                    opacity: 0.5,
-                    wireframe: true, depthWrite: false,
+                    depthTest: false,
+                    wireframe: true,
+                    depthWrite: false,
                 }),
             );
-            this.playerCapsule.geometry.translate(0, -h * 0.25, 0);
+            const segmentLength = h - 2 * r;
+            this.playerCapsule.geometry.translate(0, -segmentLength / 2, 0);
             this.playerCapsule.capsuleInfo = {
                 radius: r,
-                segment: new THREE.Line3(new THREE.Vector3(), new THREE.Vector3(0, -h * 0.5, 0)),
+                segment: new THREE.Line3(new THREE.Vector3(), new THREE.Vector3(0, -segmentLength, 0)),
             };
             this.playerCapsule.name = "capsule";
             (this.playerCapsule.material as THREE.Material).visible = this.displayPlayer;
@@ -298,7 +306,7 @@ export class playerController {
 
             // 挂载模型到胶囊
             this.playerModel.scale.multiplyScalar(modelScale * s);
-            this.playerModel.position.set(0, -h * 0.75, 0);
+            this.playerModel.position.set(0, -segmentLength - r, 0);
             this.playerModel.traverse((child: any) => {
                 if (child.name === this.playerModelConfig?.headBoneName) this.playerModelHead = child;
             });
@@ -351,7 +359,7 @@ export class playerController {
         this.setDebug(this.displayCollider);
     }
 
-    // ==================== 碰撞体构建 ====================
+    // ==================== 碰撞体构建和查询 ====================
 
     // 获取包围盒
     private getBbox(object: THREE.Object3D) {
@@ -559,48 +567,29 @@ export class playerController {
         }
     }
 
-    // 单个动态碰撞体的碰撞解算
-    private resolveDynamicEntry(entry: DynamicColliderEntry, capsuleInfo: any) {
-        // 胶囊段变换到本地空间
-        const invMat = new THREE.Matrix4().copy(entry.mesh.matrixWorld).invert();
-        const localSeg = new THREE.Line3(
-            capsuleInfo.segment.start.clone().applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(invMat),
-            capsuleInfo.segment.end.clone().applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(invMat),
-        );
-        // 构建本地包围盒
-        const localBox = new THREE.Box3().expandByPoint(localSeg.start).expandByPoint(localSeg.end);
-        localBox.expandByScalar(capsuleInfo.radius);
-        const tv1 = new THREE.Vector3(), tv2 = new THREE.Vector3();
+    // 判断是否跳过三角面碰撞
+    private shouldSkipTriCollision(tri: any): boolean {
+        const normal = tri.getNormal(new THREE.Vector3());
+        const normalYAangle = normal.angleTo(this.upVector) * 180 / Math.PI;
+        // 小于 slopeAngleThreshold° 斜坡，不处理碰撞
+        if (normalYAangle < this.slopeAngleThreshold) return true;
+        // 忽略立面阈值高度以下的碰撞
+        if (normalYAangle > 85 && normalYAangle < 95) {
+            const triHeight = Math.max(tri.a.y, tri.b.y, tri.c.y) - Math.min(tri.a.y, tri.b.y, tri.c.y); // 三角面y高度
+            if (triHeight < this.maxStepHeight * this.playerModelConfig.scale) return true; // 阈值高度
+        }
+        return false;
+    }
 
-        (entry.mesh.geometry as any)?.boundsTree?.shapecast({
-            intersectsBounds: (box: THREE.Box3) => box.intersectsBox(localBox),
-            intersectsTriangle: (tri: any) => {
-                const dist = tri.closestPointToSegment(localSeg, tv1, tv2);
-                if (dist < capsuleInfo.radius) {
-                    const normal = tri.getNormal(new THREE.Vector3());
-                    // 跳过地板和天花板
-                    if (!this.isFlying && Math.abs(normal.y) > 0.5) return;
-                    // 墙面高度过滤
-                    if (!this.isFlying && Math.abs(normal.y) <= 0.5) {
-                        const contactWorld = tv1.clone().applyMatrix4(entry.mesh.matrixWorld);
-                        const s = this.playerModelConfig.scale;
-                        const feetY = this.playerCapsule.position.y - this.playerCapsuleHeight * s * 0.75;
-                        if (contactWorld.y < feetY + this.playerCapsuleHeight * s * 0.25) return;
-                    }
-                    // 推开胶囊段
-                    const dir = tv2.clone().sub(tv1).normalize();
-                    localSeg.start.addScaledVector(dir, capsuleInfo.radius - dist);
-                    localSeg.end.addScaledVector(dir, capsuleInfo.radius - dist);
-                }
-            },
-        });
-
-        // 换回世界空间应用修正
-        const corrected = localSeg.start.clone().applyMatrix4(entry.mesh.matrixWorld);
-        const original = capsuleInfo.segment.start.clone().applyMatrix4(this.playerCapsule.matrixWorld);
-        const delta = corrected.sub(original);
-        const offset = Math.max(0, delta.length() - 1e-5);
-        if (offset > 0) this.playerCapsule.position.add(delta.normalize().multiplyScalar(offset));
+    // 处理三角面碰撞
+    private handleTriCollision(tri: any, segment: THREE.Line3, p1: THREE.Vector3, p2: THREE.Vector3, radius: number): void {
+        const distance = tri.closestPointToSegment(segment, p1, p2);
+        if (distance >= radius) return;
+        if (!this.isFlying && this.playerIsOnGround && this.shouldSkipTriCollision(tri)) return;
+        // 推开胶囊段
+        const dir = p2.clone().sub(p1).normalize();
+        segment.start.addScaledVector(dir, radius - distance);
+        segment.end.addScaledVector(dir, radius - distance);
     }
 
     // ==================== 主循环 ====================
@@ -653,28 +642,71 @@ export class playerController {
             }
         }
 
+        // 更新动画混合器
         this.animation.updateMixers(delta);
+        // 车辆模式下退出
         if (this.controllerMode === 1) return;
 
         // 计算移动方向
         this.camera.getWorldDirection(this.camDir);
         const angle = 2 * Math.PI - (Math.atan2(this.camDir.z, this.camDir.x) + Math.PI / 2);
 
+        // 按键移动方向
         this.moveDir.set(0, 0, 0);
         if (this.input.fwd) this.moveDir.add(this.DIR_FWD);
         if (this.input.bkd) this.moveDir.add(this.DIR_BKD);
         if (this.input.lft) this.moveDir.add(this.DIR_LFT);
         if (this.input.rgt) this.moveDir.add(this.DIR_RGT);
-
         if (this.isFlying) {
             this.moveDir.y = this.input.fwd ? this.camDir.y : 0;
-            if (this.input.space) this.moveDir.add(this.DIR_UP);
+            if (this.input.space) this.moveDir.y += 1;
+            if (this.input.ctrlKey) this.moveDir.y -= 1;
             this.curPlayerSpeed = this.input.shift ? this.playerFlySpeed * 2 : this.playerFlySpeed;
         } else {
             this.curPlayerSpeed = this.input.shift ? this.playerSpeed * 2 : this.playerSpeed;
         }
 
+        // 归一化并应用相机角度
         this.moveDir.normalize().applyAxisAngle(this.upVector, angle);
+
+        // 地面检测
+        const s = this.playerModelConfig.scale;
+        this.groundRaycaster.ray.origin.copy(this.playerCapsule.position);
+        const staticHits = this.groundRaycaster.intersectObject(this.collider!, false);
+
+        // 同时检测动态碰撞体，取最高地面点
+        let bestHit: THREE.Intersection | undefined = staticHits[0];
+        let hitEntry: DynamicColliderEntry | null = null;
+        for (const entry of this.dynamicColliders) {
+            const dynHits = this.groundRaycaster.intersectObject(entry.mesh, false);
+            if (dynHits.length > 0 && (!bestHit || dynHits[0].point.y > bestHit.point.y)) {
+                bestHit = dynHits[0];
+                hitEntry = entry;
+            }
+        }
+        // 更新当前动态碰撞体
+        this.activeDynamicCollider = hitEntry;
+
+        if (!this.isFlying) {
+            if (bestHit) {
+                const capsuleInfo = this.playerCapsule.capsuleInfo;
+                const snapH = parseFloat((-capsuleInfo.segment.end.y + capsuleInfo.radius).toFixed(6));
+                const maxH = parseFloat((snapH * 1.2).toFixed(6));
+                const dist = parseFloat((this.playerCapsule.position.y - bestHit.point.y).toFixed(6));
+                if (dist > maxH) {
+                    // console.log('应用重力');
+                    this.applyGravity(delta);
+                } else {
+                    if (this.playerVelocity.y <= 0) {
+                        // console.log('吸附到地面');
+                        this.snapToGround(bestHit.point.y + snapH);
+                    }
+                }
+            } else {
+                // console.log('应用重力');
+                this.applyGravity(delta);
+            }
+        }
 
         // 分步碰撞移动
         const capsuleInfo = this.playerCapsule.capsuleInfo;
@@ -682,111 +714,58 @@ export class playerController {
         const maxStep = capsuleInfo.radius * 0.8;
         const steps = Math.ceil(totalDist / maxStep) || 1;
         const stepDist = totalDist / steps;
-
         for (let i = 0; i < steps; i++) {
             this.playerCapsule.position.addScaledVector(this.moveDir, stepDist);
             this.playerCapsule.updateMatrixWorld();
 
-            // 胶囊段变换到静态碰撞体本地空间
-            this.tempBox.makeEmpty();
-            this.tempMat.copy(this.collider!.matrixWorld).invert();
-            this.tempSegment.copy(capsuleInfo.segment);
-            this.tempSegment.start.applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(this.tempMat);
-            this.tempSegment.end.applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(this.tempMat);
-            // 构建本地包围盒
-            this.tempBox.expandByPoint(this.tempSegment.start).expandByPoint(this.tempSegment.end);
-            this.tempBox.expandByScalar(capsuleInfo.radius);
-
             if (!v.isMovingToBoarding) {
-                const resolveCollision = (collider: THREE.Mesh | null) => {
-                    if (!collider) return;
-                    (collider.geometry as any)?.boundsTree?.shapecast({
-                        intersectsBounds: (box: THREE.Box3) => box.intersectsBox(this.tempBox),
-                        intersectsTriangle: (tri: any) => {
-                            const distance = tri.closestPointToSegment(this.tempSegment, this.tempVector, this.tempVector2);
-                            if (distance < capsuleInfo.radius) {
-                                const normal = tri.getNormal(new THREE.Vector3());
-                                // 跳过地板和天花板
-                                if (!this.isFlying && Math.abs(normal.y) > 0.5) return;
-                                // 墙面高度过滤
-                                if (!this.isFlying && Math.abs(normal.y) <= 0.5) {
-                                    const e = this.collider!.matrixWorld.elements;
-                                    const contactWorldY = e[1] * this.tempVector.x + e[5] * this.tempVector.y + e[9] * this.tempVector.z + e[13];
-                                    const s = this.playerModelConfig.scale;
-                                    const feetY = this.playerCapsule.position.y - this.playerCapsuleHeight * s * 0.75;
-                                    if (contactWorldY < feetY + this.playerCapsuleHeight * s * 0.25) return;
-                                }
-                                // 推开胶囊段
-                                const dir = this.tempVector2.sub(this.tempVector).normalize();
-                                const depth = capsuleInfo.radius - distance;
-                                this.tempSegment.start.addScaledVector(dir, depth);
-                                this.tempSegment.end.addScaledVector(dir, depth);
-                            }
-                        },
-                    });
-                };
-                resolveCollision(this.collider);
-            }
+                // 胶囊段变换到静态碰撞体本地空间
+                this.staticInvMat.copy(this.collider!.matrixWorld).invert();
+                this.staticLocalSeg.start.copy(capsuleInfo.segment.start).applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(this.staticInvMat);
+                this.staticLocalSeg.end.copy(capsuleInfo.segment.end).applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(this.staticInvMat);
+                // 构建本地包围盒
+                this.staticLocalBox.makeEmpty();
+                this.staticLocalBox.expandByPoint(this.staticLocalSeg.start).expandByPoint(this.staticLocalSeg.end);
+                this.staticLocalBox.expandByScalar(capsuleInfo.radius);
+                // 碰撞查询
+                (this.collider?.geometry as any)?.boundsTree?.shapecast({
+                    intersectsBounds: (box: THREE.Box3) => box.intersectsBox(this.staticLocalBox),
+                    intersectsTriangle: (tri: any) => {
+                        this.handleTriCollision(tri, this.staticLocalSeg, this.staticClosestSeg, this.staticClosestTri, capsuleInfo.radius);
+                    },
+                });
+                // 应用静态碰撞修正
+                const staticNewPos = this.staticClosestSeg.copy(this.staticLocalSeg.start).applyMatrix4(this.collider!.matrixWorld);
+                const staticDelta = this.staticClosestTri.subVectors(staticNewPos, this.playerCapsule.position);
+                const staticOffset = Math.max(0, staticDelta.length() - 1e-5);
+                this.playerCapsule.position.add(staticDelta.normalize().multiplyScalar(staticOffset));
 
-            // 应用静态碰撞修正
-            const newPos = this.tempVector.copy(this.tempSegment.start).applyMatrix4(this.collider!.matrixWorld);
-            const deltaVec = this.tempVector2.subVectors(newPos, this.playerCapsule.position);
-            const offset = Math.max(0, deltaVec.length() - 1e-5);
-            this.playerCapsule.position.add(deltaVec.normalize().multiplyScalar(offset));
-
-            // 应用动态碰撞修正
-            if (!v.isMovingToBoarding) {
+                // 动态碰撞检测
                 for (const dynEntry of this.dynamicColliders) {
                     this.playerCapsule.updateMatrixWorld();
-                    this.resolveDynamicEntry(dynEntry, capsuleInfo);
+                    // 胶囊段变换到本地空间
+                    this.dynInvMat.copy(dynEntry.mesh.matrixWorld).invert();
+                    this.dynLocalSeg.start.copy(capsuleInfo.segment.start).applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(this.dynInvMat);
+                    this.dynLocalSeg.end.copy(capsuleInfo.segment.end).applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(this.dynInvMat);
+                    // 构建本地包围盒
+                    this.dynLocalBox.makeEmpty();
+                    this.dynLocalBox.expandByPoint(this.dynLocalSeg.start).expandByPoint(this.dynLocalSeg.end);
+                    this.dynLocalBox.expandByScalar(capsuleInfo.radius);
+                    // 碰撞查询
+                    (dynEntry.mesh.geometry as any)?.boundsTree?.shapecast({
+                        intersectsBounds: (box: THREE.Box3) => box.intersectsBox(this.dynLocalBox),
+                        intersectsTriangle: (tri: any) => {
+                            this.handleTriCollision(tri, this.dynLocalSeg, this.dynClosestSeg, this.dynClosestTri, capsuleInfo.radius);
+                        },
+                    });
+                    // 应用动态碰撞修正
+                    const dynCorrected = this.dynClosestSeg.copy(this.dynLocalSeg.start).applyMatrix4(dynEntry.mesh.matrixWorld);
+                    const dynDelta = this.dynClosestTri.subVectors(dynCorrected, this.playerCapsule.position);
+                    const dynOffset = Math.max(0, dynDelta.length() - 1e-5);
+                    if (dynOffset > 0) this.playerCapsule.position.add(dynDelta.normalize().multiplyScalar(dynOffset));
                 }
             }
         }
-
-        // 地面检测
-        const s = this.playerModelConfig.scale;
-        this.raycaster.ray.origin.copy(this.playerCapsule.position);
-        const staticHits = this.raycaster.intersectObject(this.collider!, false);
-
-        // 同时检测动态碰撞体，取最高地面点
-        let bestHit: THREE.Intersection | undefined = staticHits[0];
-        let hitEntry: DynamicColliderEntry | null = null;
-        for (const entry of this.dynamicColliders) {
-            const dynHits = this.raycaster.intersectObject(entry.mesh, false);
-            if (dynHits.length > 0 && (!bestHit || dynHits[0].point.y > bestHit.point.y)) {
-                bestHit = dynHits[0];
-                hitEntry = entry;
-            }
-        }
-        this.activeDynamicCollider = hitEntry;
-
-        if (bestHit && !this.isFlying) {
-            const dist = this.playerCapsule.position.y - bestHit.point.y;
-            const maxH = this.playerCapsuleHeight * s * 0.9;
-            const h = this.playerCapsuleHeight * s * 0.75;
-            const minH = this.playerCapsuleHeight * s * 0.7;
-
-            if (dist >= maxH) {
-                this.playerVelocity.y += delta * this.gravity;
-                this.playerCapsule.position.addScaledVector(this.playerVelocity, delta);
-                this.setOnGround(false);
-            } else if (dist >= h && dist < maxH) {
-                if (!this.input.space) {
-                    this.playerVelocity.set(0, 0, 0);
-                    this.setOnGround(true);
-                    this.playerCapsule.position.y = THREE.MathUtils.lerp(this.playerCapsule.position.y, bestHit.point.y + h, Math.min(1, 15 * delta));
-                }
-            } else if (dist >= minH) {
-                this.playerVelocity.set(0, 0, 0); this.setOnGround(true); this.playerCapsule.position.y = bestHit.point.y + h;
-            } else {
-                this.playerVelocity.set(0, 0, 0); this.setOnGround(true);
-                this.playerCapsule.position.y = THREE.MathUtils.lerp(this.playerCapsule.position.y, bestHit.point.y + h, Math.min(1, 15 * delta));
-            }
-        } else if (!bestHit && !this.isFlying) {
-            this.playerVelocity.y += delta * this.gravity;
-        }
-
-        this.playerCapsule.updateMatrixWorld();
 
         // 动态平台带动玩家
         if (this.activeDynamicCollider && this.playerIsOnGround && !this.isFlying) {
@@ -819,8 +798,7 @@ export class playerController {
 
         // 第三人称相机跟随
         if (!this.isFirstPerson) {
-            const lookTarget = this.playerCapsule.position.clone();
-            lookTarget.y += (this.playerCapsuleHeight / 8) * s;
+            const lookTarget = this.cam.getLookAtPoint();
             this.camera.position.sub(this.controls.target);
             this.controls.target.copy(lookTarget);
             this.camera.position.add(lookTarget);
@@ -894,6 +872,20 @@ export class playerController {
         this.onGroundChange?.(val);
     }
 
+    // 应用重力
+    private applyGravity(delta: number) {
+        this.playerVelocity.y += delta * this.gravity;
+        this.playerCapsule.position.addScaledVector(this.playerVelocity, delta);
+        this.setOnGround(false);
+    }
+
+    // 吸附到地面
+    private snapToGround(groundY: number) {
+        this.playerVelocity.set(0, 0, 0);
+        this.playerCapsule.position.y = THREE.MathUtils.lerp(this.playerCapsule.position.y, groundY, 0.5);
+        this.setOnGround(true);
+    }
+
     // 动态修改缩放
     setPlayerScale(newScale: number) {
         if (newScale <= 0) return;
@@ -913,7 +905,10 @@ export class playerController {
 
         if (this.isFirstPerson) this.scene.attach(this.camera);
         this.playerCapsule?.scale.multiplyScalar(ratio);
-        if (this.playerCapsule?.capsuleInfo) this.playerCapsule.capsuleInfo.radius *= ratio;
+        if (this.playerCapsule?.capsuleInfo) {
+            this.playerCapsule.capsuleInfo.radius *= ratio;
+            this.playerCapsule.capsuleInfo.segment.end.y *= ratio;
+        }
         if (this.isFirstPerson) this.cam.setFirstPerson();
     }
 
@@ -974,6 +969,8 @@ export class playerController {
     setMinCamDistance(dist: number) { this.cam.minDist = dist * this.playerModelConfig.scale; }
     // 设置相机最远距
     setMaxCamDistance(dist: number) { this.cam.maxDist = dist * this.playerModelConfig.scale; this.cam.originMaxDist = this.cam.maxDist; }
+    // 设置相机看向点高度比例
+    setCamLookAtHeightRatio(ratio: number) { this.cam.lookAtHeightRatio = ratio; }
     // 设置鼠标模式
     setThirdMouseMode(mode: 0 | 1 | 2 | 3) { this.cam.mouseMode = mode; this.cam.setPointerLock(); }
     // 设置缩放开关
@@ -1049,4 +1046,3 @@ export class playerController {
         this.vehicle.active = null;
     }
 }
-
