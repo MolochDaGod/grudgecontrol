@@ -144,8 +144,40 @@
                 letter-spacing: 0.3px;
             }
             .weapon-slot.active .slot-name { color: #fff; }
+
+            .model-credit {
+                position: fixed;
+                top: 10px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 9999;
+                font-size: 16px;
+                color: #e6eef6;
+                background: rgba(0, 0, 0, 0.35);
+                padding: 6px 12px;
+                border-radius: 999px;
+                backdrop-filter: blur(4px);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    "Segoe UI",
+                    Roboto,
+                    Arial;
+            }
+
+            .model-credit a {
+                color: #6ecbff;
+                text-decoration: none;
+            }
+
+            .model-credit a:hover {
+                text-decoration: underline;
+            }
+
+          
         </style>
-        <script src="/loader.js"></script>
+        <script src="../loader.js"></script>
     </head>
     <body>
         <div id="container"></div>
@@ -190,6 +222,12 @@
         </div>
 
         <div id="weapon-hud"></div>
+
+        <div class="model-credit">
+            Scene model:
+            <a href="https://sketchfab.com/3d-models/horror-corridor-3-e03a192de67d442ebdf42f43a8a2d37a" target="_blank" rel="noopener noreferrer">Sketchfab</a>
+            <br />
+        </div>
 
         <script type="module" src="./shooting.js"></script>
     </body>
