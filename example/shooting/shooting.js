@@ -24,7 +24,6 @@ const FIRST_PERSON_PITCH_OFFSET_BY_MODEL = {
 };
 
 async function init() {
-    window.hideLoader?.();
     const container = document.querySelector("#container");
 
     let tiles, localPlayer, weapon, zombieManager;
@@ -261,6 +260,22 @@ async function init() {
         zombieManager.startWave({ origin: new THREE.Vector3(13.567, 4.6, 7.001), count: 2, radius: 1 }),
     ]);
 
+    window.hideLoader?.();
+
+    // ==================== Start Screen ====================
+    await new Promise((resolve) => {
+        const screen = document.getElementById("start-screen");
+        screen.addEventListener("mousedown", (e) => e.stopPropagation());
+        screen.addEventListener("mouseup", (e) => e.stopPropagation());
+        screen.addEventListener("click", (e) => e.stopPropagation());
+        screen.style.display = "flex";
+        document.getElementById("start-btn").addEventListener("click", () => {
+            screen.remove();
+            document.body.style.cursor = "none";
+            document.body.requestPointerLock?.();
+            resolve();
+        }, { once: true });
+    });
 
     // ==================== 窗口缩放 ====================
     window.addEventListener("resize", () => {

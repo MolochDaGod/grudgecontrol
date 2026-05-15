@@ -175,13 +175,61 @@
                 text-decoration: underline;
             }
 
-          
+            /* ── Start Screen ── */
+            #start-screen {
+                position: fixed;
+                inset: 0;
+                z-index: 99998;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                background: rgba(0, 0, 0, 0.6);
+                backdrop-filter: blur(6px);
+            }
+            #start-btn {
+                appearance: none;
+                border: none;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 16px 48px;
+                background: #c0392b;
+                color: #fff;
+                font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+                font-size: 1.1rem;
+                font-weight: 700;
+                letter-spacing: 0.22em;
+                text-transform: uppercase;
+                border-radius: 4px;
+                box-shadow: 0 4px 24px rgba(192,57,43,0.55);
+                transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+            }
+            #start-btn:hover {
+                background: #e74c3c;
+                transform: scale(1.04);
+                box-shadow: 0 6px 32px rgba(192,57,43,0.7), 0 0 0 4px rgba(231,76,60,0.25);
+            }
+            #start-btn:active { transform: scale(0.98); }
+            #start-btn svg {
+                width: 18px;
+                height: 18px;
+                fill: currentColor;
+                flex-shrink: 0;
+            }
         </style>
-        <script src="./loader.js"></script>
+        <script src="../loader.js"></script>
     </head>
     <body>
         <div id="container"></div>
         <div id="crosshair"></div>
+
+        <div id="start-screen">
+            <button id="start-btn">
+                <svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9"/></svg>
+                Play
+            </button>
+        </div>
 
         <div id="ammo-info" style="position:fixed; bottom:20px; right:20px; color:white; font-size:24px; font-family:Arial; z-index:9999; text-shadow: 0 2px 4px rgba(0,0,0,0.5); pointer-events: none;"></div>
 
