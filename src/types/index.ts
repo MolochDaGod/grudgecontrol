@@ -51,7 +51,7 @@ export type PlayerControllerOptions = {
     dynamicCollider?: THREE.Object3D | THREE.Object3D[];
     isShowMobileControls?: boolean;
     mobileControls?: MobileControlsOptions;
-    thirdMouseMode?: 0 | 1 | 2 | 3;
+    thirdMouseMode?: 0 | 1 | 2 | 3 | 4 | 5;
     enableZoom?: boolean;
     enableOverShoulderView?: boolean;
     shoulderOffsetDist?: number;

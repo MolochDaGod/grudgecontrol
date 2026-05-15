@@ -826,7 +826,7 @@ function initGUI() {
     gui.add(params, "minCamDistance", 0, 200, 1).onChange((v) => player.setMinCamDistance(v));
     gui.add(params, "maxCamDistance", 50, 1000, 1).onChange((v) => player.setMaxCamDistance(v));
     gui.add(params, "camLookAtHeightRatio", 0, 1, 0.01).onChange((v) => player.setCamLookAtHeightRatio(v));
-    gui.add(params, "thirdMouseMode", { 0: 0, 1: 1, 2: 2, 3: 3 }).onChange((v) => player.setThirdMouseMode(Number(v)));
+    gui.add(params, "thirdMouseMode", { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 }).onChange((v) => player.setThirdMouseMode(Number(v)));
     gui.add(params, "enableZoom").onChange((v) => player.setEnableZoom(v));
     gui.add(params, "debug").onChange((v) => player.setDebug(v));
     gui.add(params, "enableOverShoulderView").onChange((v) => player.setOverShoulderView(v));

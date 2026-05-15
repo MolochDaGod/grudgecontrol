@@ -9,6 +9,7 @@ export class AnimationSystem {
     actions?: Map<string, THREE.AnimationAction>; // 动作映射表
     state!: THREE.AnimationAction; // 当前播放状态
     sets = new Map<string, Map<string, THREE.AnimationAction>>(); // 动作集合组
+    currentLocomotionSet: string | null = null; // 当前激活的动作集合名
     recheckTimer: any = null; // 延迟重检定时器
     clips: THREE.AnimationClip[] = []; // 原始动画片段
 
@@ -101,6 +102,7 @@ export class AnimationSystem {
         if (!this.actions) return;
         const set = this.sets.get(setName);
         if (!set) { console.warn(`switchLocomotionSet: 未找到集合 "${setName}"`); return; }
+        this.currentLocomotionSet = setName;
         for (const [key, newAction] of set.entries()) {
             const oldAction = this.actions.get(key);
             if (oldAction === newAction) continue;
@@ -113,6 +115,7 @@ export class AnimationSystem {
                 newAction.fadeIn(fade);
                 newAction.play();
                 this.state = newAction;
+                this.ctrl.onAnimationChange?.(key, newAction);
             }
         }
     }

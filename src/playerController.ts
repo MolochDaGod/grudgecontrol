@@ -13,6 +13,7 @@ import { AnimationSystem } from "./systems/AnimationSystem";
 import { CameraSystem } from "./systems/CameraSystem";
 import { InputSystem } from "./systems/InputSystem";
 import { VehicleSystem } from "./systems/VehicleSystem";
+import { applyCapsuleCollision, createCollisionTemps, type CollisionTemps } from "./utils/capsuleCollision";
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
@@ -97,16 +98,8 @@ export class playerController {
     private moveDir = new THREE.Vector3(); // 移动方向缓存
     targetQuat = new THREE.Quaternion(); // 目标四元数
     targetMat = new THREE.Matrix4(); // 目标变换矩阵
-    private staticInvMat = new THREE.Matrix4(); // 静态碰撞体世界矩阵的逆矩阵
-    private staticLocalSeg = new THREE.Line3(); // 胶囊段在静态碰撞体本地空间的副本
-    private staticLocalBox = new THREE.Box3(); // 胶囊段在静态碰撞体本地空间的包围盒
-    private staticClosestSeg = new THREE.Vector3(); // 静态碰撞：胶囊段最近点
-    private staticClosestTri = new THREE.Vector3(); // 静态碰撞：三角面最近点
-    private dynInvMat = new THREE.Matrix4(); // 动态碰撞体世界矩阵的逆矩阵
-    private dynLocalSeg = new THREE.Line3(); // 胶囊段在动态碰撞体本地空间的副本
-    private dynLocalBox = new THREE.Box3(); // 胶囊段在动态碰撞体本地空间的包围盒
-    private dynClosestSeg = new THREE.Vector3(); // 动态碰撞：胶囊段最近点
-    private dynClosestTri = new THREE.Vector3(); // 动态碰撞：三角面最近点
+    private staticTemps: CollisionTemps = createCollisionTemps(); // 静态碰撞临时对象
+    private dynTemps: CollisionTemps = createCollisionTemps();    // 动态碰撞临时对象
     private groundRaycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0)); // 地面检测射线
 
     // ==================== 事件回调 ====================
@@ -581,16 +574,6 @@ export class playerController {
         return false;
     }
 
-    // 处理三角面碰撞
-    private handleTriCollision(tri: any, segment: THREE.Line3, p1: THREE.Vector3, p2: THREE.Vector3, radius: number): void {
-        const distance = tri.closestPointToSegment(segment, p1, p2);
-        if (distance >= radius) return;
-        if (!this.isFlying && this.playerIsOnGround && this.shouldSkipTriCollision(tri)) return;
-        // 推开胶囊段
-        const dir = p2.clone().sub(p1).normalize();
-        segment.start.addScaledVector(dir, radius - distance);
-        segment.end.addScaledVector(dir, radius - distance);
-    }
 
     // ==================== 主循环 ====================
 
@@ -719,50 +702,25 @@ export class playerController {
             this.playerCapsule.updateMatrixWorld();
 
             if (!v.isMovingToBoarding) {
-                // 胶囊段变换到静态碰撞体本地空间
-                this.staticInvMat.copy(this.collider!.matrixWorld).invert();
-                this.staticLocalSeg.start.copy(capsuleInfo.segment.start).applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(this.staticInvMat);
-                this.staticLocalSeg.end.copy(capsuleInfo.segment.end).applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(this.staticInvMat);
-                // 构建本地包围盒
-                this.staticLocalBox.makeEmpty();
-                this.staticLocalBox.expandByPoint(this.staticLocalSeg.start).expandByPoint(this.staticLocalSeg.end);
-                this.staticLocalBox.expandByScalar(capsuleInfo.radius);
-                // 碰撞查询
-                (this.collider?.geometry as any)?.boundsTree?.shapecast({
-                    intersectsBounds: (box: THREE.Box3) => box.intersectsBox(this.staticLocalBox),
-                    intersectsTriangle: (tri: any) => {
-                        this.handleTriCollision(tri, this.staticLocalSeg, this.staticClosestSeg, this.staticClosestTri, capsuleInfo.radius);
-                    },
-                });
-                // 应用静态碰撞修正
-                const staticNewPos = this.staticClosestSeg.copy(this.staticLocalSeg.start).applyMatrix4(this.collider!.matrixWorld);
-                const staticDelta = this.staticClosestTri.subVectors(staticNewPos, this.playerCapsule.position);
-                const staticOffset = Math.max(0, staticDelta.length() - 1e-5);
-                this.playerCapsule.position.add(staticDelta.normalize().multiplyScalar(staticOffset));
+                // 静态碰撞检测
+                applyCapsuleCollision(
+                    this.playerCapsule,
+                    capsuleInfo,
+                    this.collider!,
+                    this.staticTemps,
+                    (tri) => !this.isFlying && this.playerIsOnGround && this.shouldSkipTriCollision(tri),
+                );
 
                 // 动态碰撞检测
                 for (const dynEntry of this.dynamicColliders) {
                     this.playerCapsule.updateMatrixWorld();
-                    // 胶囊段变换到本地空间
-                    this.dynInvMat.copy(dynEntry.mesh.matrixWorld).invert();
-                    this.dynLocalSeg.start.copy(capsuleInfo.segment.start).applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(this.dynInvMat);
-                    this.dynLocalSeg.end.copy(capsuleInfo.segment.end).applyMatrix4(this.playerCapsule.matrixWorld).applyMatrix4(this.dynInvMat);
-                    // 构建本地包围盒
-                    this.dynLocalBox.makeEmpty();
-                    this.dynLocalBox.expandByPoint(this.dynLocalSeg.start).expandByPoint(this.dynLocalSeg.end);
-                    this.dynLocalBox.expandByScalar(capsuleInfo.radius);
-                    // 碰撞查询
-                    (dynEntry.mesh.geometry as any)?.boundsTree?.shapecast({
-                        intersectsBounds: (box: THREE.Box3) => box.intersectsBox(this.dynLocalBox),
-                        intersectsTriangle: (tri: any) => {
-                            this.handleTriCollision(tri, this.dynLocalSeg, this.dynClosestSeg, this.dynClosestTri, capsuleInfo.radius);
-                        },
-                    });
-                    // 应用动态碰撞修正
-                    const dynCorrected = this.dynClosestSeg.copy(this.dynLocalSeg.start).applyMatrix4(dynEntry.mesh.matrixWorld);
-                    const dynDelta = this.dynClosestTri.subVectors(dynCorrected, this.playerCapsule.position);
-                    const dynOffset = Math.max(0, dynDelta.length() - 1e-5);
-                    if (dynOffset > 0) this.playerCapsule.position.add(dynDelta.normalize().multiplyScalar(dynOffset));
+                    applyCapsuleCollision(
+                        this.playerCapsule,
+                        capsuleInfo,
+                        dynEntry.mesh,
+                        this.dynTemps,
+                        (tri) => !this.isFlying && this.playerIsOnGround && this.shouldSkipTriCollision(tri),
+                    );
                 }
             }
         }
@@ -781,7 +739,11 @@ export class playerController {
             const moveDirFlat = this.moveDir.clone().normalize().negate();
 
             if (!this.isFlying) {
-                if (this.cam.mouseMode === 0 || this.cam.mouseMode === 2) {
+                if (this.cam.mouseMode === 4 || this.cam.mouseMode === 5) {
+                    // mode 4/5: 胶囊朝向始终与相机水平朝向一致，鼠标旋转即驱动人物转向
+                    this.targetMat.lookAt(this.playerCapsule.position, this.playerCapsule.position.clone().add(camDirFlat), this.playerCapsule.up);
+                    this.playerCapsule.quaternion.copy(this.targetQuat.setFromRotationMatrix(this.targetMat));
+                } else if (this.cam.mouseMode === 0 || this.cam.mouseMode === 2) {
                     const lookTarget = this.playerCapsule.position.clone().add(moveDirFlat.lengthSq() > 0 ? moveDirFlat : camDirFlat);
                     this.targetMat.lookAt(this.playerCapsule.position, lookTarget, this.playerCapsule.up);
                     this.playerCapsule.quaternion.slerp(this.targetQuat.setFromRotationMatrix(this.targetMat), Math.min(1, this.rotationSpeed * delta));
@@ -972,7 +934,7 @@ export class playerController {
     // 设置相机看向点高度比例
     setCamLookAtHeightRatio(ratio: number) { this.cam.lookAtHeightRatio = ratio; }
     // 设置鼠标模式
-    setThirdMouseMode(mode: 0 | 1 | 2 | 3) { this.cam.mouseMode = mode; this.cam.setPointerLock(); }
+    setThirdMouseMode(mode: 0 | 1 | 2 | 3 | 4 | 5) { this.cam.mouseMode = mode; this.cam.setPointerLock(); }
     // 设置缩放开关
     setEnableZoom(enable: boolean) { this.cam.zoomEnabled = enable; this.controls.enableZoom = enable; }
 
@@ -996,6 +958,8 @@ export class playerController {
     switchLocomotionSet(setName: string, fade?: number) { this.animation.switchLocomotionSet(setName, fade); }
     // 获取当前动画名
     getCurrentPlayerAnimationName() { return this.animation.getCurrentName(); }
+    // 获取当前移动动作组名
+    getCurrentLocomotionSet() { return this.animation.currentLocomotionSet; }
 
     // --- 相机 ---
     // 切换视角模式
