@@ -8,23 +8,23 @@ A lightweight, out-of-the-box third-person / first-person player controller buil
 
 # Demo
 
-- [Demo](https://hh-hang.github.io/three-player-controller/index.html)
+- [![Demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/preview.gif)](https://hh-hang.github.io/three-player-controller/index.html)
 
 ### Standard Control
 
-![Standard Control Demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/1.gif)
+![Standard Control Demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/standard.gif)
 
 ### Flight Control
 
-![Flight Control Demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/4.gif)
+![Flight Control Demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/flight.gif)
 
 ### Vehicle Control
 
-![Vehicle Control Demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/6.gif)
+![Vehicle Control Demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/vehicle.gif)
 
 ### Mobile Control
 
-![Mobile Control Demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/5.gif)
+![Mobile Control Demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/mobile.gif)
 
 # Installation
 

@@ -8,23 +8,23 @@
 
 # 示例
 
-- [在线示例](https://hh-hang.github.io/three-player-controller/index.html)
+- [![在线示例](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/preview.gif)](https://hh-hang.github.io/three-player-controller/index.html)
 
 ### 普通控制
 
-![普通控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/1.gif)
+![普通控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/standard.gif)
 
 ### 飞行控制
 
-![飞行控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/4.gif)
+![飞行控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/flight.gif)
 
 ### 车辆控制
 
-![车辆控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/6.gif)
+![车辆控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/vehicle.gif)
 
 ### 移动端控制
 
-![移动端控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/gif/5.gif)
+![移动端控制演示](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/mobile.gif)
 
 # 安装
 
