@@ -144,7 +144,7 @@ async function init() {
             flyEnabled: false,
         },
         initPos: initPos,
-        minCamDistance: 50,
+        minCamDistance: 10,
         maxCamDistance: NORMAL_MAX_CAM,
         enableOverShoulderView: true,
         mouseSensitivity: MOUSE_SENSITIVITY,

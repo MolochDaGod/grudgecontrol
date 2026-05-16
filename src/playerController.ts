@@ -769,7 +769,7 @@ export class playerController {
             if (!this.cam.zoomEnabled) {
                 this.cam.updateWithRaycast(
                     this.controls.target,
-                    this.cam.playerToCam.subVectors(this.camera.position, this.playerCapsule.position).length(),
+                    this.cam.playerToCam.subVectors(this.camera.position, this.controls.target).length(),
                     this.cam.maxDist,
                 );
             }
