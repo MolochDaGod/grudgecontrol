@@ -8,7 +8,7 @@ A lightweight, out-of-the-box third-person / first-person player controller buil
 
 # Demo
 
-- [![Demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/preview.gif)](https://hh-hang.github.io/three-player-controller/index.html)
+[![Demo](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/preview.gif)](https://hh-hang.github.io/three-player-controller/index.html)
 
 ### Standard Control
 
