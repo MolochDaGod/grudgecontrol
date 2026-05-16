@@ -27,7 +27,7 @@ let stats;
 
 const pos = new Vector3(1.235, 1.21, -3.9);
 
-const scaleNormal = 0.01;
+const scaleNormal = 0.009;
 const scaleSmall = 0.001;
 let isSmallScale = false;
 let scaleAnimFrame = null;
