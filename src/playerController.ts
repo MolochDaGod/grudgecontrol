@@ -862,6 +862,7 @@ export class playerController {
         this.curPlayerSpeed *= ratio;
         this.cam.epsilon *= ratio;
         this.cam.minDist *= ratio;
+        this.controls.minDistance *= ratio;
         this.cam.maxDist *= ratio;
         this.cam.originMaxDist *= ratio;
 
