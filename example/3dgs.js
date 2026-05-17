@@ -48,7 +48,7 @@ async function init() {
     cont.appendChild(renderer.domElement);
 
     // 相机
-    camera = new PerspectiveCamera(50, cont.clientWidth / cont.clientHeight, 0.01, 1000);
+    camera = new PerspectiveCamera(60, cont.clientWidth / cont.clientHeight, 0.01, 1000);
     camera.position.copy(pos);
     camera.lookAt(pos.x, pos.y, pos.z + 1);
 
