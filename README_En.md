@@ -63,33 +63,35 @@ const controls = new OrbitControls(camera, renderer.domElement);
 
 const player = new playerController();
 
+// Player controller initialization
 await player.init({
-    scene,
-    camera,
-    controls,
+    scene, // three.js scene instance
+    camera, // three.js camera instance
+    controls, // external camera controller
     playerModelConfig: {
-        url: "./glb/person.glb",
-        scale: 0.001,
-        idleAnim: "idle",
-        walkAnim: "walk",
-        runAnim: "run",
-        jumpAnim: "jump",
+        url: "./glb/person.glb", // player model path
+        scale: 0.001, // player model scale
+        idleAnim: "idle", // idle animation name, must match the name in the model
+        walkAnim: "walk", // walk animation name, must match the name in the model
+        runAnim: "run", // run animation name, must match the name in the model
+        jumpAnim: "jump", // jump animation name, must match the name in the model
     },
-    initPos: new THREE.Vector3(0, 0, 0),
+    initPos: new THREE.Vector3(0, 0, 0), // player initial position
 });
 
+// Vehicle controller initialization (optional)
 await player.loadVehicleModel({
-    url: "./glb/bugatti.glb",
-    position: new THREE.Vector3(22, 3.69, 14.5),
-    wheelsNames: ["Wheel_LF", "Wheel_RF", "Wheel_LR", "Wheel_RR"],
-    scale: 0.1,
+    url: "./glb/bugatti.glb", // vehicle model path
+    position: new THREE.Vector3(22, 3.69, 14.5), // vehicle initial position
+    wheelsNames: ["Wheel_LF", "Wheel_RF", "Wheel_LR", "Wheel_RR"], // wheel node names, order: front-left, front-right, rear-left, rear-right
+    scale: 0.1, // vehicle model scale
     animations: {
-        openDoorAnim: "openDoorLF",
+        openDoorAnim: "openDoorLF", // door open/close animation name
     },
-    boardingPoint: new THREE.Vector3(0.5, 0, 1.8),
-    seatOffset: new THREE.Vector3(0, 0.6, 0),
-    chassisRatio: 0.15,
-    suspensionRestLengthRatio: 0.2,
+    boardingPoint: new THREE.Vector3(0.5, 0, 1.8), // boarding point in local coordinates
+    seatOffset: new THREE.Vector3(0, 0.6, 0), // seat offset after player enters the vehicle
+    chassisRatio: 0.15, // chassis height ratio
+    suspensionRestLengthRatio: 0.2, // suspension rest length ratio
 });
 
 function animate() {
