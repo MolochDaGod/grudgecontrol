@@ -63,33 +63,35 @@ const controls = new OrbitControls(camera, renderer.domElement);
 
 const player = new playerController();
 
+// 人物控制初始化
 await player.init({
-    scene,
-    camera,
-    controls,
+    scene, // three.js 场景实例
+    camera, // three.js 相机实例
+    controls, // 外部相机控制器
     playerModelConfig: {
-        url: "./glb/person.glb",
-        scale: 0.001,
-        idleAnim: "idle",
-        walkAnim: "walk",
-        runAnim: "run",
-        jumpAnim: "jump",
+        url: "./glb/person.glb", // 人物模型路径
+        scale: 0.001, // 人物模型缩放
+        idleAnim: "idle", // 静止动画名，需与模型内动画名一致
+        walkAnim: "walk", // 走路动画名，需与模型内动画名一致
+        runAnim: "run", // 奔跑动画名，需与模型内动画名一致
+        jumpAnim: "jump", // 跳跃动画名，需与模型内动画名一致
     },
-    initPos: new THREE.Vector3(0, 0, 0),
+    initPos: new THREE.Vector3(0, 0, 0), // 人物初始坐标
 });
 
+// 车辆控制初始化（可选）
 await player.loadVehicleModel({
-    url: "./glb/bugatti.glb",
-    position: new THREE.Vector3(22, 3.69, 14.5),
-    wheelsNames: ["Wheel_LF", "Wheel_RF", "Wheel_LR", "Wheel_RR"],
-    scale: 0.1,
+    url: "./glb/bugatti.glb", // 车辆模型路径
+    position: new THREE.Vector3(22, 3.69, 14.5), // 车辆初始坐标
+    wheelsNames: ["Wheel_LF", "Wheel_RF", "Wheel_LR", "Wheel_RR"], // 车轮节点名数组，顺序为左前、右前、左后、右后
+    scale: 0.1, // 车辆模型缩放
     animations: {
-        openDoorAnim: "openDoorLF",
+        openDoorAnim: "openDoorLF", // 车门开关动画名
     },
-    boardingPoint: new THREE.Vector3(0.5, 0, 1.8),
-    seatOffset: new THREE.Vector3(0, 0.6, 0),
-    chassisRatio: 0.15,
-    suspensionRestLengthRatio: 0.2,
+    boardingPoint: new THREE.Vector3(0.5, 0, 1.8), // 上车点，局部坐标
+    seatOffset: new THREE.Vector3(0, 0.6, 0), // 角色上车后座位偏移
+    chassisRatio: 0.15, // 底盘高度比例
+    suspensionRestLengthRatio: 0.2, // 悬挂静止长度比例
 });
 
 function animate() {
