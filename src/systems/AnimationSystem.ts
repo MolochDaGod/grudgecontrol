@@ -12,6 +12,7 @@ export class AnimationSystem {
     currentLocomotionSet: string | null = null; // 当前激活的动作集合名
     recheckTimer: any = null; // 延迟重检定时器
     clips: THREE.AnimationClip[] = []; // 原始动画片段
+    hasThreePartJump = false; // 是否使用三段跳跃动画
 
     constructor(ctrl: playerController) {
         this.ctrl = ctrl;
@@ -19,7 +20,7 @@ export class AnimationSystem {
 
     // 按名切换动画
     playByName(name: string, fade = 0.18) {
-        if (!this.actions || this.ctrl.input.ctrlKey) return;
+        if (!this.actions || (this.ctrl.input.ctrlKey && !this.ctrl.isFlying)) return;
         const next = this.actions.get(name);
         if (!next || this.state === next) return;
 
@@ -128,6 +129,43 @@ export class AnimationSystem {
         this.playByName(key, opts?.fade ?? 0.18);
     }
 
+    // 触发跳跃动画（统一入口）
+    startJump(inAir = false) {
+        if (this.hasThreePartJump) {
+            this.playByName(inAir ? "jumpLoop" : "jumpStart");
+        } else {
+            this.playByName("jumping");
+        }
+    }
+
+    // 离地时触发 jumpLoop（三段模式专用）
+    onBecomeAirborne() {
+        if (!this.hasThreePartJump) return;
+        const s = this.state;
+        const a = this.actions;
+        if (s === a?.get("jumpStart") || s === a?.get("jumpLoop") || s === a?.get("jumpEnd")) return;
+        this.playByName("jumpLoop");
+    }
+
+    // 落地时触发 jumpEnd（三段模式专用）
+    onLand() {
+        if (!this.hasThreePartJump) return;
+        const s = this.state;
+        const a = this.actions;
+        if (s === a?.get("jumpStart") || s === a?.get("jumpLoop")) {
+            this.playByName("jumpEnd");
+        }
+    }
+
+    // 是否处于任意跳跃动画中（防重复起跳）
+    isJumping(): boolean {
+        const s = this.state;
+        const a = this.actions;
+        if (!a) return false;
+        return s === a.get("jumping") || s === a.get("jumpStart") ||
+            s === a.get("jumpLoop") || s === a.get("jumpEnd");
+    }
+
     // 获取当前动画名
     getCurrentName(): string | null {
         return this.state?.getClip()?.name ?? null;
@@ -149,18 +187,31 @@ export class AnimationSystem {
         if (v.isBoardingAnim) { v.isBoardingAnim = false; v.doorClosed = false; }
         if (v.doorTimer) { clearTimeout(v.doorTimer); v.doorTimer = null; }
 
-        const { fwd, bkd, lft, rgt, shift } = this.ctrl.input;
+        const { fwd, bkd, lft, rgt, shift, space, ctrlKey } = this.ctrl.input;
 
         // 飞行状态
         if (this.ctrl.isFlying) {
-            if (!fwd) { this.playByName("flyidle"); return; }
-            this.playByName("flying");
-            this.ctrl.cam.maxDist = this.ctrl.cam.originMaxDist * 2;
+            if (fwd) {
+                if (shift) {
+                    this.playByName("flying");
+                    this.ctrl.cam.maxDist = this.ctrl.cam.originMaxDist * 2;
+                } else {
+                    this.playByName("flyHoverForward");
+                }
+                return;
+            }
+            if (bkd) { this.playByName("flyHoverBack"); return; }
+            if (lft) { this.playByName("flyHoverLeft"); return; }
+            if (rgt) { this.playByName("flyHoverRight"); return; }
+            if (space) { this.playByName("flyHoverUp"); return; }
+            if (ctrlKey) { this.playByName("flyHoverDown"); return; }
+            this.playByName("flyidle");
             return;
         }
 
         // 地面状态
         if (this.ctrl.playerIsOnGround) {
+            if (this.hasThreePartJump && this.state === this.actions?.get("jumpEnd")) return;
             if (!fwd && !bkd && !lft && !rgt) { this.playByName("idle"); return; }
             if (fwd) { this.playByName(shift ? "running" : "walking"); return; }
             if (!this.ctrl.isFirstPerson && (lft || rgt || bkd)) {

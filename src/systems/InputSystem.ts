@@ -44,12 +44,14 @@ export class InputSystem {
                 c.vehicle.cancelBoarding();
                 this.space = true;
                 if (c.controllerMode === 1) return;
-                if (!c.playerIsOnGround || c.isFlying) return;
-                c.animation.playByName("jumping");
+                if (c.isFlying) { c.animation.setAnimationByPressed(); return; }
+                if (!c.playerIsOnGround) return;
+                c.animation.startJump();
                 c.playerVelocity.y = c.jumpHeight;
                 c.setOnGround(false);
             } else {
                 this.space = false;
+                if (c.isFlying) c.animation.setAnimationByPressed();
             }
         }
 
@@ -60,7 +62,7 @@ export class InputSystem {
         if (input.toggleFly && c.playerFlyEnabled && c.controllerMode === 0) {
             c.isFlying = !c.isFlying;
             c.animation.setAnimationByPressed();
-            if (!c.isFlying && !c.playerIsOnGround) c.animation.playByName("jumping");
+            if (!c.isFlying && !c.playerIsOnGround) c.animation.startJump(true);
         }
 
         // 载具切换
@@ -103,7 +105,7 @@ export class InputSystem {
                 if (c.controllerMode === 0 && c.playerFlyEnabled) {
                     c.isFlying = !c.isFlying;
                     c.animation.setAnimationByPressed();
-                    if (!c.isFlying && !c.playerIsOnGround) c.animation.playByName("jumping");
+                    if (!c.isFlying && !c.playerIsOnGround) c.animation.startJump(true);
                 }
                 break;
             case "KeyE":
@@ -119,13 +121,17 @@ export class InputSystem {
                 c.vehicle.cancelBoarding();
                 this.space = true;
                 if (c.controllerMode === 1) return;
-                if (!c.playerIsOnGround || c.isFlying) return;
-                if (c.animation.actions?.get("jumping") === c.animation.state) return;
-                c.animation.playByName("jumping");
+                if (c.isFlying) { c.animation.setAnimationByPressed(); return; }
+                if (!c.playerIsOnGround) return;
+                if (c.animation.isJumping()) return;
+                c.animation.startJump();
                 c.playerVelocity.y = c.jumpHeight;
                 c.setOnGround(false);
                 break;
-            case "ControlLeft": this.ctrlKey = true; break;
+            case "ControlLeft":
+                this.ctrlKey = true;
+                if (c.isFlying) c.animation.setAnimationByPressed();
+                break;
         }
     }
 
@@ -142,8 +148,14 @@ export class InputSystem {
                 c.animation.setAnimationByPressed();
                 c.controls.mouseButtons = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
                 break;
-            case "Space": this.space = false; break;
-            case "ControlLeft": this.ctrlKey = false; break;
+            case "Space":
+                this.space = false;
+                if (c.isFlying) c.animation.setAnimationByPressed();
+                break;
+            case "ControlLeft":
+                this.ctrlKey = false;
+                if (c.isFlying) c.animation.setAnimationByPressed();
+                break;
         }
     }
 

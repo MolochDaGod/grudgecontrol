@@ -207,18 +207,29 @@ export class playerController {
             this.animation.actions = new Map();
 
             // 构建动作映射表
+            const mc = this.playerModelConfig;
+            const isThreePartJump = Array.isArray(mc.jumpAnim);
+            this.animation.hasThreePartJump = isThreePartJump;
             const mappings: [string, string][] = [
-                [this.playerModelConfig.idleAnim, "idle"],
-                [this.playerModelConfig.walkAnim, "walking"],
-                [this.playerModelConfig.leftWalkAnim || this.playerModelConfig.walkAnim, "left_walking"],
-                [this.playerModelConfig.rightWalkAnim || this.playerModelConfig.walkAnim, "right_walking"],
-                [this.playerModelConfig.backwardAnim || this.playerModelConfig.walkAnim, "walking_backward"],
-                [this.playerModelConfig.jumpAnim, "jumping"],
-                [this.playerModelConfig.runAnim, "running"],
-                [this.playerModelConfig.flyIdleAnim || this.playerModelConfig.idleAnim, "flyidle"],
-                [this.playerModelConfig.flyAnim || this.playerModelConfig.idleAnim, "flying"],
-                [this.playerModelConfig.enterCarAnim || this.playerModelConfig.idleAnim, "enterCar"],
-                [this.playerModelConfig.exitCarAnim || this.playerModelConfig.idleAnim, "exitCar"],
+                [mc.idleAnim, "idle"],
+                [mc.walkAnim, "walking"],
+                [mc.leftWalkAnim || mc.walkAnim, "left_walking"],
+                [mc.rightWalkAnim || mc.walkAnim, "right_walking"],
+                [mc.backwardAnim || mc.walkAnim, "walking_backward"],
+                ...(isThreePartJump
+                    ? [] as [string, string][]
+                    : [[mc.jumpAnim as string, "jumping"]] as [string, string][]),
+                [mc.runAnim, "running"],
+                [mc.flyIdleAnim || mc.idleAnim, "flyidle"],
+                [mc.flyAnim || mc.idleAnim, "flying"],
+                [mc.flyHoverForwardAnim || mc.flyAnim || mc.idleAnim, "flyHoverForward"],
+                [mc.flyHoverBackAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverBack"],
+                [mc.flyHoverLeftAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverLeft"],
+                [mc.flyHoverRightAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverRight"],
+                [mc.flyHoverUpAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverUp"],
+                [mc.flyHoverDownAnim || mc.flyIdleAnim || mc.idleAnim, "flyHoverDown"],
+                [mc.enterCarAnim || mc.idleAnim, "enterCar"],
+                [mc.exitCarAnim || mc.idleAnim, "exitCar"],
             ];
 
             for (const [clipName, actionName] of mappings) {
@@ -238,6 +249,27 @@ export class playerController {
                 this.animation.actions.set(actionName, action);
             }
 
+            // 注册三段跳跃动画
+            if (isThreePartJump) {
+                const [startClip, loopClip, endClip] = mc.jumpAnim as [string, string, string];
+                const jumpDefs: [string, string, number, boolean][] = [
+                    [startClip, "jumpStart", THREE.LoopOnce, true],
+                    [loopClip, "jumpLoop", THREE.LoopRepeat, false],
+                    [endClip, "jumpEnd", THREE.LoopOnce, true],
+                ];
+                for (const [clipName, key, loop, clamp] of jumpDefs) {
+                    const clip = animations.find(a => a.name === clipName);
+                    if (!clip) { console.warn(`找不到跳跃动画 clip: "${clipName}"`); continue; }
+                    const action = this.animation.mixer!.clipAction(clip);
+                    action.setLoop(loop as THREE.AnimationActionLoopStyles, loop === THREE.LoopOnce ? 1 : Infinity);
+                    action.clampWhenFinished = clamp;
+                    action.setEffectiveTimeScale(key === "jumpStart" ? 1.2 : 1);
+                    action.enabled = true;
+                    action.setEffectiveWeight(0);
+                    this.animation.actions.set(key, action);
+                }
+            }
+
             // 注册默认动作组
             const defaultSet = new Map<string, THREE.AnimationAction>();
             for (const key of ["idle", "walking", "walking_backward", "running", "jumping", "flyidle", "flying"]) {
@@ -253,12 +285,15 @@ export class playerController {
             // 监听动画完成事件
             this.animation.mixerCb = (ev: any) => {
                 const done: THREE.AnimationAction = ev.action;
-                if (done === this.animation.actions?.get("jumping")) {
+                const resolveGroundAnim = () => {
                     if (this.input.fwd) { this.animation.playByName(this.input.shift ? "running" : "walking"); return; }
                     if (this.input.bkd) { this.animation.playByName("walking_backward"); return; }
                     if (this.input.rgt || this.input.lft) { this.animation.playByName("walking"); return; }
                     this.animation.playByName("idle");
-                }
+                };
+                if (done === this.animation.actions?.get("jumping")) { resolveGroundAnim(); return; }
+                if (done === this.animation.actions?.get("jumpStart")) { this.animation.playByName("jumpLoop"); return; }
+                if (done === this.animation.actions?.get("jumpEnd")) { resolveGroundAnim(); return; }
                 if (done === this.animation.actions?.get("enterCar")) this.vehicle.onEnterAnimFinished();
             };
             this.animation.mixer.addEventListener("finished", this.animation.mixerCb);
@@ -832,6 +867,8 @@ export class playerController {
         if (this.playerIsOnGround === val) return;
         this.playerIsOnGround = val;
         this.onGroundChange?.(val);
+        if (val) this.animation.onLand();
+        else this.animation.onBecomeAirborne();
     }
 
     // 应用重力

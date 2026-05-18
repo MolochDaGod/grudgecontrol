@@ -11,6 +11,7 @@ import {
     PerspectiveCamera,
     Raycaster,
     Scene,
+    SkeletonHelper,
     SphereGeometry,
     Vector2,
     Vector3,
@@ -39,6 +40,7 @@ let raycastSphere = null;
 
 let stats = null;
 let csm = null;
+let skeletonHelper = null;
 let currentBlobUrl = null;
 let platform = null;
 let platformCloud = null;
@@ -136,6 +138,25 @@ const PLAYER_MODELS = {
         enterCarAnim: "enterCar",
         exitCarAnim: "exitCar",
         headBoneName: "mixamorigHead",
+        rotateY: Math.PI,
+    },
+    person4: {
+        url: "./glb/UEPerson.glb",
+        scale: 0.001,
+        idleAnim: "idle",
+        walkAnim: "walk",
+        runAnim: "run",
+        jumpAnim: ["jumpStart", "jumpLoop", "jumpEnd"],
+        flyAnim: "fly",
+        flyIdleAnim: "flyIdle",
+        flyHoverForwardAnim: "flyHoverForward",
+        flyHoverBackAnim: "flyHoverBack",
+        flyHoverLeftAnim: "flyHoverLeft",
+        flyHoverRightAnim: "flyHoverRight",
+        flyHoverUpAnim: "flyHoverUp",
+        flyHoverDownAnim: "flyHoverDown",
+        // headBoneName: "head",
+        // firstPersonCameraOffset: [0, 0, 0],
         rotateY: Math.PI,
     },
 };
@@ -398,6 +419,13 @@ async function init() {
         maxCamDistance: 220,
         enableOverShoulderView: true,
     });
+
+    // 骨骼可视化
+    const playerModel = player.getPlayerModel();
+    if (playerModel) {
+        skeletonHelper = new SkeletonHelper(playerModel);
+        scene.add(skeletonHelper);
+    }
 
     // 创建动态平台
     const liftPlatform = createDynamicPlatform({
@@ -730,6 +758,7 @@ function initGUI() {
         debug: false,
         enableOverShoulderView: true,
         centerRaycast: false,
+        showSkeleton: false,
     };
 
     const defaults = { ...params };
@@ -743,22 +772,22 @@ function initGUI() {
                     child.castShadow = true;
                     child.receiveShadow = true;
                     setupCSMMaterial(child.material);
-                    if (v == "person6") {
-                        // 设置金属材质
+                    if (v == "person4") {
                         child.material.metalness = 0.8;
                         child.material.roughness = 0.0;
                     }
                 }
             });
-            // 注册动画
-            player.registerAnimation("flyFight", "flyFight", {
-                loop: false,
-                clampWhenFinished: true,
-                duration: 1,
-                onFinished: () => {
-                    player.playAnimation("flyidle");
-                },
-            });
+            // 重建骨骼可视化
+            if (skeletonHelper) {
+                scene.remove(skeletonHelper);
+                skeletonHelper.dispose();
+            }
+            const newModel = player.getPlayerModel();
+            if (newModel) {
+                skeletonHelper = new SkeletonHelper(newModel);
+                scene.add(skeletonHelper);
+            }
         });
 
     const vehicleFolder = gui.addFolder("Add Vehicle");
@@ -832,6 +861,8 @@ function initGUI() {
     gui.add(params, "enableOverShoulderView").onChange((v) => player.setOverShoulderView(v));
     gui.add(params, "centerRaycast").name("Center Raycast Debug")
         .onChange((v) => { if (!v) raycastSphere.visible = false; });
+    gui.add(params, "showSkeleton").name("Show Skeleton")
+        .onChange((v) => { if (skeletonHelper) skeletonHelper.visible = v; });
 
     const resetController = gui.add(
         {
