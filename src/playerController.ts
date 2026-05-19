@@ -596,16 +596,21 @@ export class playerController {
     }
 
     // 判断是否跳过三角面碰撞
-    private shouldSkipTriCollision(tri: any): boolean {
+    private shouldSkipTriCollision(tri: any, dir: THREE.Vector3): boolean {
         const normal = tri.getNormal(new THREE.Vector3());
         const normalYAangle = normal.angleTo(this.upVector) * 180 / Math.PI;
         // 小于 slopeAngleThreshold° 斜坡，不处理碰撞
         if (normalYAangle < this.slopeAngleThreshold) return true;
         // 忽略立面阈值高度以下的碰撞
-        if (normalYAangle > 85 && normalYAangle < 95) {
+        if (normalYAangle > 80 && normalYAangle < 100) {
             const triHeight = Math.max(tri.a.y, tri.b.y, tri.c.y) - Math.min(tri.a.y, tri.b.y, tri.c.y); // 三角面y高度
             if (triHeight < this.maxStepHeight * this.playerModelConfig.scale) return true; // 阈值高度
+            // else {
+            //     // console.log('被挡住：', '当前三角面高度', triHeight, "阈值", this.maxStepHeight * this.playerModelConfig.scale);
+            // }
         }
+        // console.log('碰撞三角面法线与世界上方向夹角：', normalYAangle.toFixed(2), '°');
+        // console.log('碰撞三角面：', tri, "推开方向向量：", dir);
         return false;
     }
 
@@ -660,10 +665,12 @@ export class playerController {
             }
         }
 
-        // 更新动画混合器
-        this.animation.updateMixers(delta);
         // 车辆模式下退出
-        if (this.controllerMode === 1) return;
+        if (this.controllerMode === 1) {
+            // 更新动画
+            this.animation.updateMixers(delta);
+            return;
+        }
 
         // 计算移动方向
         this.camera.getWorldDirection(this.camDir);
@@ -743,7 +750,7 @@ export class playerController {
                     capsuleInfo,
                     this.collider!,
                     this.staticTemps,
-                    (tri) => !this.isFlying && this.playerIsOnGround && this.shouldSkipTriCollision(tri),
+                    (tri: any, dir: THREE.Vector3) => !this.isFlying && this.playerIsOnGround && this.shouldSkipTriCollision(tri, dir),
                 );
 
                 // 动态碰撞检测
@@ -754,7 +761,7 @@ export class playerController {
                         capsuleInfo,
                         dynEntry.mesh,
                         this.dynTemps,
-                        (tri) => !this.isFlying && this.playerIsOnGround && this.shouldSkipTriCollision(tri),
+                        (tri: any, dir: THREE.Vector3) => !this.isFlying && this.playerIsOnGround && this.shouldSkipTriCollision(tri, dir),
                     );
                 }
             }
@@ -828,6 +835,11 @@ export class playerController {
                 this.mobileControls?.syncVehicleBtn(near);
             }
         }
+
+        // 设置动画
+        this.animation.setAnimationByPressed();
+        // 更新动画混合器
+        this.animation.updateMixers(delta);
     }
 
     // ==================== 内部辅助 ====================

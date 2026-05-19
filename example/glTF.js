@@ -424,6 +424,7 @@ async function init() {
     const playerModel = player.getPlayerModel();
     if (playerModel) {
         skeletonHelper = new SkeletonHelper(playerModel);
+        skeletonHelper.visible = false;
         scene.add(skeletonHelper);
     }
 
@@ -778,6 +779,18 @@ function initGUI() {
                     }
                 }
             });
+            if (v == "person4") {
+                player.registerAnimation("dodgeD", "dodgeD", {
+                    loop: false,
+                    clamp: true,
+                });
+                document.addEventListener("keydown", (e) => {
+                    if (e.key.toLowerCase() === "q" && player.isFlying) {
+                        player.playAnimation("dodgeD", { returnToPrev: true });
+                    }
+                });
+            }
+
             // 重建骨骼可视化
             if (skeletonHelper) {
                 scene.remove(skeletonHelper);
@@ -786,6 +799,7 @@ function initGUI() {
             const newModel = player.getPlayerModel();
             if (newModel) {
                 skeletonHelper = new SkeletonHelper(newModel);
+                skeletonHelper.visible = params.showSkeleton;
                 scene.add(skeletonHelper);
             }
         });

@@ -33,7 +33,7 @@ export function applyCapsuleCollision(
     capsuleInfo: { segment: THREE.Line3; radius: number },
     collider: THREE.Mesh,
     temps: CollisionTemps,
-    skipTri?: (tri: any) => boolean,
+    skipTri?: (tri: any, dir: THREE.Vector3) => boolean,
 ): void {
     // 胶囊段变换到碰撞体本地空间
     temps.invMat.copy(collider.matrixWorld).invert();
@@ -49,11 +49,15 @@ export function applyCapsuleCollision(
     (collider.geometry as any)?.boundsTree?.shapecast({
         intersectsBounds: (box: THREE.Box3) => box.intersectsBox(temps.localBox),
         intersectsTriangle: (tri: any) => {
-            if (skipTri?.(tri)) return;
+            // 初步筛选
             const distance = tri.closestPointToSegment(temps.localSeg, temps.closestSeg, temps.closestTri);
             if (distance >= capsuleInfo.radius) return;
-            // 推开胶囊段
+
+            // 二次筛选
             const dir = temps.closestTri.clone().sub(temps.closestSeg).normalize();
+            if (skipTri?.(tri, dir)) return;
+
+            // 推开胶囊段
             temps.localSeg.start.addScaledVector(dir, capsuleInfo.radius - distance);
             temps.localSeg.end.addScaledVector(dir, capsuleInfo.radius - distance);
         },
