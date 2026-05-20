@@ -62,6 +62,7 @@ export type PlayerControllerOptions = {
     enableOverShoulderView?: boolean;
     shoulderOffsetDist?: number;
     isFirstPerson?: boolean;
+    enableSpringCamera?: boolean;
 };
 
 // ==================== 车辆配置 ====================

@@ -151,6 +151,7 @@ export class playerController {
         // 应用相机参数
         this.cam.sensitivity = opts.mouseSensitivity ?? this.cam.sensitivity;
         this.cam.mouseMode = opts.thirdMouseMode ?? this.cam.mouseMode;
+        this.cam.enableSpringCamera = opts.enableSpringCamera ?? this.cam.enableSpringCamera;
         this.cam.zoomEnabled = opts.enableZoom ?? this.cam.zoomEnabled;
         this.cam.minDist = (opts.minCamDistance ?? this.cam.minDist) * s;
         this.cam.maxDist = (opts.maxCamDistance ?? this.cam.maxDist) * s;
@@ -802,10 +803,10 @@ export class playerController {
 
         // 第三人称相机跟随
         if (!this.isFirstPerson) {
-            const lookTarget = this.cam.getLookAtPoint();
+            const lookTarget = this.cam.applySpringToTarget(delta);
             this.camera.position.sub(this.controls.target);
-            this.controls.target.copy(lookTarget);
             this.camera.position.add(lookTarget);
+            this.controls.target.copy(lookTarget);
             this.controls.update();
 
             if (!this.cam.zoomEnabled) {

@@ -16,6 +16,11 @@ export class CameraSystem {
 
     private lookAtPoint = new THREE.Vector3(); // 预分配的看向点向量
 
+    enableSpringCamera = false;
+    springCameraTime = 0.15;
+    private _springVelocity = new THREE.Vector3();
+    private _springResult = new THREE.Vector3();
+
     raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3()); // 相机碰撞射线
     centerRay = new THREE.Raycaster(); // 屏幕中心射线
     centerMouse = new THREE.Vector2(); // 屏幕中心坐标
@@ -24,6 +29,32 @@ export class CameraSystem {
     constructor(ctrl: playerController) {
         this.ctrl = ctrl;
         (this.raycaster as any).firstHitOnly = true;
+    }
+
+    // 弹簧阻尼插值，返回本帧的看向点；enableSpringCamera 关闭时直接返回看向点
+    applySpringToTarget(delta: number): THREE.Vector3 {
+        const dest = this.getLookAtPoint();
+        if (!this.enableSpringCamera) return dest;
+        const cur = this.ctrl.controls.target;
+        const v = this._springVelocity;
+        const out = this._springResult;
+        const smoothTime = Math.max(0.0001, this.springCameraTime);
+        const omega = 2 / smoothTime;
+        const x = omega * delta;
+        const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+        const axes = ['x', 'y', 'z'] as const;
+        for (const a of axes) {
+            const change = cur[a] - dest[a];
+            const temp = (v[a] + omega * change) * delta;
+            v[a] = (v[a] - omega * temp) * exp;
+            let o = dest[a] + (change + temp) * exp;
+            if ((dest[a] - cur[a] > 0) === (o > dest[a])) {
+                o = dest[a];
+                v[a] = 0;
+            }
+            out[a] = o;
+        }
+        return out;
     }
 
     // 第三人称相机看向点

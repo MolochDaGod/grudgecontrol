@@ -272,10 +272,16 @@ export class AnimationSystem {
 
         // 恢复相机距离
         this.ctrl.cam.maxDist = this.ctrl.cam.originMaxDist;
-        // 取消上下车过程
-        this.ctrl.vehicle.cancelBoarding();
 
         const v = this.ctrl.vehicle;
+        // 上下车流程中：有移动键输入才允许打断，否则不干预
+        if (v.isMovingToBoarding || v.isBoardingAnim || v.isExitAnim) {
+            const { fwd, bkd, lft, rgt } = this.ctrl.input;
+            if (!fwd && !bkd && !lft && !rgt) return;
+        }
+
+        // 取消上下车过程
+        v.cancelBoarding();
         if (v.isExitAnim) { v.isExitAnim = false; v.exitDoorClosed = false; }
         if (v.isBoardingAnim) { v.isBoardingAnim = false; v.doorClosed = false; }
         if (v.doorTimer) { clearTimeout(v.doorTimer); v.doorTimer = null; }
