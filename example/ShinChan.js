@@ -16,6 +16,7 @@ import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { CSM } from "three/examples/jsm/csm/CSM.js";
 
 let player;
+let fallResetThreshold = -Infinity;
 const scene = new Scene();
 
 let camera;
@@ -149,13 +150,14 @@ async function init() {
             exitCarAnim: "exitCar",
             headBoneName: "mixamorigHead",
             rotateY: Math.PI,
-            capsuleRadiusRatio: 0.3,
+            capsuleRadiusRatio: 1.3,
             firstPersonCameraOffset: [0, 220, 250],
         },
         initPos: pos,
         minCamDistance: 50,
         maxCamDistance: 220,
         enableOverShoulderView: true,
+
     });
 
     // 阴影
@@ -168,6 +170,13 @@ async function init() {
     });
 
     window.addEventListener("resize", onWindowResize, false);
+
+    // 计算掉落重置阈值
+    const collider = player.getCollider();
+    if (collider?.geometry?.boundingBox) {
+        const s = player.playerModelConfig.scale;
+        fallResetThreshold = collider.geometry.boundingBox.min.y - player.playerCapsuleHeight * s * 3;
+    }
 
     // 关闭加载页面
     window.hideLoader();
@@ -205,6 +214,9 @@ async function initGLBScene(url, modelScale = [1, 1, 1]) {
 function animate() {
     if (player) {
         player.update();
+        if (!player.isFlying && player.getPosition()?.y < fallResetThreshold) {
+            player.reset();
+        }
     } else {
         controls.update();
     }

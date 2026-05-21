@@ -48,7 +48,6 @@ export class playerController {
     private playerCapsuleRadiusRatio = 1; // 半径缩放比
     private playerCapsuleHeight = 180; // 胶囊体高度
     isFirstPerson = false; // 第一人称状态
-    private boundingBoxMinY = 0; // 碰撞体最低点
 
     // ==================== 运行状态 ====================
     controllerMode: 0 | 1 = 0; // 0步行 1载具
@@ -506,7 +505,6 @@ export class playerController {
             this.visualizer = new BVHHelper(this.collider, 10);
             this.scene.add(this.visualizer);
         }
-        this.boundingBoxMinY = (this.collider as any).geometry.boundingBox.min.y;
     }
 
     // 注册动态碰撞体
@@ -816,11 +814,6 @@ export class playerController {
                     this.cam.maxDist,
                 );
             }
-        }
-
-        // 掉落重置
-        if (this.playerCapsule.position.y < this.boundingBoxMinY - this.playerCapsuleHeight * s * 3 && !this.isFlying) {
-            this.reset();
         }
 
         // 移动端车辆按钮检测

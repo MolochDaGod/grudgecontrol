@@ -294,7 +294,7 @@ export class AnimationSystem {
                 if (shift) {
                     this.playByName("flying");
                     // 加速飞行时，拉远相机
-                    this.ctrl.cam.maxDist = this.ctrl.cam.originMaxDist * 2;
+                    if (!this.ctrl.cam.enableSpringCamera) this.ctrl.cam.maxDist = this.ctrl.cam.originMaxDist * 2;
                 } else {
                     this.playByName("flyHoverForward");
                 }
