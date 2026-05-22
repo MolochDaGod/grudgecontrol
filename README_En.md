@@ -139,6 +139,8 @@ animate();
 | `getCollider()` | The merged collider mesh used for BVH checks. |
 | `getCurrentPlayerAnimationName()` | The current animation clip name, or `null`. |
 | `getCenterScreenRaycastHit()` | Center-screen raycast result, useful for aiming or interaction. |
+| `getActiveDynamicCollider()` | The dynamic collider the player is currently standing on, or `null`. |
+| `getCurrentLocomotionSet()` | The name of the currently active locomotion set. |
 
 ## Input And Runtime Controls
 
@@ -154,7 +156,7 @@ animate();
 | `setMinCamDistance(v)` | Set minimum third-person camera distance. |
 | `setMaxCamDistance(v)` | Set maximum third-person camera distance. |
 | `setCamLookAtHeightRatio(v)` | Set the third-person camera look-at height ratio (0 = bottom, 1 = top). |
-| `setThirdMouseMode(v)` | Set third-person mouse mode: [0 | 1 | 2 | 3]. |
+| `setThirdMouseMode(v)` | Set third-person mouse mode: [0 | 1 | 2 | 3 | 4 | 5]. |
 | `setEnableZoom(v)` | Enable or disable camera zoom. |
 | `setOverShoulderView(v)` | Enable or disable over-shoulder view offset. |
 | `setDebug(v)` | Show or hide collider debug display. |
@@ -229,14 +231,12 @@ player.onTowardChange = (dx, dy, speed) => {};
 | `onVehicleExit` | Fired after exiting a vehicle. |
 | `onTowardChange` | Fired when look/facing input updates. |
 
-### Global Input Listener Helpers
+### Input Listeners
 
 ```ts
-import { onAllEvent, offAllEvent } from "three-player-controller";
+player.onAllEvent();  // enable keyboard / mouse listeners
+player.offAllEvent(); // disable keyboard / mouse listeners
 ```
-
-- `onAllEvent()`: enable keyboard / mouse listeners.
-- `offAllEvent()`: disable keyboard / mouse listeners.
 
 ### Default Keyboard Controls
 
@@ -287,7 +287,7 @@ type PlayerControllerOptions = {
     dynamicCollider?: THREE.Object3D | THREE.Object3D[];
     isShowMobileControls?: boolean;
     mobileControls?: MobileControlsOptions;
-    thirdMouseMode?: 0 | 1 | 2 | 3;
+    thirdMouseMode?: 0 | 1 | 2 | 3 | 4 | 5;
     enableZoom?: boolean;
     enableOverShoulderView?: boolean;
     isFirstPerson?: boolean;
@@ -304,12 +304,18 @@ type PlayerModelOptions = {
     idleAnim: string;
     walkAnim: string;
     runAnim: string;
-    jumpAnim: string;
+    jumpAnim: string | [startAnim: string, loopAnim: string, endAnim: string];
     leftWalkAnim?: string;
     rightWalkAnim?: string;
     backwardAnim?: string;
     flyAnim?: string;
     flyIdleAnim?: string;
+    flyHoverForwardAnim?: string;
+    flyHoverBackAnim?: string;
+    flyHoverLeftAnim?: string;
+    flyHoverRightAnim?: string;
+    flyHoverUpAnim?: string;
+    flyHoverDownAnim?: string;
     enterCarAnim?: string;
     exitCarAnim?: string;
     gravity?: number;
@@ -372,7 +378,7 @@ type VehicleOptions = {
 | `dynamicCollider` | `THREE.Object3D \| THREE.Object3D[]` | No | — | Dynamic colliders registered at init time (e.g. moving platforms). |
 | `isShowMobileControls` | `boolean` | No | `true` | Whether to show virtual controls on mobile. |
 | `mobileControls` | `MobileControlsOptions` | No | all enabled | Mobile UI visibility config. |
-| thirdMouseMode | 0 \| 1 \| 2 \| 3 | No | 1 | Different mouse control modes in the third-person perspective, default is 1 (0: Hide the mouse to control both direction and view, 1: Hide the mouse to control the view only, 2: Show the mouse and drag to control both direction and view, 3: Show the mouse and drag to control the view only) |
+| `thirdMouseMode` | `0 \| 1 \| 2 \| 3 \| 4 \| 5` | No | `1` | Mouse control mode in third-person view (0: hide cursor, control both facing and camera; 1: hide cursor, camera only; 2: show cursor, drag to control both facing and camera; 3: show cursor, drag to control camera only; 4: show cursor, drag to control camera, character facing follows camera horizontal direction; 5: hide cursor, control camera, character facing follows camera horizontal direction). |
 | `enableZoom` | `boolean` | No | `false` | Whether wheel zoom is enabled. |
 | `enableOverShoulderView` | `boolean` | No | `false` | Whether over-shoulder view is enabled. |
 | `isFirstPerson` | `boolean` | No | `false` | Whether to start directly in first-person mode. |
@@ -387,12 +393,18 @@ type VehicleOptions = {
 | `idleAnim` | `string` | Yes | — | Idle clip name. Must match the clip in the model. |
 | `walkAnim` | `string` | Yes | — | Walk clip name. Must match the clip in the model. |
 | `runAnim` | `string` | Yes | — | Run clip name. Must match the clip in the model. |
-| `jumpAnim` | `string` | Yes | — | Jump clip name. Must match the clip in the model. |
+| `jumpAnim` | `string \| [string, string, string]` | Yes | — | Jump clip name. Pass a string for a single clip; pass `[start, loop, land]` for a three-phase jump that auto-transitions back to movement on landing. |
 | `leftWalkAnim` | `string` | No | `walkAnim` | Left strafe clip. Falls back to `walkAnim`. |
 | `rightWalkAnim` | `string` | No | `walkAnim` | Right strafe clip. Falls back to `walkAnim`. |
 | `backwardAnim` | `string` | No | `walkAnim` | Backward walk clip. Falls back to `walkAnim`. |
 | `flyAnim` | `string` | No | `idleAnim` | Flying clip. Falls back to `idleAnim`. |
 | `flyIdleAnim` | `string` | No | `idleAnim` | Fly-idle clip. Falls back to `idleAnim`. |
+| `flyHoverForwardAnim` | `string` | No | `flyAnim` | Hover clip while flying forward. Falls back to `flyAnim`. |
+| `flyHoverBackAnim` | `string` | No | `flyIdleAnim` | Hover clip while flying backward. Falls back to `flyIdleAnim`. |
+| `flyHoverLeftAnim` | `string` | No | `flyIdleAnim` | Hover clip while flying left. Falls back to `flyIdleAnim`. |
+| `flyHoverRightAnim` | `string` | No | `flyIdleAnim` | Hover clip while flying right. Falls back to `flyIdleAnim`. |
+| `flyHoverUpAnim` | `string` | No | `flyIdleAnim` | Hover clip while ascending. Falls back to `flyIdleAnim`. |
+| `flyHoverDownAnim` | `string` | No | `flyIdleAnim` | Hover clip while descending. Falls back to `flyIdleAnim`. |
 | `enterCarAnim` | `string` | No | — | Enter-vehicle clip; recommended when using vehicle support. |
 | `exitCarAnim` | `string` | No | — | Exit-vehicle clip; recommended when using vehicle support. |
 | `gravity` | `number` | No | `-2400` | Gravity base value, scaled by player `scale`. |

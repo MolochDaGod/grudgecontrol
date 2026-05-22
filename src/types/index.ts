@@ -10,7 +10,7 @@ export type PlayerModelOptions = {
     idleAnim: string;
     walkAnim: string;
     runAnim: string;
-    jumpAnim: string | [string, string, string];
+    jumpAnim: string | [startAnim: string, loopAnim: string, endAnim: string];
     leftWalkAnim?: string;
     rightWalkAnim?: string;
     backwardAnim?: string;

@@ -139,6 +139,8 @@ animate();
 | `getCollider()` | 用于 BVH 检测的合并碰撞网格。 |
 | `getCurrentPlayerAnimationName()` | 当前播放的动画片段名，没有则返回 `null`。 |
 | `getCenterScreenRaycastHit()` | 屏幕中心射线检测结果，适合做瞄准或交互。 |
+| `getActiveDynamicCollider()` | 当前玩家站立的动态碰撞体，不在动态碰撞体上时返回 `null`。 |
+| `getCurrentLocomotionSet()` | 当前移动动作组名。 |
 
 ## 输入与运行时控制
 
@@ -154,7 +156,7 @@ animate();
 | `setMinCamDistance(v)` | 设置第三人称最小镜头距离。 |
 | `setMaxCamDistance(v)` | 设置第三人称最大镜头距离。 |
 | `setCamLookAtHeightRatio(v)` | 设置第三人称相机看向点高度比例（0=底部，1=顶部）。 |
-| `setThirdMouseMode(v)` | 设置第三人称鼠标模式：[0 | 1 | 2 | 3]。 |
+| `setThirdMouseMode(v)` | 设置第三人称鼠标模式：[0 | 1 | 2 | 3 | 4 | 5]。 |
 | `setEnableZoom(v)` | 设置是否允许镜头缩放。 |
 | `setOverShoulderView(v)` | 开关过肩视角偏移。 |
 | `setDebug(v)` | 开关碰撞体调试显示。 |
@@ -229,14 +231,12 @@ player.onTowardChange = (dx, dy, speed) => {};
 | `onVehicleExit` | 下车完成后触发。 |
 | `onTowardChange` | 朝向 / 视角输入更新时触发。 |
 
-### 全局输入监听辅助函数
+### 输入监听
 
 ```ts
-import { onAllEvent, offAllEvent } from "three-player-controller";
+player.onAllEvent();  // 开启键盘和鼠标输入监听
+player.offAllEvent(); // 关闭键盘和鼠标输入监听
 ```
-
-- `onAllEvent()`：开启键盘和鼠标输入监听。
-- `offAllEvent()`：关闭键盘和鼠标输入监听。
 
 ### 默认键位
 
@@ -287,7 +287,7 @@ type PlayerControllerOptions = {
     dynamicCollider?: THREE.Object3D | THREE.Object3D[];
     isShowMobileControls?: boolean;
     mobileControls?: MobileControlsOptions;
-    thirdMouseMode?: 0 | 1 | 2 | 3;
+    thirdMouseMode?: 0 | 1 | 2 | 3 | 4 | 5;
     enableZoom?: boolean;
     enableOverShoulderView?: boolean;
     isFirstPerson?: boolean;
@@ -304,12 +304,18 @@ type PlayerModelOptions = {
     idleAnim: string;
     walkAnim: string;
     runAnim: string;
-    jumpAnim: string;
+    jumpAnim: string | [startAnim: string, loopAnim: string, endAnim: string];
     leftWalkAnim?: string;
     rightWalkAnim?: string;
     backwardAnim?: string;
     flyAnim?: string;
     flyIdleAnim?: string;
+    flyHoverForwardAnim?: string;
+    flyHoverBackAnim?: string;
+    flyHoverLeftAnim?: string;
+    flyHoverRightAnim?: string;
+    flyHoverUpAnim?: string;
+    flyHoverDownAnim?: string;
     enterCarAnim?: string;
     exitCarAnim?: string;
     gravity?: number;
@@ -373,7 +379,7 @@ type VehicleOptions = {
 | `dynamicCollider` | `THREE.Object3D \| THREE.Object3D[]` | 否 | — | 初始化时注册的动态碰撞体（如可移动平台）。 |
 | `isShowMobileControls` | `boolean` | 否 | `true` | 是否在移动端显示虚拟控制 UI。 |
 | `mobileControls` | `MobileControlsOptions` | 否 | 全部显示 | 移动端按钮显隐配置。 |
-| `thirdMouseMode` | `0 \| 1 \| 2 \| 3` | 否 | `1` | 第三人称视角下的不同鼠标控制模式，默认1(0:隐藏鼠标控制朝向及视角，1:隐藏鼠标仅控制视角，2:显示鼠标拖拽控制朝向及视角，3:显示鼠标拖拽仅控制视角) |
+| `thirdMouseMode` | `0 \| 1 \| 2 \| 3 \| 4 \| 5` | 否 | `1` | 第三人称视角下的鼠标控制模式（0:隐藏鼠标，控制朝向及视角；1:隐藏鼠标，仅控制视角；2:显示鼠标，拖拽控制朝向及视角；3:显示鼠标，拖拽仅控制视角；4:显示鼠标，拖拽控制视角且人物朝向跟随相机水平方向；5:隐藏鼠标，控制视角且人物朝向跟随相机水平方向） |
 | `enableZoom` | `boolean` | 否 | `false` | 是否允许滚轮缩放。 |
 | `enableOverShoulderView` | `boolean` | 否 | `false` | 是否启用过肩视角。 |
 | `isFirstPerson` | `boolean` | 否 | `false` | 初始化时是否直接进入第一人称。 |
@@ -388,12 +394,18 @@ type VehicleOptions = {
 | `idleAnim` | `string` | 是 | — | Idle 动画名，需与模型内动画名一致。 |
 | `walkAnim` | `string` | 是 | — | Walk 动画名，需与模型内动画名一致。 |
 | `runAnim` | `string` | 是 | — | Run 动画名，需与模型内动画名一致。 |
-| `jumpAnim` | `string` | 是 | — | Jump 动画名，需与模型内动画名一致。 |
+| `jumpAnim` | `string \| [string, string, string]` | 是 | — | 跳跃动画名。传字符串播放单一动画；传三元素数组 `[起跳, 循环, 落地]` 分三阶段播放，落地后自动衔接移动动画。 |
 | `leftWalkAnim` | `string` | 否 | `walkAnim` | 左移动画名，不填则复用 `walkAnim`。 |
 | `rightWalkAnim` | `string` | 否 | `walkAnim` | 右移动画名，不填则复用 `walkAnim`。 |
 | `backwardAnim` | `string` | 否 | `walkAnim` | 后退动画名，不填则复用 `walkAnim`。 |
 | `flyAnim` | `string` | 否 | `idleAnim` | 飞行动画名，不填则复用 `idleAnim`。 |
 | `flyIdleAnim` | `string` | 否 | `idleAnim` | 飞行待机动画名，不填则复用 `idleAnim`。 |
+| `flyHoverForwardAnim` | `string` | 否 | `flyAnim` | 飞行前进时的悬停动画名，不填则复用 `flyAnim`。 |
+| `flyHoverBackAnim` | `string` | 否 | `flyIdleAnim` | 飞行后退时的悬停动画名，不填则复用 `flyIdleAnim`。 |
+| `flyHoverLeftAnim` | `string` | 否 | `flyIdleAnim` | 飞行左移时的悬停动画名，不填则复用 `flyIdleAnim`。 |
+| `flyHoverRightAnim` | `string` | 否 | `flyIdleAnim` | 飞行右移时的悬停动画名，不填则复用 `flyIdleAnim`。 |
+| `flyHoverUpAnim` | `string` | 否 | `flyIdleAnim` | 飞行上升时的悬停动画名，不填则复用 `flyIdleAnim`。 |
+| `flyHoverDownAnim` | `string` | 否 | `flyIdleAnim` | 飞行下降时的悬停动画名，不填则复用 `flyIdleAnim`。 |
 | `enterCarAnim` | `string` | 否 | — | 上车动画名；使用车辆功能时建议配置。 |
 | `exitCarAnim` | `string` | 否 | — | 下车动画名；使用车辆功能时建议配置。 |
 | `gravity` | `number` | 否 | `-2400` | 重力基准值，会按角色 `scale` 缩放。 |
