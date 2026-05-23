@@ -90,7 +90,7 @@ async function init() {
 
     // 加载3DGS场景
     initGltfLoader();
-    const splatURL = './ply/3dgs.ply'
+    const splatURL = './3DGS/3DGS.sog'
     const butterfly = new SplatMesh({
         url: splatURL,
         onLoad: (mesh) => {
