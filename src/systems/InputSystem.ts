@@ -61,6 +61,7 @@ export class InputSystem {
         // 飞行切换
         if (input.toggleFly && c.playerFlyEnabled && c.controllerMode === 0) {
             c.isFlying = !c.isFlying;
+            if (c.isFlying) c.playerVelocity.set(0, 0, 0);
             c.animation.setAnimationByPressed();
             if (!c.isFlying && !c.playerIsOnGround) c.animation.startJump(true);
         }
@@ -104,6 +105,7 @@ export class InputSystem {
             case "KeyF":
                 if (c.controllerMode === 0 && c.playerFlyEnabled) {
                     c.isFlying = !c.isFlying;
+                    if (c.isFlying) c.playerVelocity.set(0, 0, 0);
                     c.animation.setAnimationByPressed();
                     if (!c.isFlying && !c.playerIsOnGround) c.animation.startJump(true);
                 }
