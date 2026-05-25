@@ -22,8 +22,7 @@ export class AnimationSystem {
 
     // 按名切换动画
     playByName(name: string, fade = 0.18) {
-        // 飞行时按住 ctrl 键可临时禁用动画切换（方便调试）
-        if (!this.actions || (this.ctrl.input.ctrlKey && !this.ctrl.isFlying)) return;
+        if (!this.actions) return;
         const next = this.actions.get(name);
         // 如果动画不存在，或已在播放，则忽略
         if (!next || this.state === next) return;
