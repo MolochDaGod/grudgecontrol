@@ -26,7 +26,7 @@
     },
     "peerDependencies": {
         "@dimforge/rapier3d-compat": "^0.12.0",
-        "three": "^0.184.0",
+        "three": ">=0.180.0",
         "three-mesh-bvh": "^0.9.9"
     },
     "peerDependenciesMeta": {
