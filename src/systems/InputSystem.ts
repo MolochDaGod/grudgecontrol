@@ -15,6 +15,7 @@ export class InputSystem {
     private boundKeyup = (e: KeyboardEvent) => this.onKeyup(e); // 键盘抬起绑定
     private boundMouseMove = (e: MouseEvent) => this.onMouseMove(e); // 鼠标移动绑定
     private boundMouseClick = () => this.ctrl.cam.setPointerLock(); // 鼠标点击绑定
+    private boundBlur = () => this.resetKeys(); // 页面失焦时重置按键状态
 
     constructor(ctrl: playerController) {
         this.ctrl = ctrl;
@@ -80,6 +81,7 @@ export class InputSystem {
         window.addEventListener("keyup", this.boundKeyup);
         window.addEventListener("mousemove", this.boundMouseMove);
         window.addEventListener("click", this.boundMouseClick);
+        window.addEventListener("blur", this.boundBlur);
     }
 
     // 解绑输入事件
@@ -90,6 +92,21 @@ export class InputSystem {
         window.removeEventListener("keyup", this.boundKeyup);
         window.removeEventListener("mousemove", this.boundMouseMove);
         window.removeEventListener("click", this.boundMouseClick);
+        window.removeEventListener("blur", this.boundBlur);
+    }
+
+    // 重置所有按键状态
+    private resetKeys() {
+        const c = this.ctrl;
+        this.fwd = false;
+        this.bkd = false;
+        this.lft = false;
+        this.rgt = false;
+        this.space = false;
+        this.ctrlKey = false;
+        this.shift = false;
+        c.controls.mouseButtons = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
+        c.animation.setAnimationByPressed();
     }
 
     // 键盘按下处理
