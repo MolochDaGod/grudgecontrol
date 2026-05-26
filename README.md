@@ -292,6 +292,7 @@ type PlayerControllerOptions = {
     enableOverShoulderView?: boolean;
     isFirstPerson?: boolean;
     camLookAtHeightRatio?: number;
+    timeScale?: number;
 };
 ```
 
@@ -384,6 +385,7 @@ type VehicleOptions = {
 | `enableOverShoulderView` | `boolean` | 否 | `false` | 是否启用过肩视角。 |
 | `isFirstPerson` | `boolean` | 否 | `false` | 初始化时是否直接进入第一人称。 |
 | `camLookAtHeightRatio` | `number` | 否 | `0.8` | 第三人称相机看向点高度比例（0=胶囊底部，1=顶部）。 |
+| `timeScale` | `number` | 否 | `1` | 时间缩放系数，乘以每帧 delta，可用于慢动作或快进效果。 |
 
 ### `PlayerModelOptions`
 

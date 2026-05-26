@@ -292,6 +292,7 @@ type PlayerControllerOptions = {
     enableOverShoulderView?: boolean;
     isFirstPerson?: boolean;
     camLookAtHeightRatio?: number;
+    timeScale?: number;
 };
 ```
 
@@ -383,6 +384,7 @@ type VehicleOptions = {
 | `enableOverShoulderView` | `boolean` | No | `false` | Whether over-shoulder view is enabled. |
 | `isFirstPerson` | `boolean` | No | `false` | Whether to start directly in first-person mode. |
 | `camLookAtHeightRatio` | `number` | No | `0.8` | Third-person camera look-at height ratio (0 = capsule bottom, 1 = top). |
+| `timeScale` | `number` | No | `1` | Time scale multiplier applied to each frame's delta. Use values < 1 for slow motion, > 1 for fast forward. |
 
 ### `PlayerModelOptions`
 
