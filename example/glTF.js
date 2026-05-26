@@ -751,6 +751,7 @@ function initGUI() {
         jumpHeight: 600,
         playerSpeed: 300,
         flySpeed: 2100,
+        timeScale: 1,
         minCamDistance: 50,
         maxCamDistance: 220,
         camLookAtHeightRatio: 0.8,
@@ -866,6 +867,7 @@ function initGUI() {
     gui.add(params, "jumpHeight", 0, 2000, 10).onChange((v) => player.setJumpHeight(v));
     gui.add(params, "playerSpeed", 0, 1000, 10).onChange((v) => player.setPlayerSpeed(v));
     gui.add(params, "flySpeed", 0, 5000, 10).onChange((v) => player.setPlayerFlySpeed(v));
+    gui.add(params, "timeScale", 0, 3, 0.05).name("Time Scale").onChange((v) => player.timeScale = v);
     gui.add(params, "minCamDistance", 0, 200, 1).onChange((v) => player.setMinCamDistance(v));
     gui.add(params, "maxCamDistance", 50, 1000, 1).onChange((v) => player.setMaxCamDistance(v));
     gui.add(params, "camLookAtHeightRatio", 0, 1, 0.01).onChange((v) => player.setCamLookAtHeightRatio(v));
@@ -890,6 +892,7 @@ function initGUI() {
                 player.setJumpHeight(defaults.jumpHeight);
                 player.setPlayerSpeed(defaults.playerSpeed);
                 player.setPlayerFlySpeed(defaults.flySpeed);
+                player.timeScale = defaults.timeScale;
                 player.setMinCamDistance(defaults.minCamDistance);
                 player.setMaxCamDistance(defaults.maxCamDistance);
                 player.setThirdMouseMode(defaults.thirdMouseMode);

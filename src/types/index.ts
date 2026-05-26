@@ -63,6 +63,7 @@ export type PlayerControllerOptions = {
     shoulderOffsetDist?: number;
     isFirstPerson?: boolean;
     enableSpringCamera?: boolean;
+    timeScale?: number;
 };
 
 // ==================== 车辆配置 ====================

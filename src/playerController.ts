@@ -53,6 +53,7 @@ export class playerController {
     controllerMode: 0 | 1 = 0; // 0步行 1载具
     playerIsOnGround = false; // 是否在地面
     isupdate = true; // 帧更新开关
+    timeScale = 1; // 时间缩放系数
     isFlying = false; // 飞行状态
     isChangeControllerTransitionTimer: any = null; // 模式切换计时器
     enableToward = true; // 启用朝向输入
@@ -161,6 +162,7 @@ export class playerController {
         this.isShowMobileControls = (opts.isShowMobileControls ?? this.isShowMobileControls) && isMobileDevice();
         this.enableOverShoulderView = opts.enableOverShoulderView ?? this.enableOverShoulderView;
         this.isFirstPerson = opts.isFirstPerson ?? this.isFirstPerson;
+        this.timeScale = opts.timeScale ?? this.timeScale;
 
         // 初始化移动端控件
         if (this.isShowMobileControls) {
@@ -619,7 +621,7 @@ export class playerController {
     // 主循环
     async update(delta = clock.getDelta()) {
         if (!this.isupdate || !this.playerCapsule || !this.collider) return;
-        delta = Math.min(delta, 1 / 40);
+        delta = Math.min(delta, 1 / 40) * this.timeScale;
         if (this.controllerMode === 1) {
             this.vehicle.updateVehicle(delta);
         } else {
