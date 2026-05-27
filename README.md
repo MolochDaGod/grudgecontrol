@@ -8,7 +8,7 @@
 
 # 示例
 
-[![在线示例](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/preview.gif)](https://hh-hang.github.io/three-player-controller/index.html)
+[![在线示例](https://github.com/hh-hang/three-player-controller/blob/master/example/public/img/readme/preview.jpg)](https://hh-hang.github.io/three-player-controller/index.html)
 
 ### 普通控制
 
