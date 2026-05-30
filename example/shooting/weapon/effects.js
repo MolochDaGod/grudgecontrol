@@ -210,6 +210,10 @@ export class ShootingEffects {
         this._reloadSound.play();
     }
 
+    stopReloadSound() {
+        if (this._reloadSound?.isPlaying) this._reloadSound.stop();
+    }
+
     // 命中硝烟（轮转对象池）
     triggerHitSmoke(worldPos, worldNormal) {
         const e = this._smokePool[this._smokeIdx % this._smokePool.length];

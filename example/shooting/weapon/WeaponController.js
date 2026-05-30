@@ -1,4 +1,4 @@
-import { AnimationClip, AnimationMixer, Audio, AudioLoader, LoopOnce, Object3D, Quaternion, Vector3 } from "three";
+import { AnimationMixer, LoopOnce, Object3D, Quaternion, Vector3 } from "three";
 
 export const MODE = Object.freeze({ NORMAL: "normal", PRIMARY: "primary" });
 
@@ -62,6 +62,8 @@ export class WeaponController {
         this._lastFireTime = 0;
         this._elapsed = 0; // 由 update() 每帧更新，供 setTimeout 回调读取
 
+        this._reloadTimer1 = null; // 换弹半程计时器
+        this._reloadTimer2 = null; // 换弹完成计时器
         this._RELOAD_DURATION_MS = 2000; // 换弹动画时长，需根据实际模型动画调整
         this._FIRE_RATE_S = 0.1; // 连射间隔（秒）
         this._FIRE_ANIM_FADE_MS = 180; // 与 playAnimation 默认 fade(0.18s) 对齐
@@ -69,6 +71,9 @@ export class WeaponController {
 
         // ==================== 射线命中缓存 ====================
         this._frameHit = null; // 每帧射线命中结果
+
+        // ==================== 多人扩展 ====================
+        this.onHitPlayer = null; // (playerId, damage) => void，由外部注入
     }
 
     // ==================== 初始化 ====================
@@ -173,6 +178,7 @@ export class WeaponController {
             const k = e.key.toLowerCase();
             if (k === "1") this.switchMode(MODE.PRIMARY);
             if (k === "4") this.switchMode(MODE.NORMAL);
+            if (k === "q") this.switchMode(this._currentMode === MODE.PRIMARY ? MODE.NORMAL : MODE.PRIMARY);
             if (k === "r") this.reload();
         });
 
@@ -191,6 +197,10 @@ export class WeaponController {
         this._elapsed = elapsed;
         const canRunCombatLogic = this._canRunCombatLogic();
 
+        // 飞行时强制取消换弹
+        if (this._currentMode === MODE.PRIMARY && this._isReloading && this._player.getIsFlying()) {
+            this._cancelReload();
+        }
         // 飞行/跳跃等不可战斗状态时强制中断武器逻辑（换弹中不打断，由换弹自己管）
         if (this._currentMode === MODE.PRIMARY && !canRunCombatLogic && !this._isReloading) {
             this._forceStopCombatLogic();
@@ -296,6 +306,7 @@ export class WeaponController {
             if (this._firstShotTimer) { clearTimeout(this._firstShotTimer); this._firstShotTimer = null; }
             this._cancelHoldAimTimer();
             this._hud.hideCrosshair();
+            this._hud.hideAmmo?.();
             this._player.switchLocomotionSet("default");
             this._player.setMaxCamDistance(this._normalMaxCam);
             this._player.setPlayerSpeed(this._baseSpeed);
@@ -307,8 +318,8 @@ export class WeaponController {
         if (this._currentMode === MODE.PRIMARY) {
             this._player.switchLocomotionSet("primary");
             this._player.setPlayerSpeed(this._armedSpeed);
-            // 初次切换时更新一次弹药显示
             this._hud.updateAmmo?.(this._currentAmmo, this._totalAmmo);
+            this._hud.showAmmo?.();
         }
 
         if (this._weaponModel) this._weaponModel.visible = (this._currentMode === MODE.PRIMARY);
@@ -357,6 +368,7 @@ export class WeaponController {
     // 换弹
     reload() {
         if (this._currentMode !== MODE.PRIMARY || this._isReloading || this._totalAmmo <= 0 || this._currentAmmo === this._magSize) return;
+        if (this._player.getIsFlying()) return;
 
         this._isReloading = true;
 
@@ -384,7 +396,8 @@ export class WeaponController {
         }
 
         // 动画播放到一半时停止，同时隐藏备用弹夹骨骼（避免 snap-back 到悬空位置时可见）
-        setTimeout(() => {
+        this._reloadTimer1 = setTimeout(() => {
+            this._reloadTimer1 = null;
             if (this._isReloading && this._weaponReloadAction) {
                 this._weaponReloadAction.stop();
             }
@@ -392,7 +405,8 @@ export class WeaponController {
         }, this._RELOAD_DURATION_MS / 2);
 
         // 3. 锁定状态直到动画结束
-        setTimeout(() => {
+        this._reloadTimer2 = setTimeout(() => {
+            this._reloadTimer2 = null;
             // 此时 _isReloading 变回 false，允许开火
             this._isReloading = false;
 
@@ -509,19 +523,28 @@ export class WeaponController {
         this._currentAmmo--;
         this._hud.updateAmmo?.(this._currentAmmo, this._totalAmmo);
 
-        const zombieId = this._frameHit?.object?.userData?.zombieId;
-
-        if (zombieId && this._zombieManager) {
-            this._zombieManager.onHit(zombieId, 30);
-            this._hud.flashHit(); // 触发命中红点反馈
-        } else {
-            this._decalSystem.spawn(this._frameHit, this._effects);
-        }
-
+        // 枪口火焰 + 音效：无论命中什么都必须先触发
         if (this._effects && this._muzzlePoint) {
             this._muzzlePoint.updateWorldMatrix(true, false);
             this._muzzlePoint.getWorldPosition(_muzzleWorldPos);
             this._effects.triggerMuzzleFlash(_muzzleWorldPos, this._camera);
+        }
+
+        // 多人模式：检测是否命中远程玩家（dmgMult 由命中部位决定：头×2，躯干×1，四肢×0.75）
+        const hitPlayerId = this._frameHit?.object?.userData?.playerId;
+        if (hitPlayerId && this.onHitPlayer) {
+            const dmgMult = this._frameHit.object.userData.dmgMult ?? 1.0;
+            this.onHitPlayer(hitPlayerId, Math.round(30 * dmgMult));
+            this._hud.flashHit();
+            return;
+        }
+
+        const zombieId = this._frameHit?.object?.userData?.zombieId;
+        if (zombieId && this._zombieManager) {
+            this._zombieManager.onHit(zombieId, 30);
+            this._hud.flashHit();
+        } else {
+            this._decalSystem.spawn(this._frameHit, this._effects);
         }
     }
 
@@ -541,6 +564,18 @@ export class WeaponController {
                 this.exitAim(true);
             }
         }, this._HOLD_AIM_DURATION);
+    }
+
+    _cancelReload() {
+        if (!this._isReloading) return;
+        this._isReloading = false;
+        if (this._reloadTimer1) { clearTimeout(this._reloadTimer1); this._reloadTimer1 = null; }
+        if (this._reloadTimer2) { clearTimeout(this._reloadTimer2); this._reloadTimer2 = null; }
+        if (this._weaponReloadAction) this._weaponReloadAction.stop();
+        if (this._magazineBone) this._magazineBone.scale.setScalar(0.0001);
+        this._effects?.stopReloadSound();
+        this._player.stopUpperBody(0.18);
+        this._hud.hideCrosshair();
     }
 
     _cancelHoldAimTimer() {

@@ -48,5 +48,8 @@
         "type": "git",
         "url": "https://github.com/hh-hang/three-player-controller"
     },
-    "homepage": "https://github.com/hh-hang/three-player-controller"
+    "homepage": "https://github.com/hh-hang/three-player-controller",
+    "dependencies": {
+        "firebase": "^12.14.0"
+    }
 }

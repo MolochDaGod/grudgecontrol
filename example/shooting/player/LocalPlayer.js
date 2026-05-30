@@ -310,10 +310,13 @@ export class LocalPlayer {
     getCollider() { return this._player?.getCollider?.() ?? null; }
     getCenterScreenRaycastHit() { return this._player?.getCenterScreenRaycastHit() ?? null; }
     playAnimation(name, opts) { return this._player?.playAnimation(name, opts); }
+    registerAnimation(key, clipName, opts) { return this._player?.registerAnimation(key, clipName, opts); }
     registerLocomotionSet(...a) { return this._player?.registerLocomotionSet(...a); }
     switchLocomotionSet(name) { return this._player?.switchLocomotionSet(name); }
     setMaxCamDistance(d) { return this._player?.setMaxCamDistance(d); }
     setPlayerSpeed(s) { return this._player?.setPlayerSpeed(s); }
     setEnableToward(v) { return this._player?.setEnableToward(v); }
     setThirdMouseMode(mode) { return this._player?.setThirdMouseMode(mode); }
+    onAllEvent() { return this._player?.onAllEvent(); }
+    offAllEvent() { return this._player?.offAllEvent(); }
 }

@@ -2,19 +2,18 @@
 // 不依赖任何 Three.js 对象，只操作 DOM
 export class HUD {
     constructor(weaponSlots) {
-        // ==================== 武器槽配置 ====================
         this._slots = weaponSlots; // [{ key, mode, label }]
 
-        // ==================== DOM 引用 ====================
         this._crosshair = document.getElementById("crosshair");
         this._weaponHud = document.getElementById("weapon-hud");
-        this._ammoHud = document.getElementById("ammo-info");
-        this._hitTimer = null; // 命中红点恢复计时器
+        this._ammoHud = document.getElementById("ammo-hud");
+        this._ammoCurrent = document.getElementById("ammo-current-val");
+        this._ammoTotal = document.getElementById("ammo-total-val");
+        this._hitTimer = null;
     }
 
     // ==================== 初始化 ====================
 
-    // 首次构建武器槽 DOM
     build() {
         this._weaponHud.innerHTML = "";
         for (let i = this._slots.length - 1; i >= 0; i--) {
@@ -25,23 +24,29 @@ export class HUD {
             el.innerHTML = `<span class="slot-key">${slot.key}</span><span class="slot-name">${slot.label}</span>`;
             this._weaponHud.appendChild(el);
         }
-        this._weaponHud.style.display = "none";
     }
 
-    // ==================== 更新 ====================
+    // ==================== 武器槽 ====================
 
-    // 刷新当前高亮武器槽
     update(currentMode) {
         this._weaponHud.querySelectorAll(".weapon-slot").forEach((el) => {
             el.classList.toggle("active", el.dataset.mode === currentMode);
         });
     }
 
-    // 更新弹药数量显示
+    // ==================== 弹药 ====================
+
     updateAmmo(current, max) {
-        if (this._ammoHud) {
-            this._ammoHud.innerHTML = `<span class="ammo-current">${current}</span><span class="ammo-separator">/</span><span class="ammo-max">${max}</span>`;
-        }
+        if (this._ammoCurrent) this._ammoCurrent.textContent = current;
+        if (this._ammoTotal) this._ammoTotal.textContent = max;
+    }
+
+    showAmmo() {
+        if (this._ammoHud) this._ammoHud.style.display = "flex";
+    }
+
+    hideAmmo() {
+        if (this._ammoHud) this._ammoHud.style.display = "none";
     }
 
     // ==================== 准星 ====================
@@ -49,15 +54,12 @@ export class HUD {
     showCrosshair() { this._crosshair.style.display = "block"; }
     hideCrosshair() { this._crosshair.style.display = "none"; }
 
-    // 命中反馈：准星短时间内变红
     flashHit() {
         if (!this._crosshair) return;
         if (this._hitTimer) clearTimeout(this._hitTimer);
         this._crosshair.style.backgroundColor = "red";
-        this._crosshair.style.color = "red";
         this._hitTimer = setTimeout(() => {
             this._crosshair.style.backgroundColor = "";
-            this._crosshair.style.color = "";
         }, 100);
     }
 }
