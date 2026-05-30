@@ -35,7 +35,7 @@
         }
     },
     "devDependencies": {
-        "@sparkjsdev/spark": "^0.1.10",
+        "@sparkjsdev/spark": "^2.1.0",
         "@types/node": "^25.0.6",
         "@types/three": "^0.184.0",
         "3d-tiles-renderer": "^0.4.24",

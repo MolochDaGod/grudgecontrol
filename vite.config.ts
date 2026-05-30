@@ -18,6 +18,7 @@ export default defineConfig({
                 OfficeBuilding: resolve(__dirname, "example", "OfficeBuilding.html"),
                 shooting: resolve(__dirname, "example", "shooting", "shooting.html"),
                 multiplayer: resolve(__dirname, "example", "multiplayer.html"),
+                multiplayer3dgs: resolve(__dirname, "example", "multiplayer-3dgs.html"),
             },
         },
     },

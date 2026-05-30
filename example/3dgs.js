@@ -13,7 +13,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import { playerController } from "../src/playerController";
-import { SplatMesh } from "@sparkjsdev/spark";
+import { SplatMesh, SparkRenderer } from "@sparkjsdev/spark";
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 
 let player;
@@ -65,6 +65,8 @@ async function init() {
     const ambient = new AmbientLight(0xffffff, 10);
     scene.add(ambient);
 
+
+
     // 背景
     new HDRLoader().load(
         "./img/1.hdr",
@@ -90,6 +92,8 @@ async function init() {
 
     // 加载3DGS场景
     initGltfLoader();
+    const spark = new SparkRenderer({ renderer });
+    scene.add(spark);
     const splatURL = './3DGS/3DGS.sog'
     const butterfly = new SplatMesh({
         url: splatURL,
