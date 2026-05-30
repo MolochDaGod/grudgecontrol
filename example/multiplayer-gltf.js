@@ -56,30 +56,77 @@ const SPAWN_POINTS = [
     new THREE.Vector3(-7.957, 2.772, 9.655),
     new THREE.Vector3(2.330, 3.757, 21.281),
 ];
-const PLAYER_MODEL_URL1 = BASE + "./glb/person1.glb";
-const PLAYER_MODEL_URL2 = BASE + "./glb/person2.glb";
-const PLAYER_MODEL_URL15 = BASE + "./glb/person15.glb";
-const FIRST_PERSON_PITCH_OFFSET_BY_MODEL = {
-    [PLAYER_MODEL_URL1]: Math.PI * (10 / 180),
-    [PLAYER_MODEL_URL2]: Math.PI * (10 / 180),
-    [PLAYER_MODEL_URL15]: Math.PI * (16 / 180),
-};
+// 角色库（与 HTML data-idx 对应），每项含完整模型配置
+const CHARACTER_LIST = [
+    {
+        name: "Josh",
+        url: BASE + "./glb/person1.glb",
+        scale: 0.001,
+        idleAnim: "idle1",
+        walkAnim: "walk",
+        runAnim: "run",
+        jumpAnim: "jump",
+        flyAnim: "flying",
+        flyIdleAnim: "flyidle",
+        headBoneName: "mixamorigHead",
+        rotateY: -Math.PI / 2,
+        minCamDistance: 10, maxCamDistance: 220,
+        firstPersonPitchOffset: Math.PI * (10 / 180),
+    },
+    {
+        name: "Tommy",
+        url: BASE + "./glb/person2.glb",
+        scale: 0.001,
+        idleAnim: "idle1",
+        walkAnim: "walk",
+        runAnim: "run",
+        jumpAnim: "jump",
+        flyAnim: "flying",
+        flyIdleAnim: "flyidle",
+        headBoneName: "mixamorigHead",
+        rotateY: -Math.PI / 2,
+        minCamDistance: 10, maxCamDistance: 220,
+        firstPersonPitchOffset: Math.PI * (10 / 180),
+    },
+    {
+        name: "Swat",
+        url: BASE + "./glb/person15.glb",
+        scale: 0.001,
+        idleAnim: "idle1",
+        walkAnim: "walk",
+        runAnim: "run",
+        jumpAnim: "jump",
+        flyAnim: "flying",
+        flyIdleAnim: "flyidle",
+        headBoneName: "mixamorigHead",
+        rotateY: -Math.PI / 2,
+        minCamDistance: 10, maxCamDistance: 220,
+        firstPersonPitchOffset: Math.PI * (16 / 180),
+    },
+    {
+        name: "UE",
+        url: BASE + "./glb/UEPerson.glb",
+        scale: 0.001,
+        idleAnim: "idle",
+        walkAnim: "walk",
+        runAnim: "run",
+        jumpAnim: ["jumpStart", "jumpLoop", "jumpEnd"],
+        flyAnim: "fly", flyIdleAnim: "flyIdle",
+        flyHoverForwardAnim: "flyHoverForward",
+        flyHoverBackAnim: "flyHoverBack",
+        flyHoverLeftAnim: "flyHoverLeft",
+        flyHoverRightAnim: "flyHoverRight",
+        flyHoverUpAnim: "flyHoverUp",
+        flyHoverDownAnim: "flyHoverDown",
+        headBoneName: null,
+        rotateY: Math.PI,
+        minCamDistance: 10, maxCamDistance: 220,
+        firstPersonPitchOffset: Math.PI * (10 / 180),
+    },
+];
+let selectedModelUrl = CHARACTER_LIST[2].url; // 默认 Swat（index 2）
 
-const PLAYER_MODEL = {
-    url: PLAYER_MODEL_URL2,
-    scale: 0.001,
-    idleAnim: "idle1",
-    walkAnim: "walk",
-    runAnim: "run",
-    jumpAnim: "jump",
-    flyAnim: "flying",
-    flyIdleAnim: "flyidle",
-    headBoneName: "mixamorigHead",
-    rotateY: -Math.PI / 2,
-    minCamDistance: 10,
-    maxCamDistance: 220,
-    firstPersonPitchOffset: FIRST_PERSON_PITCH_OFFSET_BY_MODEL[PLAYER_MODEL_URL2],
-};
+const PLAYER_MODEL = { ...CHARACTER_LIST[2] };
 
 // 持枪时远程玩家的动画映射（clipName → rifleClipName）
 const RIFLE_ANIM_MAP = { idle1: "rifle_idle", walk: "rifle_walk", run: "rifle_run", jump: "rifle_jump" };
@@ -109,14 +156,6 @@ let camera, renderer, controls;
 const clock = new THREE.Clock();
 const gltfLoader = new GLTFLoader();
 
-// 角色库（与 HTML data-idx 对应）
-const CHARACTER_LIST = [
-    { url: PLAYER_MODEL_URL1, name: "Josh" },
-    { url: PLAYER_MODEL_URL2, name: "Tommy" },
-    { url: PLAYER_MODEL_URL15, name: "Swat" },
-];
-let selectedModelUrl = PLAYER_MODEL_URL15; // 默认 Swat（index 2）
-
 // 本地血量 & 名字 & 死亡状态 & 击杀死亡统计
 let myHp = 100;
 let isDead = false;
@@ -142,9 +181,9 @@ function randomName() {
 function waitForName() {
     const savedName = localStorage.getItem("mp_name");
     const savedCharIdx = parseInt(localStorage.getItem("mp_char_idx") ?? "2");
-    selectedModelUrl = CHARACTER_LIST[savedCharIdx]?.url ?? PLAYER_MODEL_URL15;
+    selectedModelUrl = CHARACTER_LIST[savedCharIdx]?.url ?? CHARACTER_LIST[2].url;
 
-    // 用 BASE 设置角色头像路径（%BASE_URL% 在 inline CSS 里不被 Vite 替换）
+    // 用 BASE 设置角色头像路径
     const charImgs = [
         BASE + "img/multiplayer/char_josh.png",
         BASE + "img/multiplayer/char_tommy.png",
@@ -171,7 +210,7 @@ function waitForName() {
         cards.forEach(card => card.addEventListener("click", () => {
             cards.forEach(c => c.classList.remove("selected"));
             card.classList.add("selected");
-            selectedModelUrl = CHARACTER_LIST[parseInt(card.dataset.idx)]?.url ?? PLAYER_MODEL_URL15;
+            selectedModelUrl = CHARACTER_LIST[parseInt(card.dataset.idx)]?.url ?? CHARACTER_LIST[2].url;
         }));
 
         const confirm = () => {
@@ -198,6 +237,8 @@ function openChat() {
     const input = document.getElementById("chat-input");
     wrap.style.display = "flex";
     input.value = "";
+    const prefix = document.getElementById("chat-prefix");
+    if (prefix) prefix.textContent = myName + ":";
     setTimeout(() => input.focus(), 20);
 }
 
@@ -274,6 +315,7 @@ class RemotePlayer {
     constructor(id, charIdx = 2) {
         this.id = id;
         this.charIdx = charIdx;
+        this._charCfg = CHARACTER_LIST[charIdx] ?? CHARACTER_LIST[2];
         this.model = null;
         this.gunModel = null;
         this.mixer = null;
@@ -295,10 +337,10 @@ class RemotePlayer {
     // 异步加载模型、动画、碰撞盒、枪械；完成后 loaded = true
     async load() {
         // 根据角色索引加载对应模型
-        const modelUrl = CHARACTER_LIST[this.charIdx]?.url ?? PLAYER_MODEL_URL15;
+        const modelUrl = CHARACTER_LIST[this.charIdx]?.url ?? CHARACTER_LIST[2].url;
         const gltf = await gltfLoader.loadAsync(modelUrl);
         this.model = gltf.scene;
-        this.model.scale.setScalar(PLAYER_MODEL.scale);
+        this.model.scale.setScalar(this._charCfg.scale);
         this.model.visible = false;
         scene.add(this.model);
 
@@ -351,10 +393,10 @@ class RemotePlayer {
         }
 
         // 初始 idle 动画
-        this._switchAnim(PLAYER_MODEL.idleAnim);
+        this._switchAnim(this._charCfg.idleAnim);
         this.loaded = true;
 
-        this._headBone = this.model.getObjectByName(PLAYER_MODEL.headBoneName) ?? null;
+        this._headBone = this.model.getObjectByName(this._charCfg.headBoneName) ?? null;
         this._buildNameLabel();
     }
 
@@ -385,7 +427,7 @@ class RemotePlayer {
             if (!state.dead) {
                 // 敌人已复活：重置死亡状态，切回 idle，继续正常同步
                 this._isDead = false;
-                this._switchAnim(PLAYER_MODEL.idleAnim);
+                this._switchAnim(this._charCfg.idleAnim);
             } else {
                 return; // 仍处于死亡状态，忽略
             }
@@ -481,8 +523,8 @@ class RemotePlayer {
     // 每帧：平滑插值位置/旋转，驱动动画 mixer
     tick(delta) {
         if (!this.loaded || !this.model) return;
-        this.model.position.lerp(this.targetPos, 0.15);
-        this.model.quaternion.slerp(this.targetQuat, 0.15);
+        this.model.position.lerp(this.targetPos, 0.3);
+        this.model.quaternion.slerp(this.targetQuat, 0.3);
         this.mixer?.update(delta);
     }
 
@@ -497,10 +539,10 @@ class RemotePlayer {
             this._headBone.updateWorldMatrix(true, false);
             this._headBone.getWorldPosition(worldPos);
             // 在世界坐标空间加偏移，透视会自动压缩远处的偏移量，避免固定像素偏移导致越远越高
-            worldPos.y += PLAYER_MODEL.scale * 60;
+            worldPos.y += this._charCfg.scale * 60;
         } else {
             this.model.getWorldPosition(worldPos);
-            worldPos.y += PLAYER_MODEL.scale * 230;
+            worldPos.y += this._charCfg.scale * 230;
         }
         const s = worldPos.clone().project(camera);
         if (s.z > 1) { this.nameLabelEl.style.display = "none"; return; }
@@ -535,7 +577,7 @@ class RemotePlayer {
 const _sendPos = new THREE.Vector3();
 const _sendQuat = new THREE.Quaternion();
 let lastSendTime = 0;
-const SEND_INTERVAL = 50;
+const SEND_INTERVAL = 17;
 let currentUpperKey = null; // 跟踪上半身动画 key
 
 // 将本地玩家当前状态推送到 Firebase（位置、朝向、动画、血量、死亡标志）
@@ -1001,10 +1043,7 @@ async function init() {
 }
 
 waitForName().then(() => {
-    // 将选中的角色应用到 PLAYER_MODEL
-    PLAYER_MODEL.url = selectedModelUrl;
-    PLAYER_MODEL.firstPersonPitchOffset =
-        FIRST_PERSON_PITCH_OFFSET_BY_MODEL[selectedModelUrl]
-        ?? PLAYER_MODEL.firstPersonPitchOffset;
+    const entry = CHARACTER_LIST.find(c => c.url === selectedModelUrl) ?? CHARACTER_LIST[2];
+    Object.assign(PLAYER_MODEL, entry);
     return init();
 });

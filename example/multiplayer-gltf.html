@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>Multiplayer GLTF — three-player-controller</title>
+        <title>多人联机 GLTF — three-player-controller</title>
         <style>
             html, body { height: 100%; margin: 0; }
             #container {
@@ -143,15 +143,16 @@
             }
             /* ---- 角色选择区 ---- */
             #char-picker {
-                display: flex; flex-direction: column; gap: 8px;
-                max-height: 320px; overflow-y: auto;
-                padding-right: 14px;
+                display: grid; grid-template-columns: repeat(3, 1fr);
+                gap: 8px; align-content: start;
+                min-width: 210px; max-height: 240px; overflow-y: auto;
+                padding-right: 6px;
                 border-right: 1px solid rgba(255,255,255,0.08);
             }
             #char-picker::-webkit-scrollbar { width: 3px; }
             #char-picker::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
             .char-card {
-                width: 58px; flex-shrink: 0; cursor: pointer;
+                width: 100%; cursor: pointer;
                 border-radius: 6px; border: 2px solid transparent;
                 overflow: hidden; position: relative;
                 background: rgba(255,255,255,0.04);
@@ -160,7 +161,7 @@
             .char-card:hover { border-color: rgba(255,255,255,0.25); }
             .char-card.selected { border-color: rgba(100,180,255,0.7); }
             .char-avatar {
-                width: 58px; height: 72px;
+                width: 100%; height: 72px;
                 background: rgba(255,255,255,0.06);
                 background-size: cover; background-position: center top;
                 display: block;
@@ -300,13 +301,13 @@
     <body>
         <!-- 房间已满提示 -->
         <div id="room-full-overlay">
-            <div class="rf-title">Room Full</div>
+            <div class="rf-title">房间已满</div>
         </div>
 
         <!-- 名字输入弹窗（进入游戏前显示） -->
         <div id="name-overlay">
             <div id="name-dialog">
-                <!-- 左：角色库（头像占位，后续替换图片） -->
+                <!-- 左：角色库 -->
                 <div id="char-picker">
                     <div class="char-card" data-idx="0">
                         <div class="char-avatar"></div>
@@ -323,9 +324,9 @@
                 </div>
                 <!-- 右：名字输入 -->
                 <div id="name-form">
-                    <div class="nd-title">ENTER YOUR NAME</div>
+                    <div class="nd-title">输入你的名字</div>
                     <input id="name-input" type="text" maxlength="16" spellcheck="false">
-                    <button id="name-confirm">PLAY</button>
+                    <button id="name-confirm">进入游戏</button>
                 </div>
             </div>
         </div>
@@ -335,26 +336,26 @@
         <!-- 操作提示 -->
         <div class="hud" role="note">
             <div class="row">
-                <span class="hint-text">Move:</span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+                <span class="hint-text">移动:</span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
                 <span class="hud-sep"></span>
-                <span class="hint-text">Sprint:</span><kbd>Shift</kbd>
+                <span class="hint-text">冲刺:</span><kbd>Shift</kbd>
             </div>
             <div class="row">
-                <span class="hint-text">Jump:</span><kbd>Space</kbd>
+                <span class="hint-text">跳跃:</span><kbd>Space</kbd>
                 <span class="hud-sep"></span>
-                <span class="hint-text">Fly:</span><kbd>F</kbd>
+                <span class="hint-text">飞行:</span><kbd>F</kbd>
                 <span class="hud-sep"></span>
-                <span class="hint-text">View:</span><kbd>V</kbd>
+                <span class="hint-text">视角:</span><kbd>V</kbd>
             </div>
             <div class="row">
-                <span class="hint-text">Weapon:</span><kbd>Q</kbd>
+                <span class="hint-text">武器:</span><kbd>Q</kbd>
                 <span class="hud-sep"></span>
-                <span class="hint-text">Reload:</span><kbd>R</kbd>
+                <span class="hint-text">换弹:</span><kbd>R</kbd>
             </div>
             <div class="row">
-                <span class="hint-text">Chat:</span><kbd>Enter</kbd>
+                <span class="hint-text">聊天:</span><kbd>Enter</kbd>
                 <span class="hud-sep"></span>
-                <span class="hint-text">Scoreboard:</span><kbd>Tab</kbd>
+                <span class="hint-text">计分板:</span><kbd>Tab</kbd>
             </div>
         </div>
 
@@ -391,9 +392,9 @@
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>NAME</th>
-                            <th>KILLS</th>
-                            <th>DEATHS</th>
+                            <th>名字</th>
+                            <th>击杀</th>
+                            <th>死亡</th>
                         </tr>
                     </thead>
                     <tbody id="sb-body"></tbody>
@@ -403,8 +404,7 @@
 
         <!-- 死亡遮罩 -->
         <div id="death-overlay">
-            <div class="death-title">YOU DIED</div>
-            <button id="btn-respawn">RESPAWN</button>
+            <button id="btn-respawn">复活</button>
         </div>
 
         <!-- 准星 -->
@@ -414,7 +414,7 @@
         <div id="chat-container">
             <div id="chat-messages"></div>
             <div id="chat-input-wrap">
-                <span id="chat-prefix">Say:</span>
+                <span id="chat-prefix">你:</span>
                 <input id="chat-input" type="text" maxlength="80" autocomplete="off" spellcheck="false">
             </div>
         </div>
