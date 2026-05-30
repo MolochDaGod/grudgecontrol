@@ -32,7 +32,7 @@ const FIREBASE_CONFIG = {
 
 // ==================== 房间 & 身份 ====================
 const MAX_PLAYERS = 10;
-const roomId = location.hash.slice(1) || "lobby";
+const roomId = "3dgs-" + (location.hash.slice(1) || "lobby");
 const playerId = Math.random().toString(36).slice(2, 9);
 
 const firebaseApp = initializeApp(FIREBASE_CONFIG);
@@ -101,6 +101,10 @@ const UPPER_CLIP_MAP = { upper_aim: "rifle_idle_aim3", upper_shoot: "rifle_shoot
 // ==================== 场景变量 ====================
 let localPlayer = null;
 let weapon = null;
+let audioListener = null;
+let gunShotBuffer = null;
+let localShotSeq = 0;
+let decalSystem = null;
 const scene = new THREE.Scene();
 let camera, renderer, controls;
 const clock = new THREE.Clock();
@@ -258,6 +262,7 @@ function triggerRespawn() {
     const capsule = localPlayer._player?.getPlayerCapsule();
     if (capsule) capsule.position.copy(respawnPos);
 
+    weapon?.resetAmmo();
     localPlayer.onAllEvent();
     localPlayer.playPlayerAnimationByName(PLAYER_MODEL.idleAnim, 0.3);
     sendState();
@@ -284,6 +289,8 @@ class RemotePlayer {
         this.name = "";
         this.nameLabelEl = null;
         this._headBone = null;
+        this._gunSound = null;
+        this._lastShotSeq = null;
     }
 
     // 异步加载模型、动画、碰撞盒、枪械；完成后 loaded = true
@@ -334,6 +341,15 @@ class RemotePlayer {
 
         // 加载枪模型挂到右手
         await this._loadGun();
+
+        // 挂载空间化枪声（距离衰减，远近有别）
+        if (audioListener && gunShotBuffer && this.gunModel) {
+            this._gunSound = new THREE.PositionalAudio(audioListener);
+            this._gunSound.setBuffer(gunShotBuffer);
+            this._gunSound.setRefDistance(10);
+            this._gunSound.setVolume(1.0);
+            this.gunModel.add(this._gunSound);
+        }
 
         // 初始 idle 动画
         this._switchAnim(PLAYER_MODEL.idleAnim);
@@ -402,6 +418,17 @@ class RemotePlayer {
 
         this.targetPos.set(state.x, state.y, state.z);
         this.targetQuat.set(state.qx, state.qy, state.qz, state.qw);
+
+        // 远程枪声：首次收到时记录基准值，后续检测到计数器增加则播放空间音效
+        if (state.shotSeq !== undefined) {
+            if (this._lastShotSeq === null) {
+                this._lastShotSeq = state.shotSeq;
+            } else if (state.shotSeq > this._lastShotSeq && this._gunSound) {
+                if (this._gunSound.isPlaying) this._gunSound.stop();
+                this._gunSound.play();
+                this._lastShotSeq = state.shotSeq;
+            }
+        }
 
         // 枪模型显隐
         if (this.gunModel) this.gunModel.visible = (state.weapon === "primary");
@@ -496,6 +523,10 @@ class RemotePlayer {
         this._hitboxes = null;
         this.mixer?.stopAllAction();
         this.model = null;
+        if (this._gunSound) {
+            if (this._gunSound.isPlaying) this._gunSound.stop();
+            this._gunSound = null;
+        }
         this.nameLabelEl?.remove();
         this.nameLabelEl = null;
     }
@@ -532,6 +563,7 @@ function sendState() {
         kills: localKills,
         deaths: localDeaths,
         name: myName,
+        shotSeq: localShotSeq,
         t: Date.now(),
     });
 }
@@ -599,6 +631,16 @@ function initFirebaseSync() {
         if (t < joinTime - 3000) return; // 过滤早于加入时间 3 秒的历史消息
         addChatMessage(name, text);
         if (Date.now() - t > 30000) remove(snap.ref); // 清理超过 30 秒的旧消息
+    });
+
+    // 监听其他玩家产生的弹痕（自己的跳过，入场前 3 秒的忽略，读完即删）
+    const decalsRef = ref(db, `rooms/${roomId}/decals`);
+    onChildAdded(decalsRef, snap => {
+        const d = snap.val();
+        if (!d || snap.key?.endsWith(`_${playerId}`)) { remove(snap.ref); return; }
+        if (d.t < joinTime - 3000) { remove(snap.ref); return; }
+        decalSystem?.spawnAtPoint(new THREE.Vector3(d.x, d.y, d.z), new THREE.Vector3(d.nx, d.ny, d.nz));
+        remove(snap.ref);
     });
 
     // 监听命中本玩家的事件
@@ -825,9 +867,8 @@ async function init() {
     scene.add(spark);
     const splatMesh = new SplatMesh({
         url: SPLAT_URL,
-        onLoad: (mesh) => {
-            mesh.rotateZ(Math.PI);
-        }
+        onProgress: (e) => window.setLoaderProgress?.(e.loaded, e.total),
+        onLoad: (mesh) => { mesh.rotateZ(Math.PI); },
     });
     scene.add(splatMesh);
 
@@ -883,27 +924,38 @@ async function init() {
     hud.build();
 
     // 音频
-    const listener = new THREE.AudioListener();
-    camera.add(listener);
+    audioListener = new THREE.AudioListener();
+    camera.add(audioListener);
 
     // 特效
-    const effects = new ShootingEffects(scene, { listener, flashScale: 0.015, smokeSize: 0.08 });
+    const effects = new ShootingEffects(scene, { listener: audioListener, flashScale: 0.015, smokeSize: 0.08 });
     await effects.load(
         BASE + "img/muzzle_flash.png",
         BASE + "img/smoke.png",
         BASE + "audio/gun_shot.mp3",
         BASE + "audio/reload.mp3",
     );
+    gunShotBuffer = effects._fireSound?.buffer ?? null;
 
     // 弹孔
-    const decalSystem = new DecalSystem(scene, 60, 0.025);
+    decalSystem = new DecalSystem(scene, 60, 0.025);
     await decalSystem.loadMaterials(["img/bullet_hole2.png"], BASE);
+    decalSystem.onSpawn = (p, n) => {
+        set(ref(db, `rooms/${roomId}/decals/${Date.now()}_${playerId}`), {
+            x: +p.x.toFixed(4), y: +p.y.toFixed(4), z: +p.z.toFixed(4),
+            nx: +n.x.toFixed(4), ny: +n.y.toFixed(4), nz: +n.z.toFixed(4),
+            t: Date.now(),
+        });
+    };
 
     // 武器控制器
     weapon = new WeaponController({ scene, camera, localPlayer, decalSystem, effects, hud, zombieManager: null });
     await weapon.load(gltfLoader, BASE);
     weapon.setupAnimations();
     weapon.bindInput();
+
+    const _origFireOnce = weapon._fireOnce.bind(weapon);
+    weapon._fireOnce = function () { localShotSeq++; _origFireOnce(); };
 
     // 注册死亡动画：LoopOnce + 锁末帧，播完后显示死亡遮罩
     localPlayer.registerAnimation("death", "death", {
@@ -961,6 +1013,8 @@ async function init() {
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
+    // 等待高斯泼溅模型加载完毕再隐藏 loader
+    await splatMesh.initialized.catch(() => { });
     window.hideLoader?.();
 }
 

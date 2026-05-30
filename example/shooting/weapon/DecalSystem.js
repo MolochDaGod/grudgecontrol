@@ -21,6 +21,7 @@ export class DecalSystem {
         this._pool = []; // 场景中现存的弹孔 Mesh
         this._mats = []; // 可用的弹痕材质（多张随机选取）
         this._geo = new PlaneGeometry(decalSize, decalSize); // 弹孔平面几何体
+        this.onSpawn = null; // (hitPoint, hitNormal) => void，多人模式注入广播回调
     }
 
     // ==================== 初始化 ====================
@@ -78,6 +79,30 @@ export class DecalSystem {
 
         // 命中硝烟特效
         effects?.triggerHitSmoke(hitPoint, hitNormal);
+
+        // 广播给其他客户端（多人模式注入）
+        this.onSpawn?.(hitPoint, hitNormal);
+    }
+
+    // 根据世界坐标和法线直接生成弹孔（接收远程弹痕时使用，不触发硝烟）
+    spawnAtPoint(hitPoint, hitNormal) {
+        if (!this._mats.length) return;
+
+        _decalHelper.position.copy(hitPoint);
+        _decalHelper.lookAt(hitPoint.clone().add(hitNormal));
+        _decalHelper.rotation.z = Math.random() * Math.PI * 2;
+
+        const mat = this._mats[Math.floor(Math.random() * this._mats.length)];
+        const decal = new Mesh(this._geo, mat);
+        decal.position.copy(hitPoint).addScaledVector(hitNormal, 0.001);
+        decal.rotation.copy(_decalHelper.rotation);
+        decal.renderOrder = 1;
+        this._scene.add(decal);
+
+        this._pool.push(decal);
+        if (this._pool.length > this._maxDecals) {
+            this._scene.remove(this._pool.shift());
+        }
     }
 
     // 清空所有弹孔

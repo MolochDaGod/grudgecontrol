@@ -263,6 +263,12 @@ export class WeaponController {
 
     getMode() { return this._currentMode; }
 
+    resetAmmo() {
+        this._currentAmmo = this._magSize;
+        this._totalAmmo = 300;
+        this._hud.updateAmmo?.(this._currentAmmo, this._totalAmmo);
+    }
+
     _canRunCombatLogic() {
         if (this._currentMode !== MODE.PRIMARY) return false;
         if (this._isReloading) return false;
