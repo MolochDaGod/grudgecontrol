@@ -16,7 +16,8 @@ export default defineConfig({
                 dgs: resolve(__dirname, "example", "3dgs.html"),
                 ShinChan: resolve(__dirname, "example", "ShinChan.html"),
                 OfficeBuilding: resolve(__dirname, "example", "OfficeBuilding.html"),
-                shooting: resolve(__dirname, "example", "shooting", "shooting.html")
+                shooting: resolve(__dirname, "example", "shooting", "shooting.html"),
+                multiplayer: resolve(__dirname, "example", "multiplayer.html"),
             },
         },
     },
