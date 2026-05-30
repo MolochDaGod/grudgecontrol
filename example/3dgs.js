@@ -97,10 +97,8 @@ async function init() {
     const splatURL = './3DGS/3DGS.sog'
     const butterfly = new SplatMesh({
         url: splatURL,
-        onLoad: (mesh) => {
-            console.log('模型加载完成', mesh);
-            mesh.rotateX(-Math.PI / 2);
-        }
+        onProgress: (e) => window.setLoaderProgress?.(e.loaded, e.total),
+        onLoad: (mesh) => { mesh.rotateX(-Math.PI / 2); },
     });
     scene.add(butterfly);
 
@@ -152,7 +150,8 @@ async function init() {
         isSmallScale = !isSmallScale;
         animateToScale(isSmallScale ? scaleSmall : scaleNormal, 1);
     });
-    // 关闭加载页面
+    // 等待高斯泼溅模型加载完毕再隐藏 loader
+    await butterfly.initialized.catch(() => {});
     window.hideLoader();
 }
 
