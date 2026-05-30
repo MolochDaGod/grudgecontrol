@@ -30,7 +30,8 @@ const FIREBASE_CONFIG = {
 
 // ==================== 房间 & 身份 ====================
 const MAX_PLAYERS = 10;
-const roomId = "gltf-" + (location.hash.slice(1) || "lobby");
+if (!location.hash) location.replace(location.href + "#room1");
+const roomId = "gltf-" + (location.hash.slice(1) || "room1");
 const playerId = Math.random().toString(36).slice(2, 9);
 
 const firebaseApp = initializeApp(FIREBASE_CONFIG);
@@ -708,11 +709,12 @@ function updateMyHPUI() {
 
 // 显示房间已满提示，阻止进入游戏
 function showRoomFull() {
-    document.getElementById("mp-panel").innerHTML = `
-        <div style="color:#ff6b6b;font-weight:bold;margin-bottom:4px">房间已满</div>
-        <div style="color:#aaa;font-size:12px">最多 ${MAX_PLAYERS} 人</div>
-        <div style="color:#6ecbff;font-size:12px;margin-top:6px">#room1 / #room2 ...</div>
-    `;
+    const overlay = document.getElementById("room-full-overlay");
+    if (overlay) {
+        overlay.style.display = "flex";
+    } else {
+        alert(`房间已满（最多 ${MAX_PLAYERS} 人），请换个房间`);
+    }
     window.hideLoader?.();
 }
 

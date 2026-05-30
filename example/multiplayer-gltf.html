@@ -117,6 +117,18 @@
             /* ===== 武器槽（保留但不展示，保持 HUD.js 兼容） ===== */
             #weapon-hud { display: none; }
 
+            /* ===== 房间已满提示 ===== */
+            #room-full-overlay {
+                position: fixed; top: 14px; right: 14px; z-index: 99999;
+                background: rgba(15,18,28,0.92); backdrop-filter: blur(6px);
+                border: 1px solid rgba(255,80,80,0.35); border-radius: 10px;
+                padding: 12px 16px; display: none; flex-direction: column; gap: 4px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            }
+            #room-full-overlay .rf-title { color: #ff6b6b; font-size: 14px; font-weight: bold; }
+            #room-full-overlay .rf-sub   { color: #aaa; font-size: 12px; }
+            #room-full-overlay .rf-hint  { color: #6ecbff; font-size: 11px; }
+
             /* ===== 名字输入弹窗 ===== */
             #name-overlay {
                 position: fixed; inset: 0; z-index: 99999;
@@ -286,6 +298,11 @@
         <script src="./loader.js"></script>
     </head>
     <body>
+        <!-- 房间已满提示 -->
+        <div id="room-full-overlay">
+            <div class="rf-title">Room Full</div>
+        </div>
+
         <!-- 名字输入弹窗（进入游戏前显示） -->
         <div id="name-overlay">
             <div id="name-dialog">
