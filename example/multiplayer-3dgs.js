@@ -872,6 +872,13 @@ async function init() {
     });
     scene.add(splatMesh);
 
+    // 白色地面平面
+    const groundMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(100, 100)
+    );
+    groundMesh.rotation.x = -Math.PI / 2;
+    groundMesh.position.y = -0.05;
+
     // 不可见碰撞体
     const colliderGltf = await gltfLoader.loadAsync(COLLIDER_URL);
     const sceneModel = colliderGltf.scene;
@@ -895,7 +902,7 @@ async function init() {
         minCamDistance: 10,
         maxCamDistance: 220,
         enableOverShoulderView: true,
-        staticCollider: sceneModel,
+        staticCollider: [sceneModel, groundMesh],
     });
 
     // 设置本地玩家材质
@@ -975,6 +982,24 @@ async function init() {
     hud.update(weapon.getMode());
 
     document.addEventListener("contextmenu", e => e.preventDefault());
+
+    // // 点击获取射线与碰撞体的交点坐标
+    // const _clickRaycaster = new THREE.Raycaster();
+    // const _clickMouse = new THREE.Vector2();
+    // renderer.domElement.addEventListener("click", e => {
+    //     if (document.pointerLockElement) return; // 指针锁定时（游戏操作中）跳过
+    //     const rect = renderer.domElement.getBoundingClientRect();
+    //     _clickMouse.set(
+    //         ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    //         -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    //     );
+    //     _clickRaycaster.setFromCamera(_clickMouse, camera);
+    //     const hits = _clickRaycaster.intersectObject(sceneModel, true);
+    //     if (hits.length > 0) {
+    //         const { x, y, z } = hits[0].point;
+    //         console.log(`[射线交点] x=${x.toFixed(4)}, y=${y.toFixed(4)}, z=${z.toFixed(4)}`);
+    //     }
+    // });
 
     // Enter 键打开/发送聊天，Esc 取消
     document.addEventListener("keydown", e => {
