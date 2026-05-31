@@ -43,7 +43,7 @@ export class LocalPlayer {
 
         // ==================== 配置 ====================
         this._mouseSensitivity = 5;
-        this._firstPersonPitchOffset = Math.PI * (10 / 180); // 第一人称相机俯仰初始偏移
+        this._firstPersonPitchOffset = 0; // 第一人称相机俯仰初始偏移
 
         // ==================== 外部注入 ====================
         this._isGunEngagedFn = null; // 由 WeaponController 注入，判断是否持枪
@@ -83,7 +83,8 @@ export class LocalPlayer {
         const spineBones = spineBoneNames
             .map((n) => model?.getObjectByName(n))
             .filter(Boolean);
-        const headBone = model?.getObjectByName("mixamorigHead") ?? null;
+        const headBoneName = config.playerModelConfig?.headBoneName;
+        const headBone = model?.getObjectByName(headBoneName) ?? null;
         this.spineIK = new SpineIK(spineBones, headBone);
 
         // 上半身 mixer：root = 模型根节点（与主 mixer 一致，路径解析最可靠）
@@ -140,9 +141,15 @@ export class LocalPlayer {
 
         // 视角切换
         this._player.onViewChange = (isFirstPerson) => {
+            this.onViewChange?.(isFirstPerson);
             if (isFirstPerson) {
-                this._camera.position.z = 8;
-                this._camera.position.x = 15;
+                if (headBoneName) {
+                    this._camera.position.z = 8;
+                    this._camera.position.x = 15;
+                } else {
+                    this._camera.position.z = 0;
+                    this._camera.position.x = 0;
+                }
                 this._camera.rotation.x = this._firstPersonPitchOffset;
                 this._player.setEnableToward(false);
                 // 同步控制器俯仰角
@@ -319,4 +326,5 @@ export class LocalPlayer {
     setThirdMouseMode(mode) { return this._player?.setThirdMouseMode(mode); }
     onAllEvent() { return this._player?.onAllEvent(); }
     offAllEvent() { return this._player?.offAllEvent(); }
+    onViewChange(isFirstPerson) { return this._player?.onViewChange(isFirstPerson); }
 }

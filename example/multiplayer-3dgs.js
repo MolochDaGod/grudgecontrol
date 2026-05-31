@@ -105,6 +105,60 @@ const CHARACTER_LIST = [
         minCamDistance: 10, maxCamDistance: 220,
         firstPersonPitchOffset: Math.PI * (16 / 180),
     },
+    {
+        name: "Manny",
+        url: BASE + "./glb/UEPerson.glb",
+        scale: 0.001,
+        idleAnim: "idle",
+        walkAnim: "walk",
+        runAnim: "run",
+        jumpAnim: ["jumpStart", "jumpLoop", "jumpEnd"],
+        flyAnim: "fly",
+        flyIdleAnim: "flyIdle",
+        flyHoverForwardAnim: "flyHoverForward",
+        flyHoverBackAnim: "flyHoverBack",
+        flyHoverLeftAnim: "flyHoverLeft",
+        flyHoverRightAnim: "flyHoverRight",
+        flyHoverUpAnim: "flyHoverUp",
+        flyHoverDownAnim: "flyHoverDown",
+        headBoneName: null,
+        firstPersonCameraOffset: [0, 25, 30],
+        minCamDistance: 10, maxCamDistance: 220,
+        firstPersonPitchOffset: 0,
+        noGun: true,
+    },
+    {
+        name: "Mob",
+        url: BASE + "./glb/person3.glb",
+        scale: 0.003,
+        idleAnim: "idle",
+        walkAnim: "walk",
+        runAnim: "run",
+        jumpAnim: "jump",
+        flyAnim: "flying",
+        flyIdleAnim: "flyidle",
+        headBoneName: "mixamorigHead",
+        minCamDistance: 10, maxCamDistance: 220,
+        firstPersonPitchOffset: Math.PI * (10 / 180),
+        rotateY: Math.PI,
+        noGun: true,
+    },
+    {
+        name: "AntMan",
+        url: BASE + "./glb/person5.glb",
+        scale: 0.001,
+        idleAnim: "Idle_4",
+        walkAnim: "Walking_3",
+        runAnim: "Run_2",
+        jumpAnim: "Jump_1",
+        flyAnim: "flying",
+        flyIdleAnim: "flyIdle",
+        headBoneName: "mixamorigHead",
+        minCamDistance: 10, maxCamDistance: 220,
+        firstPersonPitchOffset: Math.PI * (10 / 180),
+        rotateY: Math.PI,
+        noGun: true,
+    }
 ];
 let selectedModelUrl = CHARACTER_LIST[2].url; // 默认 Swat（index 2）
 
@@ -148,6 +202,11 @@ let spawnIndex = 0; // 当前出生点索引，在 init() 和复活时递增
 let isChatting = false;
 let lastChatTime = 0;
 const CHAT_COOLDOWN = 1000; // 发送冷却（ms）
+
+// AntMan 蚁人技能状态
+let antManIsSmall = false;
+let antManIsScaling = false;
+let antManScaleFrame = null;
 const _lastHitterOf = new Map(); // targetId → attackerId，用于击杀归属
 let lastAttackerOnMe = null;     // 最后一次攻击本玩家的 playerId
 
@@ -170,6 +229,9 @@ function waitForName() {
         BASE + "img/multiplayer/char_josh.png",
         BASE + "img/multiplayer/char_tommy.png",
         BASE + "img/multiplayer/char_swat.png",
+        BASE + "img/multiplayer/char_manny.png",
+        BASE + "img/multiplayer/char_mob.png",
+        BASE + "img/multiplayer/char_antMan.png",
     ];
     document.querySelectorAll(".char-avatar").forEach((el, i) => {
         if (charImgs[i]) el.style.backgroundImage = `url(${charImgs[i]})`;
@@ -258,6 +320,7 @@ function addChatMessage(name, text) {
 // 触发本地玩家死亡：停止输入、播死亡动画、推送死亡状态到 Firebase
 function triggerDeath() {
     if (isDead) return;
+    if (PLAYER_MODEL.noGun) return; // noGun 角色没有死亡动画，不响应死亡
     isDead = true;
     localDeaths++;
     updateKillBar();
@@ -295,25 +358,25 @@ const remotePlayers = new Map();
 
 class RemotePlayer {
     constructor(id, charIdx = 2) {
-        this.id = id;
-        this.charIdx = charIdx;
-        this._charCfg = CHARACTER_LIST[charIdx] ?? CHARACTER_LIST[2];
-        this.model = null;
-        this.gunModel = null;
-        this.mixer = null;
-        this.actions = new Map();
-        this.currentClip = null;
-        this.targetPos = new THREE.Vector3();
-        this.targetQuat = new THREE.Quaternion();
-        this.loaded = false;
-        this._isDead = false;
-        this.kills = 0;
-        this.deaths = 0;
-        this.name = "";
-        this.nameLabelEl = null;
-        this._headBone = null;
-        this._gunSound = null;
-        this._lastShotSeq = null;
+        this.id = id; // 远程玩家 ID
+        this.charIdx = charIdx; // 角色索引
+        this._charCfg = CHARACTER_LIST[charIdx] ?? CHARACTER_LIST[2]; // 角色配置
+        this.model = null; // 模型
+        this.gunModel = null; // 枪械模型
+        this.mixer = null; // 动画混音器
+        this.actions = new Map(); // 动画动作映射表
+        this.currentClip = null; // 当前播放的动画动作
+        this.targetPos = new THREE.Vector3(); // 目标位置
+        this.targetQuat = new THREE.Quaternion(); // 目标旋转
+        this.loaded = false; // 是否加载完成
+        this._isDead = false; // 是否死亡
+        this.kills = 0; // 击杀数
+        this.deaths = 0; // 死亡数
+        this.name = ""; // 显示名称
+        this.nameLabelEl = null; // 显示名称元素
+        this._headBone = null; // 头骨
+        this._gunSound = null; // 枪械音效
+        this._lastShotSeq = null; // 上一次枪击序列
     }
 
     // 异步加载模型、动画、碰撞盒、枪械；完成后 loaded = true
@@ -322,7 +385,7 @@ class RemotePlayer {
         const modelUrl = CHARACTER_LIST[this.charIdx]?.url ?? CHARACTER_LIST[2].url;
         const gltf = await gltfLoader.loadAsync(modelUrl);
         this.model = gltf.scene;
-        this.model.scale.setScalar(this._charCfg.scale);
+        // 不在此处设置 scale，先让模型保持自然尺寸，待计算包围盒后再设置
         this.model.visible = false;
         scene.add(this.model);
 
@@ -342,44 +405,64 @@ class RemotePlayer {
             this.actions.set(clip.name, action);
         }
 
-        // 根据 HITBOX_DEFS 为每根骨骼挂载不可见碰撞盒
+        // noGun 角色无需碰撞盒（不参与枪击判定）
         this._hitboxes = [];
-        const hitboxMat = HITBOX_DEBUG
-            ? new THREE.MeshBasicMaterial({ color: 0x00ff88, wireframe: true })
-            : new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
-        for (const def of HITBOX_DEFS) {
-            const bone = this.model.getObjectByName(def.bone);
-            if (!bone) continue;
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(def.w, def.h, def.d), hitboxMat);
-            mesh.userData.playerId = this.id;
-            mesh.userData.hitPart = def.part;
-            mesh.userData.dmgMult = def.dmg;
-            mesh.layers.set(0);
-            mesh.layers.enable(2); // layer 2：可被武器射线检测
-            mesh.visible = HITBOX_DEBUG;
-            mesh.position.set(0, def.oy, 0);
-            bone.add(mesh);
-            this._hitboxes.push(mesh);
+        if (!this._charCfg.noGun) {
+            const hitboxMat = HITBOX_DEBUG
+                ? new THREE.MeshBasicMaterial({ color: 0x00ff88, wireframe: true })
+                : new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+            for (const def of HITBOX_DEFS) {
+                const bone = this.model.getObjectByName(def.bone);
+                if (!bone) continue;
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(def.w, def.h, def.d), hitboxMat);
+                mesh.userData.playerId = this.id;
+                mesh.userData.hitPart = def.part;
+                mesh.userData.dmgMult = def.dmg;
+                mesh.layers.set(0);
+                mesh.layers.enable(2); // layer 2：可被武器射线检测
+                mesh.visible = HITBOX_DEBUG;
+                mesh.position.set(0, def.oy, 0);
+                bone.add(mesh);
+                this._hitboxes.push(mesh);
+            }
+
+            // 加载枪模型挂到右手
+            await this._loadGun();
+
+            // 挂载空间化枪声（距离衰减，远近有别）
+            if (audioListener && gunShotBuffer && this.gunModel) {
+                this._gunSound = new THREE.PositionalAudio(audioListener);
+                this._gunSound.setBuffer(gunShotBuffer);
+                this._gunSound.setRefDistance(10);
+                this._gunSound.setVolume(1.0);
+                this.gunModel.add(this._gunSound);
+            }
         }
 
-        // 加载枪模型挂到右手
-        await this._loadGun();
-
-        // 挂载空间化枪声（距离衰减，远近有别）
-        if (audioListener && gunShotBuffer && this.gunModel) {
-            this._gunSound = new THREE.PositionalAudio(audioListener);
-            this._gunSound.setBuffer(gunShotBuffer);
-            this._gunSound.setRefDistance(10);
-            this._gunSound.setVolume(1.0);
-            this.gunModel.add(this._gunSound);
-        }
-
-        // 初始 idle 动画
+        // 播放初始动画并更新骨骼矩阵
         this._switchAnim(this._charCfg.idleAnim);
+        this.mixer.update(0);
+        this.model.updateMatrixWorld(true);
+
+        // 将模型归一化到 180 单位高度，再乘配置 scale
+        const _bboxSize = new THREE.Vector3();
+        new THREE.Box3().setFromObject(this.model).getSize(_bboxSize);
+        const _modelScale = _bboxSize.y > 0 ? (180 / _bboxSize.y) : 1;
+        this._baseScale = _modelScale * this._charCfg.scale;
+        this.model.scale.setScalar(this._baseScale);
+
+        this.model.traverse(child => {
+            if (child.isMesh) {
+                child.material.metalness = 0.0;
+                child.material.roughness = 1.0;
+            }
+        });
+
         this.loaded = true;
 
         this._headBone = this.model.getObjectByName(this._charCfg.headBoneName) ?? null;
         this._buildNameLabel();
+        this._buildChatBubble();
     }
 
     // 加载 AK47 模型并挂载到右手骨骼
@@ -439,6 +522,12 @@ class RemotePlayer {
         if (state.kills !== undefined) { this.kills = state.kills; updateKillBar(); }
         if (state.deaths !== undefined) this.deaths = state.deaths;
 
+        // AntMan 缩放同步
+        if (state.scale !== undefined && this._baseScale !== undefined) {
+            const ratio = state.scale / this._charCfg.scale;
+            this.model.scale.setScalar(this._baseScale * ratio);
+        }
+
         this.targetPos.set(state.x, state.y, state.z);
         this.targetQuat.set(state.qx, state.qy, state.qz, state.qw);
 
@@ -489,17 +578,32 @@ class RemotePlayer {
     // 创建头顶悬浮名字 DOM 标签
     _buildNameLabel() {
         const el = document.createElement("div");
-        Object.assign(el.style, {
-            position: "fixed", display: "none", pointerEvents: "none",
-            transform: "translate(-50%, -100%)", zIndex: "9996",
-            color: "#fff", fontFamily: "system-ui, sans-serif",
-            fontSize: "12px", fontWeight: "bold", whiteSpace: "nowrap",
-            textShadow: "0 1px 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.7)",
-            letterSpacing: "0.04em",
-        });
+        el.className = "player-name-label";
         el.textContent = this.name || "";
         document.body.appendChild(el);
         this.nameLabelEl = el;
+    }
+
+    _buildChatBubble() {
+        const el = document.createElement("div");
+        el.className = "player-chat-bubble";
+        el.appendChild(document.getElementById("chat-bubble-tpl").content.cloneNode(true));
+        document.body.appendChild(el);
+        this.chatBubbleEl = el;
+        this._chatTimer = null;
+        this._chatActive = false;
+    }
+
+    showChatBubble(text) {
+        if (!this.chatBubbleEl) return;
+        this.chatBubbleEl.querySelector(".player-chat-text").textContent =
+            text.length > 10 ? text.slice(0, 10) + "…" : text;
+        this._chatActive = true;
+        clearTimeout(this._chatTimer);
+        this._chatTimer = setTimeout(() => {
+            this._chatActive = false;
+            if (this.chatBubbleEl) this.chatBubbleEl.style.display = "none";
+        }, 5000);
     }
 
     // 每帧：平滑插值位置/旋转，驱动动画 mixer
@@ -514,25 +618,35 @@ class RemotePlayer {
     updateNameLabel(camera, renderer) {
         if (!this.nameLabelEl || !this.model?.visible) {
             if (this.nameLabelEl) this.nameLabelEl.style.display = "none";
+            if (this.chatBubbleEl) this.chatBubbleEl.style.display = "none";
             return;
         }
         const worldPos = new THREE.Vector3();
         if (this._headBone) {
             this._headBone.updateWorldMatrix(true, false);
             this._headBone.getWorldPosition(worldPos);
-            // 在世界坐标空间加偏移，透视会自动压缩远处的偏移量，避免固定像素偏移导致越远越高
-            worldPos.y += this._charCfg.scale * 60;
+            // 在世界坐标空间加偏移
+            worldPos.y += this._charCfg.scale * 30;
         } else {
             this.model.getWorldPosition(worldPos);
             worldPos.y += this._charCfg.scale * 230;
         }
         const s = worldPos.clone().project(camera);
-        if (s.z > 1) { this.nameLabelEl.style.display = "none"; return; }
+        if (s.z > 1) {
+            this.nameLabelEl.style.display = "none";
+            if (this.chatBubbleEl) this.chatBubbleEl.style.display = "none";
+            return;
+        }
         const x = (s.x * 0.5 + 0.5) * renderer.domElement.clientWidth;
         const y = (-s.y * 0.5 + 0.5) * renderer.domElement.clientHeight;
         this.nameLabelEl.style.display = "block";
         this.nameLabelEl.style.left = `${x}px`;
         this.nameLabelEl.style.top = `${y}px`;
+        if (this.chatBubbleEl) {
+            this.chatBubbleEl.style.display = this._chatActive ? "block" : "none";
+            this.chatBubbleEl.style.left = `${x}px`;
+            this.chatBubbleEl.style.top = `${y - 20}px`;
+        }
     }
 
     // 释放几何体/材质/DOM，将模型移出场景（玩家离线时调用）
@@ -552,6 +666,9 @@ class RemotePlayer {
         }
         this.nameLabelEl?.remove();
         this.nameLabelEl = null;
+        clearTimeout(this._chatTimer);
+        this.chatBubbleEl?.remove();
+        this.chatBubbleEl = null;
     }
 }
 
@@ -569,6 +686,7 @@ function sendState() {
     const capsule = localPlayer._player?.getPlayerCapsule();
     if (!model || !capsule) return;
 
+
     model.getWorldPosition(_sendPos);
     capsule.getWorldQuaternion(_sendQuat);
 
@@ -583,6 +701,7 @@ function sendState() {
         dead: isDead,
         killedBy: isDead ? (lastAttackerOnMe ?? null) : null,
         charIdx: CHARACTER_LIST.findIndex(c => c.url === selectedModelUrl),
+        scale: localPlayer._player?.playerModelConfig.scale,
         kills: localKills,
         deaths: localDeaths,
         name: myName,
@@ -629,7 +748,7 @@ function initFirebaseSync() {
                 rp.load().then(() => {
                     rp.applyState(state);
                     addRoomNotify(state.name || id, "joined");
-                });
+                })
                 updateCountUI();
             } else {
                 remotePlayers.get(id).applyState(state);
@@ -653,6 +772,8 @@ function initFirebaseSync() {
         const { name, text, t } = snap.val();
         if (t < joinTime - 3000) return; // 过滤早于加入时间 3 秒的历史消息
         addChatMessage(name, text);
+        const senderId = snap.key.replace(/^\d+_/, '');
+        remotePlayers.get(senderId)?.showChatBubble(text);
         if (Date.now() - t > 30000) remove(snap.ref); // 清理超过 30 秒的旧消息
     });
 
@@ -671,7 +792,8 @@ function initFirebaseSync() {
     onChildAdded(myHitsRef, snap => {
         const { damage, by } = snap.val();
         if (by) lastAttackerOnMe = by;
-        if (!isDead) {
+        // noGun 角色免疫枪击伤害
+        if (!isDead && !PLAYER_MODEL.noGun) {
             myHp = Math.max(0, myHp - damage);
             updateMyHPUI();
             if (myHp <= 0) triggerDeath();
@@ -758,6 +880,21 @@ function applyRepulsion() {
     }
 }
 
+// ==================== AntMan 蚁人技能 ====================
+function antManAnimateToScale(targetScale, duration = 1) {
+    if (antManScaleFrame !== null) { cancelAnimationFrame(antManScaleFrame); antManScaleFrame = null; }
+    antManIsScaling = true;
+    const fromScale = localPlayer?._player?.playerModelConfig.scale ?? targetScale;
+    const startTime = performance.now();
+    const tick = (now) => {
+        const t = Math.min((now - startTime) / (duration * 1000), 1);
+        localPlayer?._player?.setPlayerScale(fromScale + (targetScale - fromScale) * t);
+        if (t < 1) { antManScaleFrame = requestAnimationFrame(tick); }
+        else { antManScaleFrame = null; antManIsScaling = false; }
+    };
+    antManScaleFrame = requestAnimationFrame(tick);
+}
+
 // ==================== 渲染循环 ====================
 // 刷新顶部击杀栏：左侧本人击杀，右侧房间第一击杀
 function updateKillBar() {
@@ -798,10 +935,10 @@ function animate() {
     const delta = Math.min(clock.getDelta(), 0.05);
     const elapsed = clock.getElapsedTime();
 
-    if (localPlayer && weapon) {
+    if (localPlayer && (weapon || PLAYER_MODEL.noGun)) {
         if (!isDead) {
             const spineIK = localPlayer.spineIK;
-            const gunEngaged = weapon.isGunEngaged();
+            const gunEngaged = weapon?.isGunEngaged() ?? false;
 
             if (gunEngaged !== prevGunEngaged) {
                 localPlayer.setThirdMouseMode(gunEngaged ? 5 : 1);
@@ -819,9 +956,8 @@ function animate() {
                     : spineIK?.applyAim3P(camera, true);
             }
 
-            weapon.update(elapsed, delta);
+            weapon?.update(elapsed, delta);
             applyRepulsion();
-
 
             const now = performance.now();
             if (now - lastSendTime > SEND_INTERVAL) { lastSendTime = now; sendState(); }
@@ -864,7 +1000,7 @@ async function init() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
 
-    // 背景
+    // 环境光
     new HDRLoader().load(
         "./img/2.hdr",
         (texture) => {
@@ -873,7 +1009,19 @@ async function init() {
         },
         undefined,
         (err) => {
-            console.warn("HDR 加载失败：", err);
+            console.warn("环境光HDR 加载失败：", err);
+        }
+    );
+    // 背景
+    new HDRLoader().load(
+        "./img/3.hdr",
+        (texture) => {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            scene.background = texture;
+        },
+        undefined,
+        (err) => {
+            console.warn("背景HDR 加载失败：", err);
         }
     );
 
@@ -937,6 +1085,18 @@ async function init() {
         }
     });
 
+    localPlayer.onViewChange = (isFirstPerson) => {
+        if (!localPlayer._player.playerModelHead) {
+            if (isFirstPerson) {
+                // 隐藏人物模型
+                localPlayer._player.getPlayerModel().visible = false;
+            } else {
+                // 显示人物模型
+                localPlayer._player.getPlayerModel().visible = true;
+            }
+        }
+    };
+
     // 打印骨骼名，用于排查 SpineIK 骨骼名不匹配问题（排查完可删除）
     const boneNames = [];
     localPlayer.getPlayerModel()?.traverse(b => { if (b.isBone) boneNames.push(b.name); });
@@ -979,31 +1139,36 @@ async function init() {
         });
     };
 
-    // 武器控制器
-    weapon = new WeaponController({ scene, camera, localPlayer, decalSystem, effects, hud, zombieManager: null });
-    await weapon.load(gltfLoader, BASE);
-    weapon.setupAnimations();
-    weapon.bindInput();
+    // 武器控制器（noGun 角色无需武器系统）
+    if (!PLAYER_MODEL.noGun) {
+        weapon = new WeaponController({ scene, camera, localPlayer, decalSystem, effects, hud, zombieManager: null });
+        await weapon.load(gltfLoader, BASE);
+        weapon.setupAnimations();
+        weapon.bindInput();
 
-    const _origFireOnce = weapon._fireOnce.bind(weapon);
-    weapon._fireOnce = function () { localShotSeq++; _origFireOnce(); };
+        const _origFireOnce = weapon._fireOnce.bind(weapon);
+        weapon._fireOnce = function () { localShotSeq++; _origFireOnce(); };
+    }
 
-    // 注册死亡动画：LoopOnce + 锁末帧，播完后显示死亡遮罩
-    localPlayer.registerAnimation("death", "death", {
-        loop: false,
-        clampWhenFinished: true,
-        timeScale: 2,
-        onFinished: () => { document.getElementById("death-overlay").style.display = "flex"; },
-    });
+    // 注册死亡动画：LoopOnce + 锁末帧，播完后显示死亡遮罩（noGun 角色无死亡动画，跳过）
+    if (!PLAYER_MODEL.noGun) {
+        localPlayer.registerAnimation("death", "death", {
+            loop: false,
+            clampWhenFinished: true,
+            timeScale: 2,
+            onFinished: () => { document.getElementById("death-overlay").style.display = "flex"; },
+        });
+    }
 
     // 死亡遮罩按钮
     document.getElementById("btn-respawn").addEventListener("click", triggerRespawn);
 
-    // 注入多人命中回调
-    weapon.onHitPlayer = onHitPlayer;
-
-    localPlayer.setGunEngagedGetter(() => weapon.isGunEngaged());
-    hud.update(weapon.getMode());
+    // 注入多人命中回调（noGun 角色无武器，跳过）
+    if (weapon) {
+        weapon.onHitPlayer = onHitPlayer;
+        localPlayer.setGunEngagedGetter(() => weapon.isGunEngaged());
+        hud.update(weapon.getMode());
+    }
 
     document.addEventListener("contextmenu", e => e.preventDefault());
 
@@ -1045,6 +1210,15 @@ async function init() {
     });
     document.addEventListener("keyup", e => {
         if (e.key === "Tab") scoreboardEl.style.display = "none";
+    });
+
+    // Z 键：AntMan 蚁人缩放技能（仅 AntMan 角色可用）
+    document.addEventListener("keydown", e => {
+        if (e.code !== "KeyZ" || PLAYER_MODEL.name !== "AntMan") return;
+        if (antManIsScaling || isDead || isChatting) return;
+        antManIsSmall = !antManIsSmall;
+        const normalScale = CHARACTER_LIST[5].scale;
+        antManAnimateToScale(antManIsSmall ? normalScale / 9 : normalScale, 1);
     });
 
     // Firebase 同步
