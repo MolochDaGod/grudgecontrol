@@ -42,7 +42,7 @@ export class WeaponController {
 
         // ==================== 相机距离限制 ====================
         this._normalMaxCam = 220; // 徒手模式最远距离
-        this._armedMaxCam = 80; // 持枪模式最远距离
+        this._armedMaxCam = 100; // 瞄准模式最远距离
 
         // ==================== 移速配置 ====================
         this._baseSpeed = 300;
