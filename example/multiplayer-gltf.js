@@ -4,6 +4,7 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 
+import { createVolumeCloud, updateVolumeCloud } from "./volumeCloud.js";
 import { LocalPlayer } from "./shooting/player/LocalPlayer.js";
 import { WeaponController } from "./shooting/weapon/WeaponController.js";
 import { HUD } from "./shooting/ui/HUD.js";
@@ -179,6 +180,20 @@ const HITBOX_DEFS = [
 const UPPER_CLIP_MAP = { upper_aim: "rifle_idle_aim3", upper_shoot: "rifle_shoot3", upper_reload: "reload" };
 
 // ==================== 场景变量 ====================
+// ==================== 动态平台 ====================
+let dynamicPlatforms = [];
+
+const dynamicPlatformXPath = [
+    new THREE.Vector3(20.94, 3.74, 14.89),
+    new THREE.Vector3(-1.32, 7.65, 14.83),
+    new THREE.Vector3(-19.85, 14.38, 8.77),
+];
+const dynamicPlatformXSegments = dynamicPlatformXPath.slice(0, -1).map((p, i) => ({
+    from: p, to: dynamicPlatformXPath[i + 1],
+    length: p.distanceTo(dynamicPlatformXPath[i + 1]),
+}));
+const dynamicPlatformXLength = dynamicPlatformXSegments.reduce((s, seg) => s + seg.length, 0);
+
 let localPlayer = null;
 let weapon = null;
 let audioListener = null;  // THREE.AudioListener，供远程玩家空间音频使用
@@ -356,25 +371,27 @@ const remotePlayers = new Map();
 
 class RemotePlayer {
     constructor(id, charIdx = 2) {
-        this.id = id;
-        this.charIdx = charIdx;
-        this._charCfg = CHARACTER_LIST[charIdx] ?? CHARACTER_LIST[2];
-        this.model = null;
-        this.gunModel = null;
-        this.mixer = null;
-        this.actions = new Map();
-        this.currentClip = null;
-        this.targetPos = new THREE.Vector3();
-        this.targetQuat = new THREE.Quaternion();
-        this.loaded = false;
-        this._isDead = false;
-        this.kills = 0;
-        this.deaths = 0;
-        this.name = "";
-        this.nameLabelEl = null;
-        this._headBone = null;
-        this._gunSound = null;
-        this._lastShotSeq = null;
+        this.id = id; // 远程玩家 ID
+        this.charIdx = charIdx; // 角色索引
+        this._charCfg = CHARACTER_LIST[charIdx] ?? CHARACTER_LIST[2]; // 角色配置
+        this.model = null; // 模型
+        this.gunModel = null; // 枪械模型
+        this.mixer = null; // 动画混音器
+        this.actions = new Map(); // 动画动作映射表
+        this.currentClip = null; // 当前播放的动画动作
+        this.targetPos = new THREE.Vector3(); // 目标位置
+        this.targetQuat = new THREE.Quaternion(); // 目标旋转
+        this.loaded = false; // 是否加载完成
+        this._isDead = false; // 是否死亡
+        this.kills = 0; // 击杀数
+        this.deaths = 0; // 死亡数
+        this.name = ""; // 显示名称
+        this.nameLabelEl = null; // 显示名称元素
+        this._headBone = null; // 头骨
+        this._gunSound = null; // 枪械音效
+        this._lastShotSeq = null; // 上一次枪击序列
+        this._platformIdx = -1; // 当前所在平台索引
+        this._platformOffset = new THREE.Vector3(); // 平台偏移量
     }
 
     // 异步加载模型、动画、碰撞盒、枪械；完成后 loaded = true
@@ -525,6 +542,10 @@ class RemotePlayer {
             this.model.scale.setScalar(this._baseScale * ratio);
         }
 
+        this._platformIdx = state.platformIdx ?? -1;
+        if (this._platformIdx >= 0) {
+            this._platformOffset.set(state.pox ?? 0, state.poy ?? 0, state.poz ?? 0);
+        }
         this.targetPos.set(state.x, state.y, state.z);
         this.targetQuat.set(state.qx, state.qy, state.qz, state.qw);
 
@@ -606,6 +627,10 @@ class RemotePlayer {
     // 每帧：平滑插值位置/旋转，驱动动画 mixer
     tick(delta) {
         if (!this.loaded || !this.model) return;
+        // 站在平台上时：世界坐标 = 本地实时平台位置 + 收到的相对偏移，消除网络延迟
+        if (this._platformIdx >= 0 && dynamicPlatforms[this._platformIdx]) {
+            this.targetPos.copy(dynamicPlatforms[this._platformIdx].mesh.position).add(this._platformOffset);
+        }
         this.model.position.lerp(this.targetPos, 0.3);
         this.model.quaternion.slerp(this.targetQuat, 0.3);
         this.mixer?.update(delta);
@@ -686,6 +711,20 @@ function sendState() {
     model.getWorldPosition(_sendPos);
     capsule.getWorldQuaternion(_sendQuat);
 
+    // 站在平台上时只传平台索引和相对偏移，远程端用本地实时平台坐标还原，绕开网络延迟
+    let platformIdx = -1, pox = 0, poy = 0, poz = 0;
+    const activePlatform = localPlayer._player?.getActiveDynamicCollider();
+    if (activePlatform) {
+        const idx = dynamicPlatforms.findIndex(p => p.mesh === activePlatform.source);
+        if (idx >= 0) {
+            platformIdx = idx;
+            const platPos = dynamicPlatforms[idx].mesh.position;
+            pox = +(_sendPos.x - platPos.x).toFixed(3);
+            poy = +(_sendPos.y - platPos.y).toFixed(3);
+            poz = +(_sendPos.z - platPos.z).toFixed(3);
+        }
+    }
+
     set(myRef, {
         x: +_sendPos.x.toFixed(3), y: +_sendPos.y.toFixed(3), z: +_sendPos.z.toFixed(3),
         qx: +_sendQuat.x.toFixed(4), qy: +_sendQuat.y.toFixed(4),
@@ -702,6 +741,7 @@ function sendState() {
         deaths: localDeaths,
         name: myName,
         shotSeq: localShotSeq,
+        platformIdx, pox, poy, poz,
         t: Date.now(),
     });
 }
@@ -891,6 +931,70 @@ function antManAnimateToScale(targetScale, duration = 1) {
     antManScaleFrame = requestAnimationFrame(tick);
 }
 
+// ==================== 动态平台函数 ====================
+// 两端缓入、中间匀速的缓动函数
+function easeEndsLinearMiddle(progress, easeRatio = 0.18) {
+    const ease = Math.min(Math.max(easeRatio, 0.001), 0.49);
+    const maxSpeed = 1 / (1 - ease);
+    if (progress < ease) return (maxSpeed * progress * progress) / (2 * ease);
+    if (progress > 1 - ease) return 1 - (maxSpeed * (1 - progress) * (1 - progress)) / (2 * ease);
+    return maxSpeed * (progress - ease / 2);
+}
+
+// 将 progress（0~1）映射到 X 轴路径上，结果写入 target Vector3
+function setPositionOnXPath(target, progress) {
+    if (!dynamicPlatformXSegments.length || dynamicPlatformXLength <= 0) return;
+    let targetDistance = progress * dynamicPlatformXLength;
+    for (const segment of dynamicPlatformXSegments) {
+        if (targetDistance <= segment.length) {
+            target.lerpVectors(segment.from, segment.to, targetDistance / segment.length);
+            return;
+        }
+        targetDistance -= segment.length;
+    }
+    target.copy(dynamicPlatformXPath[dynamicPlatformXPath.length - 1]);
+}
+
+// 每帧更新所有动态平台位置及云朵渲染
+function updateDynamicPlatforms() {
+    const t = Date.now() / 1000;
+    dynamicPlatforms.forEach(({ mesh, basePosition, motion, cloud }) => {
+        if (motion?.axis === "y") {
+            // 正弦往返：以 basePosition.y 为底部，向上运动 distance*2 的范围
+            mesh.position.copy(basePosition);
+            mesh.position.y = basePosition.y + Math.sin(t * motion.speed) * motion.distance + motion.distance;
+        } else if (motion?.axis === "x") {
+            // 沿折线路径往返，两端缓动
+            const phase = (t * motion.speed / Math.PI) % 2;
+            const rawProgress = phase <= 1 ? phase : 2 - phase;
+            setPositionOnXPath(mesh.position, easeEndsLinearMiddle(rawProgress));
+        }
+        updateVolumeCloud(cloud, camera);
+    });
+}
+
+// 创建动态平台：不可见碰撞圆盘 + 体积云视觉，注册到 playerController 碰撞系统
+function createDynamicPlatform({ position, radius = 0.16, cloudScale = [0.32, 0.15, 0.32], motion = null }) {
+    const mesh = new THREE.Mesh(
+        new THREE.CircleGeometry(radius, 32),
+        new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.7, metalness: 0, roughness: 0.5, side: THREE.DoubleSide }),
+    );
+    mesh.position.copy(position);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.material.visible = false;
+    scene.add(mesh);
+    localPlayer._player.addDynamicCollider(mesh); // 注册为动态碰撞体，玩家可站立
+
+    // 体积云作为子节点挂在碰撞盘上，随平台一起移动
+    const cloud = createVolumeCloud({ scale: cloudScale, opacity: 0.28, steps: 80 });
+    cloud.position.set(0, 0, 0);
+    cloud.rotation.x = Math.PI / 2;
+    mesh.add(cloud);
+
+    dynamicPlatforms.push({ mesh, cloud, basePosition: position.clone(), motion });
+}
+
+
 // ==================== 渲染循环 ====================
 // 刷新顶部击杀栏：左侧本人击杀，右侧房间第一击杀
 function updateKillBar() {
@@ -976,6 +1080,8 @@ function animate() {
     //     const p = localPlayer.getPosition();
     //     if (p) console.log(`x:${p.x.toFixed(3)} y:${p.y.toFixed(3)} z:${p.z.toFixed(3)}`);
     // }
+
+    updateDynamicPlatforms(); // 更新所有动态平台位置及云朵渲染
 
     renderer.render(scene, camera);
 }
@@ -1184,6 +1290,10 @@ async function init() {
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
+
+    // 动态平台
+    createDynamicPlatform({ position: new THREE.Vector3(22, 2.76, 9.7), motion: { axis: "y", distance: 4, speed: 0.25 } });
+    createDynamicPlatform({ position: dynamicPlatformXPath[0], motion: { axis: "x", distance: 3, speed: 0.05 } });
 
     window.hideLoader?.();
 }
