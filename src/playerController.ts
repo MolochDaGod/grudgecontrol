@@ -93,9 +93,11 @@ export class playerController {
     private DIR_LFT = new THREE.Vector3(-1, 0, 0); // 左
     private DIR_RGT = new THREE.Vector3(1, 0, 0); // 右
 
+    playerAcceleration = 63; // XZ 加速/减速响应速度
     playerVelocity = new THREE.Vector3(); // 玩家速度
     private camDir = new THREE.Vector3(); // 相机方向缓存
     private moveDir = new THREE.Vector3(); // 移动方向缓存
+    private xzDir = new THREE.Vector3(); // 步进方向缓存
     targetQuat = new THREE.Quaternion(); // 目标四元数
     targetMat = new THREE.Matrix4(); // 目标变换矩阵
     private staticTemps: CollisionTemps = createCollisionTemps(); // 静态碰撞临时对象
@@ -694,6 +696,12 @@ export class playerController {
         // 归一化并应用相机角度
         this.moveDir.normalize().applyAxisAngle(this.upVector, angle);
 
+        // 速度驱动
+        const t = Math.min(1, this.playerAcceleration * delta);
+        this.playerVelocity.x += (this.moveDir.x * this.curPlayerSpeed - this.playerVelocity.x) * t;
+        this.playerVelocity.z += (this.moveDir.z * this.curPlayerSpeed - this.playerVelocity.z) * t;
+        if (this.isFlying) this.playerVelocity.y += (this.moveDir.y * this.curPlayerSpeed - this.playerVelocity.y) * t;
+
         // 地面检测
         const s = this.playerModelConfig.scale;
         this.groundRaycaster.ray.origin.copy(this.playerCapsule.position);
@@ -738,18 +746,20 @@ export class playerController {
             } else {
                 this.applyGravity(delta);
             }
-            // 应用重力速度叠加
-            this.playerCapsule.position.addScaledVector(this.playerVelocity, delta);
+            // 应用重力速度
+            this.playerCapsule.position.y += this.playerVelocity.y * delta;
         }
 
         // 分步碰撞移动
         const capsuleInfo = this.playerCapsule.capsuleInfo;
-        const totalDist = this.curPlayerSpeed * delta;
+        const xzSpeed = Math.hypot(this.playerVelocity.x, this.playerVelocity.z);
+        const totalDist = this.isFlying ? this.playerVelocity.length() * delta : xzSpeed * delta;
+        this.xzDir.set(this.playerVelocity.x, this.isFlying ? this.playerVelocity.y : 0, this.playerVelocity.z).normalize();
         const maxStep = capsuleInfo.radius * 0.8;
         const steps = Math.ceil(totalDist / maxStep) || 1;
         const stepDist = totalDist / steps;
         for (let i = 0; i < steps; i++) {
-            this.playerCapsule.position.addScaledVector(this.moveDir, stepDist);
+            this.playerCapsule.position.addScaledVector(this.xzDir, stepDist);
             this.playerCapsule.updateMatrixWorld();
 
             if (!v.isMovingToBoarding) {
@@ -895,7 +905,7 @@ export class playerController {
 
     // 吸附到地面
     private snapToGround(groundY: number) {
-        this.playerVelocity.set(0, 0, 0);
+        this.playerVelocity.y = 0;
         this.playerCapsule.position.y = groundY;
         this.setOnGround(true);
     }
