@@ -751,6 +751,8 @@ function initGUI() {
         jumpHeight: 600,
         playerSpeed: 300,
         flySpeed: 2100,
+        playerAcceleration: 20,
+        playerDeceleration: 20,
         timeScale: 1,
         minCamDistance: 50,
         maxCamDistance: 220,
@@ -865,8 +867,10 @@ function initGUI() {
     gui.add(params, "mouseSensitivity", 1, 20, 0.1).onChange((v) => player.setMouseSensitivity(v));
     gui.add(params, "gravity", -6000, 0, 50).onChange((v) => player.setGravity(v));
     gui.add(params, "jumpHeight", 0, 2000, 10).onChange((v) => player.setJumpHeight(v));
-    gui.add(params, "playerSpeed", 0, 1000, 10).onChange((v) => player.setPlayerSpeed(v));
+    gui.add(params, "playerSpeed", 0, 10000, 10).onChange((v) => player.setPlayerSpeed(v));
     gui.add(params, "flySpeed", 0, 5000, 10).onChange((v) => player.setPlayerFlySpeed(v));
+    gui.add(params, "playerAcceleration", 1, 100, 1).name("Acceleration").onChange((v) => player.playerAcceleration = v);
+    gui.add(params, "playerDeceleration", 1, 100, 1).name("Deceleration").onChange((v) => player.playerDeceleration = v);
     gui.add(params, "timeScale", 0, 3, 0.05).name("Time Scale").onChange((v) => player.timeScale = v);
     gui.add(params, "minCamDistance", 0, 200, 1).onChange((v) => player.setMinCamDistance(v));
     gui.add(params, "maxCamDistance", 50, 1000, 1).onChange((v) => player.setMaxCamDistance(v));

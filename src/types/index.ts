@@ -33,6 +33,8 @@ export type PlayerModelOptions = {
     firstPersonCameraOffset?: [number, number, number];
     flyEnabled?: boolean;
     capsuleRadiusRatio?: number;
+    acceleration?: number;
+    deceleration?: number;
 };
 
 export type MobileControlsOptions = {

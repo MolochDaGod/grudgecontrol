@@ -93,7 +93,9 @@ export class playerController {
     private DIR_LFT = new THREE.Vector3(-1, 0, 0); // 左
     private DIR_RGT = new THREE.Vector3(1, 0, 0); // 右
 
-    playerAcceleration = 63; // XZ 加速/减速响应速度
+    playerAcceleration = 20; // XZ 加速响应速度
+    playerDeceleration = 20; // XZ 减速响应速度
+    private decelBase = 300; // 减速基准速度
     playerVelocity = new THREE.Vector3(); // 玩家速度
     private camDir = new THREE.Vector3(); // 相机方向缓存
     private moveDir = new THREE.Vector3(); // 移动方向缓存
@@ -149,6 +151,9 @@ export class playerController {
         this.curPlayerSpeed = this.playerSpeed;
         this.playerFlyEnabled = pm.flyEnabled ?? this.playerFlyEnabled;
         this.playerCapsuleRadiusRatio = pm.capsuleRadiusRatio ?? this.playerCapsuleRadiusRatio;
+        this.playerAcceleration = pm.acceleration ?? this.playerAcceleration;
+        this.playerDeceleration = pm.deceleration ?? this.playerDeceleration;
+        this.decelBase = this.playerSpeed;
 
         // 应用相机参数
         this.cam.sensitivity = opts.mouseSensitivity ?? this.cam.sensitivity;
@@ -617,7 +622,6 @@ export class playerController {
         return false;
     }
 
-
     // ==================== 主循环 ====================
 
     // 主循环
@@ -697,10 +701,25 @@ export class playerController {
         this.moveDir.normalize().applyAxisAngle(this.upVector, angle);
 
         // 速度驱动
-        const t = Math.min(1, this.playerAcceleration * delta);
-        this.playerVelocity.x += (this.moveDir.x * this.curPlayerSpeed - this.playerVelocity.x) * t;
-        this.playerVelocity.z += (this.moveDir.z * this.curPlayerSpeed - this.playerVelocity.z) * t;
-        if (this.isFlying) this.playerVelocity.y += (this.moveDir.y * this.curPlayerSpeed - this.playerVelocity.y) * t;
+        const accelStep = this.playerAcceleration * this.decelBase * delta; // 加速步长
+        const decelStep = this.playerDeceleration * this.decelBase * delta; // 减速步长
+        const targetX = this.moveDir.x * this.curPlayerSpeed; // 目标速度X
+        const targetZ = this.moveDir.z * this.curPlayerSpeed; // 目标速度Z
+        const diffX = targetX - this.playerVelocity.x; // 速度差X
+        const diffZ = targetZ - this.playerVelocity.z; // 速度差Z
+        // XZ 作为整体2D向量限幅
+        const hasXZInput = this.moveDir.x !== 0 || this.moveDir.z !== 0;
+        const xzDiffLen = Math.hypot(diffX, diffZ);
+        if (xzDiffLen > 0) {
+            const xzApplied = Math.min(xzDiffLen, hasXZInput ? accelStep : decelStep);
+            this.playerVelocity.x += (diffX / xzDiffLen) * xzApplied;
+            this.playerVelocity.z += (diffZ / xzDiffLen) * xzApplied;
+        }
+        if (this.isFlying) {
+            const targetY = this.moveDir.y * this.curPlayerSpeed;
+            const diffY = targetY - this.playerVelocity.y;
+            this.playerVelocity.y += Math.sign(diffY) * Math.min(Math.abs(diffY), this.moveDir.y !== 0 ? accelStep : decelStep);
+        }
 
         // 地面检测
         const s = this.playerModelConfig.scale;
