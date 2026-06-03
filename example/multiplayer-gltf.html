@@ -112,9 +112,20 @@
                 box-shadow: 0 0 3px rgba(0,0,0,0.8); pointer-events: none;
             }
 
-            /* ===== 右下角：枪图 + AMMO + 弹药数 ===== */
+            /* ===== 右下角面板：源码（上） + 弹药（下） ===== */
+            #br-panel {
+                position: fixed; bottom: 16px; right: 16px; z-index: 9999;
+                display: flex; flex-direction: column; align-items: center; gap: 8px;
+            }
+            .source {
+                padding: 12px;
+                border-radius: 50%;
+                background-color: #fff;
+                opacity: 0.9;
+                box-shadow: 0 0 4px rgba(0, 0, 0, 0.15);
+            }
+            .source img { display: block; width: 24px; }
             #ammo-hud {
-                position: fixed; bottom: 20px; right: 20px; z-index: 9998;
                 display: none; flex-direction: column; align-items: center; gap: 4px;
             }
             .weapon-img-box {
@@ -479,23 +490,28 @@
         <!-- 武器槽（HUD.js 兼容用，不可见） -->
         <div id="weapon-hud"></div>
 
-        <!-- 右下角：枪械图（上） + AMMO + 弹药数（下，同行） -->
-        <div id="ammo-hud">
-            <div class="weapon-img-box">
-                <svg width="96" height="38" viewBox="0 0 96 38" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M2 18 L2 24 L20 24 L22 20 L20 15 L2 15 Z" fill="rgba(210,195,160,0.8)"/>
-                    <rect x="18" y="13" width="50" height="12" rx="2" fill="rgba(210,195,160,0.8)"/>
-                    <path d="M36 25 L34 37 L44 37 L46 25 Z" fill="rgba(190,175,140,0.85)"/>
-                    <rect x="66" y="15" width="28" height="6" rx="1" fill="rgba(210,195,160,0.8)"/>
-                    <rect x="88" y="12" width="2" height="3" fill="rgba(210,195,160,0.7)"/>
-                    <rect x="30" y="9" width="22" height="5" rx="1" fill="rgba(190,175,140,0.7)"/>
-                </svg>
-            </div>
-            <div class="ammo-row">
-                <span class="ammo-label-tag">AMMO</span>
-                <span id="ammo-current-val">30</span>
-                <span class="ammo-divider">/</span>
-                <span id="ammo-total-val">300</span>
+        <!-- 右下角面板：源码（上） + 弹药（下） -->
+        <div id="br-panel">
+            <a class="source" href="https://github.com/hh-hang/three-player-controller/blob/master/example/multiplayer-gltf.js" target="_blank" rel="noopener noreferrer">
+                <img src="./img/source.svg" alt="" />
+            </a>
+            <div id="ammo-hud">
+                <div class="weapon-img-box">
+                    <svg width="96" height="38" viewBox="0 0 96 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M2 18 L2 24 L20 24 L22 20 L20 15 L2 15 Z" fill="rgba(210,195,160,0.8)"/>
+                        <rect x="18" y="13" width="50" height="12" rx="2" fill="rgba(210,195,160,0.8)"/>
+                        <path d="M36 25 L34 37 L44 37 L46 25 Z" fill="rgba(190,175,140,0.85)"/>
+                        <rect x="66" y="15" width="28" height="6" rx="1" fill="rgba(210,195,160,0.8)"/>
+                        <rect x="88" y="12" width="2" height="3" fill="rgba(210,195,160,0.7)"/>
+                        <rect x="30" y="9" width="22" height="5" rx="1" fill="rgba(190,175,140,0.7)"/>
+                    </svg>
+                </div>
+                <div class="ammo-row">
+                    <span class="ammo-label-tag">AMMO</span>
+                    <span id="ammo-current-val">30</span>
+                    <span class="ammo-divider">/</span>
+                    <span id="ammo-total-val">300</span>
+                </div>
             </div>
         </div>
 

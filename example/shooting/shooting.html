@@ -100,50 +100,45 @@
                 z-index: 9999;
             }
 
-            /* 武器切换 HUD（右下角，CS:GO 风格） */
-            #weapon-hud {
-                position: fixed;
-                right: 16px;
-                bottom: 16px;
-                z-index: 9999;
-                display: flex;
-                flex-direction: column;
-                gap: 5px;
-                pointer-events: none;
-                font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+            /* 右下角面板：源码（上） + 弹药（下） */
+            #weapon-hud { display: none; }
+            #br-panel {
+                position: fixed; bottom: 16px; right: 16px; z-index: 9999;
+                display: flex; flex-direction: column; align-items: center; gap: 8px;
             }
-            .weapon-slot {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 6px 10px 6px 8px;
-                min-width: 120px;
-                background: rgba(0, 0, 0, 0.5);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 4px;
-                backdrop-filter: blur(4px);
-                opacity: 0.45;
-                transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+            .source {
+                padding: 12px;
+                border-radius: 50%;
+                background-color: #fff;
+                opacity: 0.9;
+                box-shadow: 0 0 4px rgba(0, 0, 0, 0.15);
             }
-            .weapon-slot.active {
-                background: rgba(180, 200, 220, 0.18);
-                border-color: rgba(255, 255, 255, 0.45);
-                opacity: 1;
+            .source img { display: block; width: 24px; }
+            #ammo-hud {
+                display: none; flex-direction: column; align-items: center; gap: 4px;
             }
-            .weapon-slot .slot-key {
-                font-size: 11px;
-                color: rgba(255,255,255,0.55);
-                min-width: 12px;
-                text-align: center;
+            .weapon-img-box {
+                width: 96px; height: 44px;
+                display: flex; align-items: center; justify-content: center;
             }
-            .weapon-slot.active .slot-key { color: rgba(255,255,255,0.8); }
-            .weapon-slot .slot-name {
-                font-size: 14px;
-                font-weight: 600;
-                color: rgba(255,255,255,0.55);
-                letter-spacing: 0.3px;
+            .ammo-row {
+                display: flex; align-items: center; gap: 4px;
+                padding: 3px 16px 3px 8px; border-radius: 4px;
+                background: linear-gradient(to right, rgba(0,0,0,0.7), transparent);
             }
-            .weapon-slot.active .slot-name { color: #fff; }
+            .ammo-label-tag {
+                font-family: system-ui; font-size: 9px; font-weight: bold;
+                letter-spacing: 0.18em; color: #fff;
+                text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+            }
+            #ammo-current-val {
+                color: #e8a020; font-family: monospace; font-size: 22px;
+                font-weight: bold; line-height: 1;
+                text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+            }
+            .ammo-divider { color: #fff; font-family: monospace; font-size: 15px; margin: 0 1px; }
+            #ammo-total-val { color: #fff; font-family: monospace; font-size: 13px;
+                text-shadow: 0 1px 4px rgba(0,0,0,0.9); }
 
             .model-credit {
                 position: fixed;
@@ -231,8 +226,6 @@
             </button>
         </div>
 
-        <div id="ammo-info" style="position:fixed; bottom:20px; right:20px; color:white; font-size:24px; font-family:Arial; z-index:9999; text-shadow: 0 2px 4px rgba(0,0,0,0.5); pointer-events: none;"></div>
-
         <div class="hud" role="note" aria-label="Controls">
             <div class="row hint-group">
                 <span class="hint-text">Move:</span>
@@ -270,6 +263,30 @@
         </div>
 
         <div id="weapon-hud"></div>
+
+        <div id="br-panel">
+            <a class="source" href="https://github.com/hh-hang/three-player-controller/blob/master/example/shooting/shooting.js" target="_blank" rel="noopener noreferrer">
+                <img src="../img/source.svg" alt="" />
+            </a>
+            <div id="ammo-hud">
+                <div class="weapon-img-box">
+                    <svg width="96" height="38" viewBox="0 0 96 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M2 18 L2 24 L20 24 L22 20 L20 15 L2 15 Z" fill="rgba(210,195,160,0.8)"/>
+                        <rect x="18" y="13" width="50" height="12" rx="2" fill="rgba(210,195,160,0.8)"/>
+                        <path d="M36 25 L34 37 L44 37 L46 25 Z" fill="rgba(190,175,140,0.85)"/>
+                        <rect x="66" y="15" width="28" height="6" rx="1" fill="rgba(210,195,160,0.8)"/>
+                        <rect x="88" y="12" width="2" height="3" fill="rgba(210,195,160,0.7)"/>
+                        <rect x="30" y="9" width="22" height="5" rx="1" fill="rgba(190,175,140,0.7)"/>
+                    </svg>
+                </div>
+                <div class="ammo-row">
+                    <span class="ammo-label-tag">AMMO</span>
+                    <span id="ammo-current-val">30</span>
+                    <span class="ammo-divider">/</span>
+                    <span id="ammo-total-val">300</span>
+                </div>
+            </div>
+        </div>
 
         <div class="model-credit">
             Scene model:

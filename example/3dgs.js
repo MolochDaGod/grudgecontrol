@@ -65,8 +65,6 @@ async function init() {
     const ambient = new AmbientLight(0xffffff, 10);
     scene.add(ambient);
 
-
-
     // 背景
     new HDRLoader().load(
         "./img/1.hdr",
@@ -95,12 +93,12 @@ async function init() {
     const spark = new SparkRenderer({ renderer });
     scene.add(spark);
     const splatURL = './3DGS/3DGS.sog'
-    const butterfly = new SplatMesh({
+    const splat = new SplatMesh({
         url: splatURL,
         onProgress: (e) => window.setLoaderProgress?.(e.loaded, e.total),
         onLoad: (mesh) => { mesh.rotateX(-Math.PI / 2); },
     });
-    scene.add(butterfly);
+    scene.add(splat);
 
     // 加载碰撞体
     const colliderGltf = await gltfLoader.loadAsync("./glb/3dgsCollider.glb");
@@ -151,7 +149,7 @@ async function init() {
         animateToScale(isSmallScale ? scaleSmall : scaleNormal, 1);
     });
     // 等待高斯泼溅模型加载完毕再隐藏 loader
-    await butterfly.initialized.catch(() => {});
+    await splat.initialized.catch(() => { });
     window.hideLoader();
 }
 
