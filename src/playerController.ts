@@ -93,8 +93,8 @@ export class playerController {
     private DIR_LFT = new THREE.Vector3(-1, 0, 0); // 左
     private DIR_RGT = new THREE.Vector3(1, 0, 0); // 右
 
-    playerAcceleration = 20; // XZ 加速响应速度
-    playerDeceleration = 20; // XZ 减速响应速度
+    playerAcceleration = 30; // XZ 加速响应速度
+    playerDeceleration = 30; // XZ 减速响应速度
     private decelBase = 300; // 减速基准速度
     playerVelocity = new THREE.Vector3(); // 玩家速度
     private camDir = new THREE.Vector3(); // 相机方向缓存
@@ -159,6 +159,7 @@ export class playerController {
         this.cam.sensitivity = opts.mouseSensitivity ?? this.cam.sensitivity;
         this.cam.mouseMode = opts.thirdMouseMode ?? this.cam.mouseMode;
         this.cam.enableSpringCamera = opts.enableSpringCamera ?? this.cam.enableSpringCamera;
+        this.cam.springCameraTime = opts.springCameraTime ?? this.cam.springCameraTime;
         this.cam.zoomEnabled = opts.enableZoom ?? this.cam.zoomEnabled;
         this.cam.minDist = (opts.minCamDistance ?? this.cam.minDist) * s;
         this.cam.maxDist = (opts.maxCamDistance ?? this.cam.maxDist) * s;
@@ -689,16 +690,15 @@ export class playerController {
         if (this.input.lft) this.moveDir.add(this.DIR_LFT);
         if (this.input.rgt) this.moveDir.add(this.DIR_RGT);
         if (this.isFlying) {
-            this.moveDir.y = this.input.fwd ? this.camDir.y : 0;
+            if (this.input.fwd) this.moveDir.copy(this.camDir);
             if (this.input.space) this.moveDir.y += 1;
-            if (this.input.ctrlKey) this.moveDir.y -= 1;
             this.curPlayerSpeed = this.input.shift ? this.playerFlySpeed * 2 : this.playerFlySpeed;
         } else {
             this.curPlayerSpeed = this.input.shift ? this.playerSpeed * 2 : this.playerSpeed;
         }
 
-        // 归一化并应用相机角度
-        this.moveDir.normalize().applyAxisAngle(this.upVector, angle);
+        this.moveDir.normalize(); // 归一化方向向量
+        if (!this.isFlying || !this.input.fwd) this.moveDir.applyAxisAngle(this.upVector, angle); // 应用相机角度
 
         // 速度驱动
         const accelStep = this.playerAcceleration * this.decelBase * delta; // 加速步长

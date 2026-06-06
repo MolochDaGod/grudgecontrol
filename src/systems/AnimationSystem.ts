@@ -303,7 +303,6 @@ export class AnimationSystem {
             if (lft) { this.playByName("flyHoverLeft"); return; }
             if (rgt) { this.playByName("flyHoverRight"); return; }
             if (space) { this.playByName("flyHoverUp"); return; }
-            if (ctrlKey) { this.playByName("flyHoverDown"); return; }
             // 无任何操作时，播放悬停动画
             this.playByName("flyidle");
             return;

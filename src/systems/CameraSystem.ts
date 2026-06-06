@@ -160,7 +160,7 @@ export class CameraSystem {
     initControls() {
         this.ctrl.controls.enableZoom = this.zoomEnabled;
         this.ctrl.controls.rotateSpeed = this.sensitivity * 0.05;
-        this.ctrl.controls.maxPolarAngle = Math.PI * (300 / 360);
+        this.ctrl.controls.maxPolarAngle = Math.PI;
         this.ctrl.controls.mouseButtons = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
         // 防止相机轨道半径归零穿越目标点
         this.ctrl.controls.minDistance = this.minDist;

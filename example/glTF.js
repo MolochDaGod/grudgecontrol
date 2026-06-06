@@ -46,10 +46,9 @@ let platform = null;
 let platformCloud = null;
 let dynamicPlatforms = [];
 const dynamicPlatformXPath = [
-    new Vector3(20.94, 3.74, 14.89),
+    new Vector3(20.94, 3.70, 14.89),
     new Vector3(-1.32, 7.65, 14.83),
     new Vector3(-19.85, 14.38, 8.77),
-
 ];
 const dynamicPlatformXSegments = dynamicPlatformXPath.slice(0, -1).map((point, index) => ({
     from: point,
@@ -751,8 +750,8 @@ function initGUI() {
         jumpHeight: 600,
         playerSpeed: 300,
         flySpeed: 2100,
-        playerAcceleration: 20,
-        playerDeceleration: 20,
+        playerAcceleration: 30,
+        playerDeceleration: 30,
         timeScale: 1,
         minCamDistance: 50,
         maxCamDistance: 220,

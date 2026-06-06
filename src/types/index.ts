@@ -65,6 +65,7 @@ export type PlayerControllerOptions = {
     shoulderOffsetDist?: number;
     isFirstPerson?: boolean;
     enableSpringCamera?: boolean;
+    springCameraTime?: number;
     timeScale?: number;
 };
 
