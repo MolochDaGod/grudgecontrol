@@ -3,8 +3,10 @@
 # three-player-controller
 
 [![NPM Package][npm]][npm-url]
+[![Github][github]][github-url]
+[![X][x]][x-url]
 
-A lightweight, out-of-the-box third-person / first-person player controller built on three.js and three-mesh-bvh. Features capsule-based character collision, BVH collision detection, character animation, first/third-person view switching, and camera obstacle avoidance — optimized for high performance in large scenes.
+A lightweight, out-of-the-box third-person / first-person player controller built on three.js and three-mesh-bvh. Features capsule-based character collision, BVH collision detection, character animation, first/third-person view switching, and camera obstacle avoidance — using three-mesh-bvh to optimize collision performance for large scenes.
 
 # Demo
 
@@ -57,50 +59,162 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { playerController } from "three-player-controller";
 
+// Set up the three.js environment (scene / camera / renderer / controls)
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 
+// playerController core usage
 const player = new playerController();
 
 // Player controller initialization
 await player.init({
-    scene, // three.js scene instance
-    camera, // three.js camera instance
+    scene,    // three.js scene instance
+    camera,   // three.js camera instance
     controls, // external camera controller
     playerModelConfig: {
-        url: "./glb/person.glb", // player model path
-        scale: 0.001, // player model scale
-        idleAnim: "idle", // idle animation name, must match the name in the model
-        walkAnim: "walk", // walk animation name, must match the name in the model
-        runAnim: "run", // run animation name, must match the name in the model
-        jumpAnim: "jump", // jump animation name, must match the name in the model
+        url: "./glb/person.glb",   // model path (GLB/GLTF)
+        scale: 0.001,              // model scale
+        idleAnim: "idle",          // idle clip name
+        walkAnim: "walk",          // walk clip name
+        runAnim: "run",            // run clip name
+        jumpAnim: "jump",          // jump clip name; or pass ["start", "loop", "land"] for a three-phase jump
     },
-    initPos: new THREE.Vector3(0, 0, 0), // player initial position
+    initPos: new THREE.Vector3(0, 0, 0),  // initial spawn position
 });
 
 // Vehicle controller initialization (optional)
 await player.loadVehicleModel({
-    url: "./glb/bugatti.glb", // vehicle model path
-    position: new THREE.Vector3(22, 3.69, 14.5), // vehicle initial position
-    wheelsNames: ["Wheel_LF", "Wheel_RF", "Wheel_LR", "Wheel_RR"], // wheel node names, order: front-left, front-right, rear-left, rear-right
-    scale: 0.1, // vehicle model scale
-    animations: {
-        openDoorAnim: "openDoorLF", // door open/close animation name
-    },
-    boardingPoint: new THREE.Vector3(0.5, 0, 1.8), // boarding point in local coordinates
-    seatOffset: new THREE.Vector3(0, 0.6, 0), // seat offset after player enters the vehicle
-    chassisRatio: 0.15, // chassis height ratio
-    suspensionRestLengthRatio: 0.2, // suspension rest length ratio
+    url: "./glb/bugatti.glb",                                      // vehicle model URL
+    position: new THREE.Vector3(0, 0, 0),                          // vehicle position
+    wheelsNames: ["Wheel_LF", "Wheel_RF", "Wheel_LR", "Wheel_RR"], // order: front-left, front-right, rear-left, rear-right
+    boardingPoint: new THREE.Vector3(0.5, 0, 1.8),                 // boarding trigger point, local coordinates
 });
 
+// Called every frame
 function animate() {
     requestAnimationFrame(animate);
     player.update();
     renderer.render(scene, camera);
 }
-
 animate();
+```
+
+> `player.update()` already drives the camera controller you passed in. Do not call `controls.update()` again in your render loop, or it will conflict with the internal camera logic.
+
+### Full Parameter Example
+
+#### `init()`
+
+```ts
+await player.init({
+    // Required
+    scene,    // three.js scene instance
+    camera,   // three.js camera instance
+    controls, // external camera controller
+    playerModelConfig: {
+        url: "./glb/person.glb",   // model path (GLB/GLTF)
+        scale: 0.001,              // model scale
+        idleAnim: "idle",          // idle clip name
+        walkAnim: "walk",          // walk clip name
+        runAnim: "run",            // run clip name
+        jumpAnim: "jump",          // jump clip name; or pass ["start", "loop", "land"] for a three-phase jump
+
+        // Directional animations (optional; each falls back to the matching default)
+        leftWalkAnim: "leftWalk",         // falls back to walkAnim
+        rightWalkAnim: "rightWalk",       // falls back to walkAnim
+        backwardAnim: "walkBack",         // falls back to walkAnim
+        flyAnim: "fly",                   // falls back to idleAnim
+        flyIdleAnim: "flyIdle",           // falls back to idleAnim
+        flyHoverForwardAnim: "flyFwd",    // falls back to flyAnim
+        flyHoverBackAnim: "flyBack",      // falls back to flyIdleAnim
+        flyHoverLeftAnim: "flyLeft",      // falls back to flyIdleAnim
+        flyHoverRightAnim: "flyRight",    // falls back to flyIdleAnim
+        flyHoverUpAnim: "flyUp",          // falls back to flyIdleAnim
+        flyHoverDownAnim: "flyDown",      // falls back to flyIdleAnim
+        enterCarAnim: "enterCar",         // enter-vehicle clip (recommended when using vehicle support)
+        exitCarAnim: "exitCar",           // exit-vehicle clip (recommended when using vehicle support)
+
+        // Physics params (optional)
+        gravity: -2400,     // gravity base value, scaled by scale
+        jumpHeight: 600,    // jump height base value, scaled by scale
+        speed: 300,         // move speed base value, scaled by scale
+        flySpeed: 2100,     // fly speed base value, scaled by scale
+        acceleration: 30,   // XZ acceleration response speed
+        deceleration: 30,   // XZ deceleration response speed
+
+        // Model params (optional)
+        rotateY: 0,                            // initial character facing (radians), changes the model's initial facing direction
+        headBoneName: "Head",                  // head bone name, used for first-person camera attachment
+        firstPersonCameraOffset: [0, 40, 30],  // first-person camera local offset
+        capsuleRadiusRatio: 1,                 // capsule radius multiplier
+    },
+
+    // Scene & collision (optional)
+    initPos: new THREE.Vector3(0, 0, 0),       // initial spawn position
+    staticCollider: mesh,                      // static collider source; if omitted, the whole scene is traversed
+    dynamicCollider: platform,                 // dynamic colliders registered at init
+
+    // Camera (optional)
+    minCamDistance: 100,           // minimum third-person camera distance
+    maxCamDistance: 440,           // maximum third-person camera distance
+    camLookAtHeightRatio: 0.8,     // camera look-at height ratio, 0 = bottom, 1 = top
+    thirdMouseMode: 1,             // mouse control mode 0-5, see Field Reference
+    enableZoom: false,             // whether wheel zoom is allowed
+    enableOverShoulderView: false, // whether over-shoulder view is enabled
+    isFirstPerson: false,          // whether to start in first-person
+    enableSpringCamera: false,     // whether to enable spring camera
+    springCameraTime: 0.15,        // spring camera smooth time (seconds); lower = tighter tracking
+
+    // Misc (optional)
+    mouseSensitivity: 5,           // mouse sensitivity
+    timeScale: 1,                  // time scale multiplier; < 1 slow motion, > 1 fast forward
+    keyMap: {                      // custom key bindings (defaults shown; rebind, bind multiple via array, or null to disable — see Custom Key Mapping)
+        forward: ["KeyW", "ArrowUp"],        // move forward
+        backward: ["KeyS", "ArrowDown"],     // move backward
+        left: ["KeyA", "ArrowLeft"],         // move left
+        right: ["KeyD", "ArrowRight"],       // move right
+        sprint: ["ShiftLeft", "ShiftRight"], // sprint
+        jump: ["Space"],                     // jump
+        toggleView: ["KeyV"],                // toggle view
+        toggleFly: ["KeyF"],                 // toggle flight mode
+        toggleVehicle: ["KeyE"],             // enter / exit vehicle
+    },
+    isShowMobileControls: true,    // whether to show virtual controls on mobile
+    mobileControls: {              // mobile button visibility (all shown by default)
+        joystick: true,             // show joystick, default true
+        jump: true,                 // show jump button, default true
+        fly: true,                  // show fly button, default true
+        view: true,                 // show view button, default true
+        vehicle: true,              // show vehicle button, default true
+    },
+});
+```
+
+#### `loadVehicleModel()`
+
+```ts
+await player.loadVehicleModel({
+    // Required
+    url: "./glb/bugatti.glb",                                      // vehicle model URL
+    position: new THREE.Vector3(0, 0, 0),                          // vehicle position
+    wheelsNames: ["Wheel_LF", "Wheel_RF", "Wheel_LR", "Wheel_RR"], // order: front-left, front-right, rear-left, rear-right
+    boardingPoint: new THREE.Vector3(0.5, 0, 1.8),                 // boarding trigger point, local coordinates
+
+    // Optional
+    scale: 0.1,                                // vehicle model scale, default 1
+    animations: {
+        openDoorAnim: "openDoorLF",            // door open/close clip name
+    },
+    seatOffset: new THREE.Vector3(0, 0.6, 0),  // seat offset, default (0,0,0)
+    chassisRatio: 0.15,                        // chassis height ratio, default 0.2
+    suspensionRestLengthRatio: 0.2,            // suspension rest length ratio, default 0.2
+    followVehicleDirection: true,              // camera follows vehicle direction while driving, default true
+    speedMultiplier: 1,                        // per-vehicle speed multiplier, default 1
+});
 ```
 
 # API
@@ -110,14 +224,14 @@ animate();
 | Method | Description |
 | --- | --- |
 | `init(opts, callback?)` | Initialize the controller. `callback` runs after loading completes. |
-| `update(dt?)` | Update movement, collision, and animation once per frame. |
+| `update(dt?)` | Update movement, collision, and animation each frame. It already drives the camera controller you passed in, so you don't need to call `controls.update()` in your loop. |
 | `destroy()` | Dispose the controller and remove listeners. |
 | `reset(pos?)` | Reset the character to `pos` or the initial position. |
 | `switchPlayerModel(model)` | Swap the current player model while preserving position and facing. |
-| `loadVehicleModel(opts)` | Load a vehicle. Can be called multiple times. |
+| `loadVehicleModel(opts)` | Load a vehicle. Can be called multiple times for multiple vehicles. |
 | `changeView()` | Toggle first-person / third-person. |
 | `setFirstPersonCamera(vertAngle?)` | Switch directly to first-person with an optional initial vertical angle. |
-| `buildStaticCollider(sources?)` | (Re)build the static collider. If omitted, traverses the whole scene. |
+| `buildStaticCollider(sources?)` | Build the static collider. If omitted, traverses the whole scene. |
 | `addDynamicCollider(source)` | Register a dynamic collider (e.g. a moving platform). |
 | `removeDynamicCollider(source)` | Unregister a previously added dynamic collider. |
 | `clearDynamicColliders()` | Remove all dynamic colliders. |
@@ -134,7 +248,7 @@ animate();
 | `getControllerMode()` | `0` for player mode, `1` for vehicle mode. |
 | `getPlayerModel()` | The loaded player model object. |
 | `getPlayerCapsule()` | The player capsule mesh. |
-| `getActiveVehicle()` | The current vehicle instance, if any. |
+| `getActiveVehicle()` | The current vehicle instance in use. |
 | `getAllVehicles()` | All loaded vehicle instances. |
 | `getCollider()` | The merged collider mesh used for BVH checks. |
 | `getCurrentPlayerAnimationName()` | The current animation clip name, or `null`. |
@@ -147,6 +261,7 @@ animate();
 | Method | Description |
 | --- | --- |
 | `setInput(input)` | Feed custom input state, useful for gamepads or your own key mapping. |
+| `setKeyMap(map?)` | Customize key bindings at runtime; omit the argument to restore defaults (see [Custom Key Mapping](#custom-key-mapping)). |
 | `setMouseSensitivity(v)` | Set mouse sensitivity. |
 | `setPlayerScale(v)` | Rescale the player and update collider-related values. |
 | `setPlayerSpeed(v)` | Set move speed. |
@@ -162,6 +277,77 @@ animate();
 | `setDebug(v)` | Show or hide collider debug display. |
 | `setEnableToward(v)` | Enable or disable mouse-driven facing / look updates. |
 
+### Input Listeners
+
+Keyboard and mouse listeners are enabled by default once `init()` completes — no manual call needed. The two methods below let you temporarily disable and re-enable listening at runtime.
+
+```ts
+player.offAllEvent(); // disable keyboard / mouse listeners
+player.onAllEvent();  // re-enable keyboard / mouse listeners
+```
+
+### Default Keyboard Controls
+
+| Action | Default Key | Function |
+| --- | --- | --- |
+| `forward` | `W` / `ArrowUp` | Move forward |
+| `backward` | `S` / `ArrowDown` | Move backward |
+| `left` | `A` / `ArrowLeft` | Move left |
+| `right` | `D` / `ArrowRight` | Move right |
+| `sprint` | `Shift` | Sprint |
+| `jump` | `Space` | Jump |
+| `toggleView` | `V` | Toggle view |
+| `toggleFly` | `F` | Toggle flight mode |
+| `toggleVehicle` | `E` | Enter / exit vehicle |
+| — | Mouse move | Look / rotate camera |
+
+### Custom Key Mapping
+
+Use `keyMap` to rebind any action above to other keys, or disable an action entirely. Key names use [`KeyboardEvent.code`](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code) (e.g. `"KeyE"`, `"ArrowUp"`, `"Space"` — note it's `"KeyE"`, not `"e"`).
+
+Each action accepts one of three values:
+
+- **Omitted** → use the default key(s)
+- **String / string array** → replace with the given key(s) (an array binds multiple keys)
+- **`null`** → disable the action (no key triggers it)
+
+Configure at init:
+
+```ts
+await player.init({
+    // ...
+    keyMap: {
+        forward: "KeyE",          // press E to move forward (replaces default W / ↑)
+        jump: null,               // disable jump
+        left: ["KeyA", "KeyJ"],   // bind both A and J
+        // other actions omitted, keep defaults
+    },
+});
+```
+
+Switch key bindings at runtime:
+
+```ts
+player.setKeyMap({ forward: "KeyI", backward: "KeyK" }); // apply new bindings
+player.setKeyMap();                                      // restore all defaults
+```
+
+### `setInput`
+
+```ts
+player.setInput({
+    moveX: 1 | 0 | -1,    // horizontal move, 1 = right, -1 = left
+    moveY: 1 | 0 | -1,    // forward/back move, 1 = forward, -1 = back
+    lookDeltaX: number,   // horizontal look delta, typically from mousemove's movementX
+    lookDeltaY: number,   // vertical look delta, typically from mousemove's movementY
+    jump: boolean,        // jump, held state (true = pressed, false = released); ascends while flying
+    shift: boolean,       // sprint, held state (true = pressed, false = released)
+    toggleView: boolean,  // trigger: pass true to toggle first/third-person view
+    toggleFly: boolean,   // trigger: pass true to toggle flight mode
+    toggleVehicle: boolean, // trigger: pass true to enter / exit vehicle
+});
+```
+
 ## Animation
 
 | Method | Description |
@@ -176,26 +362,29 @@ animate();
 
 ```ts
 player.registerAnimation(key, clipName, {
-    loop?: boolean,
-    timeScale?: number,
-    duration?: number,
-    clampWhenFinished?: boolean,
-    onFinished?: () => void,
+    loop?: boolean,              // whether to loop, default true
+    timeScale?: number,          // playback time scale, default 1
+    duration?: number,           // playback duration, default 0
+    clampWhenFinished?: boolean, // whether to reset the animation time to 0 after finishing, default false
+    onFinished?: () => void,     // fired after the animation finishes
 });
 ```
 
-- `duration` is supported in the current implementation and overrides `timeScale`.
+When both `duration` and `timeScale` are set, `duration` takes precedence.
 
 ### `playAnimation`
 
 ```ts
 player.playAnimation(key, {
-    fade?: number,
-    force?: boolean,
+    fade?: number,          // transition time (seconds), default 0.18
+    force?: boolean,        // when true, force a restart even if this animation is already playing
+    returnToPrev?: boolean, // LoopOnce clips only; auto-restores the previous animation state after finishing
 });
 ```
 
 ### `registerLocomotionSet`
+
+Supported keys: `idle` | `walking` | `walking_backward` | `running` | `jumping` | `flyidle` | `flying`. Provided keys replace the matching built-in animation; omitted keys keep the original.
 
 ```ts
 player.registerLocomotionSet("combat", {
@@ -212,153 +401,13 @@ player.registerLocomotionSet("combat", {
 ## Events
 
 ```ts
-player.onAnimationChange = (name, action) => {};
-player.onBeforeViewChange = (isFirstPerson) => {};
-player.onViewChange = (isFirstPerson) => {};
-player.onGroundChange = (onGround) => {};
-player.onVehicleEnter = (vehicle) => {};
-player.onVehicleExit = (vehicle) => {};
-player.onTowardChange = (dx, dy, speed) => {};
-```
-
-| Event | Description |
-| --- | --- |
-| `onAnimationChange` | Fired when the active player animation changes. |
-| `onBeforeViewChange` | Fired before first/third-person view toggles. |
-| `onViewChange` | Fired after view toggle completes. |
-| `onGroundChange` | Fired when grounded state changes. |
-| `onVehicleEnter` | Fired after entering a vehicle. |
-| `onVehicleExit` | Fired after exiting a vehicle. |
-| `onTowardChange` | Fired when look/facing input updates. |
-
-### Input Listeners
-
-```ts
-player.onAllEvent();  // enable keyboard / mouse listeners
-player.offAllEvent(); // disable keyboard / mouse listeners
-```
-
-### Default Keyboard Controls
-
-| Key | Action |
-| --- | --- |
-| `W` / `ArrowUp` | Move forward |
-| `S` / `ArrowDown` | Move backward |
-| `A` / `ArrowLeft` | Move left |
-| `D` / `ArrowRight` | Move right |
-| `Shift` | Sprint |
-| `Space` | Jump |
-| `V` | Toggle view |
-| `F` | Toggle flight mode |
-| `E` | Enter / exit vehicle |
-| Mouse move | Look / rotate camera |
-
-### `setInput`
-
-```ts
-player.setInput({
-    moveX: 1 | 0 | -1,
-    moveY: 1 | 0 | -1,
-    lookDeltaX: number,
-    lookDeltaY: number,
-    jump: boolean,
-    shift: boolean,
-    toggleView: boolean,
-    toggleFly: boolean,
-    toggleVehicle: boolean,
-});
-```
-
-## Types
-
-### `PlayerControllerOptions`
-
-```ts
-type PlayerControllerOptions = {
-    scene: THREE.Scene;
-    camera: THREE.PerspectiveCamera;
-    controls: any;
-    playerModelConfig: PlayerModelOptions;
-    initPos?: THREE.Vector3;
-    mouseSensitivity?: number;
-    minCamDistance?: number;
-    maxCamDistance?: number;
-    staticCollider?: THREE.Object3D | THREE.Object3D[];
-    dynamicCollider?: THREE.Object3D | THREE.Object3D[];
-    isShowMobileControls?: boolean;
-    mobileControls?: MobileControlsOptions;
-    thirdMouseMode?: 0 | 1 | 2 | 3 | 4 | 5;
-    enableZoom?: boolean;
-    enableOverShoulderView?: boolean;
-    isFirstPerson?: boolean;
-    camLookAtHeightRatio?: number;
-    timeScale?: number;
-};
-```
-
-### `PlayerModelOptions`
-
-```ts
-type PlayerModelOptions = {
-    url: string;
-    scale: number;
-    idleAnim: string;
-    walkAnim: string;
-    runAnim: string;
-    jumpAnim: string | [startAnim: string, loopAnim: string, endAnim: string];
-    leftWalkAnim?: string;
-    rightWalkAnim?: string;
-    backwardAnim?: string;
-    flyAnim?: string;
-    flyIdleAnim?: string;
-    flyHoverForwardAnim?: string;
-    flyHoverBackAnim?: string;
-    flyHoverLeftAnim?: string;
-    flyHoverRightAnim?: string;
-    flyHoverUpAnim?: string;
-    flyHoverDownAnim?: string;
-    enterCarAnim?: string;
-    exitCarAnim?: string;
-    gravity?: number;
-    jumpHeight?: number;
-    speed?: number;
-    flySpeed?: number;
-    rotateY?: number;
-    headBoneName?: string;
-    firstPersonCameraOffset?: [number, number, number];
-    flyEnabled?: boolean;
-    capsuleRadiusRatio?: number;
-};
-```
-
-### `MobileControlsOptions`
-
-```ts
-type MobileControlsOptions = {
-    joystick?: boolean;
-    jump?: boolean;
-    fly?: boolean;
-    view?: boolean;
-    vehicle?: boolean;
-};
-```
-
-### `VehicleOptions`
-
-```ts
-type VehicleOptions = {
-    url: string;
-    position: THREE.Vector3;
-    wheelsNames: string[];
-    scale?: number;
-    animations: { openDoorAnim?: string };
-    boardingPoint: THREE.Vector3;
-    seatOffset?: THREE.Vector3;
-    chassisRatio?: number;
-    suspensionRestLengthRatio?: number;
-    followVehicleDirection?: boolean;
-    speedMultiplier?: number;
-};
+player.onAnimationChange = (name, action) => {};   // fired when the active player animation changes
+player.onBeforeViewChange = (isFirstPerson) => {}; // fired before first/third-person toggles
+player.onViewChange = (isFirstPerson) => {};       // fired after first/third-person toggles
+player.onGroundChange = (onGround) => {};          // fired when grounded state changes
+player.onVehicleEnter = (vehicle) => {};           // fired after entering a vehicle
+player.onVehicleExit = (vehicle) => {};            // fired after exiting a vehicle
+player.onTowardChange = (dx, dy, speed) => {};     // fired when look / facing input updates
 ```
 
 ## Field Reference
@@ -370,21 +419,24 @@ type VehicleOptions = {
 | `scene` | `THREE.Scene` | Yes | — | three.js scene instance. |
 | `camera` | `THREE.PerspectiveCamera` | Yes | — | three.js camera instance. |
 | `controls` | `any` | Yes | — | External camera controller, typically `OrbitControls`. |
-| `playerModelConfig` | `PlayerModelOptions` | Yes | — | Player model and movement-related config. |
+| `playerModelConfig` | `PlayerModelOptions` | Yes | — | Player model and movement config. |
 | `initPos` | `THREE.Vector3` | No | `(0, 0, 0)` | Initial spawn position. |
 | `mouseSensitivity` | `number` | No | `5` | Mouse sensitivity. |
 | `minCamDistance` | `number` | No | `100` | Minimum third-person camera distance. |
 | `maxCamDistance` | `number` | No | `440` | Maximum third-person camera distance. |
-| `staticCollider` | `THREE.Object3D \| THREE.Object3D[]` | No | — | Objects used to build the static collider. If omitted, the whole scene is traversed. |
-| `dynamicCollider` | `THREE.Object3D \| THREE.Object3D[]` | No | — | Dynamic colliders registered at init time (e.g. moving platforms). |
+| `staticCollider` | `THREE.Object3D \| THREE.Object3D[]` | No | — | Source(s) for the static collider; if omitted, the whole scene is traversed. |
+| `dynamicCollider` | `THREE.Object3D \| THREE.Object3D[]` | No | — | Dynamic colliders registered at init time. |
 | `isShowMobileControls` | `boolean` | No | `true` | Whether to show virtual controls on mobile. |
-| `mobileControls` | `MobileControlsOptions` | No | all enabled | Mobile UI visibility config. |
-| `thirdMouseMode` | `0 \| 1 \| 2 \| 3 \| 4 \| 5` | No | `1` | Mouse control mode in third-person view (0: hide cursor, control both facing and camera; 1: hide cursor, camera only; 2: show cursor, drag to control both facing and camera; 3: show cursor, drag to control camera only; 4: show cursor, drag to control camera, character facing follows camera horizontal direction; 5: hide cursor, control camera, character facing follows camera horizontal direction). |
+| `mobileControls` | `MobileControlsOptions` | No | all shown | Mobile button visibility config. |
+| `thirdMouseMode` | `0 \| 1 \| 2 \| 3 \| 4 \| 5` | No | `1` | Mouse control mode in third-person view (0: hide cursor, control facing and camera; 1: hide cursor, camera only; 2: show cursor, drag to control facing and camera; 3: show cursor, drag to control camera only; 4: show cursor, drag to control camera, character facing follows camera horizontal direction; 5: hide cursor, control camera, character facing follows camera horizontal direction). |
 | `enableZoom` | `boolean` | No | `false` | Whether wheel zoom is enabled. |
 | `enableOverShoulderView` | `boolean` | No | `false` | Whether over-shoulder view is enabled. |
-| `isFirstPerson` | `boolean` | No | `false` | Whether to start directly in first-person mode. |
+| `isFirstPerson` | `boolean` | No | `false` | Whether to start directly in first-person. |
+| `enableSpringCamera` | `boolean` | No | `false` | Whether to enable spring camera (the target follows the character with spring-damper smoothing). |
+| `springCameraTime` | `number` | No | `0.15` | Spring smooth time (seconds); lower = tighter tracking. |
 | `camLookAtHeightRatio` | `number` | No | `0.8` | Third-person camera look-at height ratio (0 = capsule bottom, 1 = top). |
-| `timeScale` | `number` | No | `1` | Time scale multiplier applied to each frame's delta. Use values < 1 for slow motion, > 1 for fast forward. |
+| `timeScale` | `number` | No | `1` | Time scale multiplier; < 1 slow motion, > 1 fast forward. |
+| `keyMap` | `KeyMap` | No | default bindings | Custom key binding map. See [Custom Key Mapping](#custom-key-mapping). |
 
 ### `PlayerModelOptions`
 
@@ -392,32 +444,33 @@ type VehicleOptions = {
 | --- | --- | --- | --- | --- |
 | `url` | `string` | Yes | — | Player model path (GLB/GLTF). |
 | `scale` | `number` | Yes | — | Player model scale. |
-| `idleAnim` | `string` | Yes | — | Idle clip name. Must match the clip in the model. |
-| `walkAnim` | `string` | Yes | — | Walk clip name. Must match the clip in the model. |
-| `runAnim` | `string` | Yes | — | Run clip name. Must match the clip in the model. |
+| `idleAnim` | `string` | Yes | — | Idle clip name. |
+| `walkAnim` | `string` | Yes | — | Walk clip name. |
+| `runAnim` | `string` | Yes | — | Run clip name. |
 | `jumpAnim` | `string \| [string, string, string]` | Yes | — | Jump clip name. Pass a string for a single clip; pass `[start, loop, land]` for a three-phase jump that auto-transitions back to movement on landing. |
-| `leftWalkAnim` | `string` | No | `walkAnim` | Left strafe clip. Falls back to `walkAnim`. |
-| `rightWalkAnim` | `string` | No | `walkAnim` | Right strafe clip. Falls back to `walkAnim`. |
-| `backwardAnim` | `string` | No | `walkAnim` | Backward walk clip. Falls back to `walkAnim`. |
-| `flyAnim` | `string` | No | `idleAnim` | Flying clip. Falls back to `idleAnim`. |
-| `flyIdleAnim` | `string` | No | `idleAnim` | Fly-idle clip. Falls back to `idleAnim`. |
-| `flyHoverForwardAnim` | `string` | No | `flyAnim` | Hover clip while flying forward. Falls back to `flyAnim`. |
-| `flyHoverBackAnim` | `string` | No | `flyIdleAnim` | Hover clip while flying backward. Falls back to `flyIdleAnim`. |
-| `flyHoverLeftAnim` | `string` | No | `flyIdleAnim` | Hover clip while flying left. Falls back to `flyIdleAnim`. |
-| `flyHoverRightAnim` | `string` | No | `flyIdleAnim` | Hover clip while flying right. Falls back to `flyIdleAnim`. |
-| `flyHoverUpAnim` | `string` | No | `flyIdleAnim` | Hover clip while ascending. Falls back to `flyIdleAnim`. |
-| `flyHoverDownAnim` | `string` | No | `flyIdleAnim` | Hover clip while descending. Falls back to `flyIdleAnim`. |
+| `leftWalkAnim` | `string` | No | `walkAnim` | Left strafe clip; falls back to `walkAnim`. |
+| `rightWalkAnim` | `string` | No | `walkAnim` | Right strafe clip; falls back to `walkAnim`. |
+| `backwardAnim` | `string` | No | `walkAnim` | Backward walk clip; falls back to `walkAnim`. |
+| `flyAnim` | `string` | No | `idleAnim` | Flying clip; falls back to `idleAnim`. |
+| `flyIdleAnim` | `string` | No | `idleAnim` | Fly-idle clip; falls back to `idleAnim`. |
+| `flyHoverForwardAnim` | `string` | No | `flyAnim` | Hover clip while flying forward; falls back to `flyAnim`. |
+| `flyHoverBackAnim` | `string` | No | `flyIdleAnim` | Hover clip while flying backward; falls back to `flyIdleAnim`. |
+| `flyHoverLeftAnim` | `string` | No | `flyIdleAnim` | Hover clip while flying left; falls back to `flyIdleAnim`. |
+| `flyHoverRightAnim` | `string` | No | `flyIdleAnim` | Hover clip while flying right; falls back to `flyIdleAnim`. |
+| `flyHoverUpAnim` | `string` | No | `flyIdleAnim` | Hover clip while ascending; falls back to `flyIdleAnim`. |
+| `flyHoverDownAnim` | `string` | No | `flyIdleAnim` | Hover clip while descending; falls back to `flyIdleAnim`. |
 | `enterCarAnim` | `string` | No | — | Enter-vehicle clip; recommended when using vehicle support. |
 | `exitCarAnim` | `string` | No | — | Exit-vehicle clip; recommended when using vehicle support. |
-| `gravity` | `number` | No | `-2400` | Gravity base value, scaled by player `scale`. |
-| `jumpHeight` | `number` | No | `600` | Jump base value, scaled by player `scale`. |
-| `speed` | `number` | No | `300` | Move speed base value, scaled by player `scale`. |
-| `flySpeed` | `number` | No | `2100` | Fly speed base value, scaled by player `scale`. |
-| `rotateY` | `number` | No | `0` | Extra Y-axis model rotation offset. |
-| `headBoneName` | `string` | No | — | Head bone or node name used for first-person camera attachment. |
-| `firstPersonCameraOffset` | `[number, number, number]` | No | built-in fallback | Local first-person camera offset. If `headBoneName` exists it is relative to that bone, otherwise to the capsule. |
-| `flyEnabled` | `boolean` | No | `true` | Whether flight mode is enabled. |
+| `gravity` | `number` | No | `-2400` | Gravity base value (scaled by `scale`). |
+| `jumpHeight` | `number` | No | `600` | Jump height base value (scaled by `scale`). |
+| `speed` | `number` | No | `300` | Move speed base value (scaled by `scale`). |
+| `flySpeed` | `number` | No | `2100` | Fly speed base value (scaled by `scale`). |
+| `rotateY` | `number` | No | `0` | Initial character facing (radians); changes the model's initial facing direction. |
+| `headBoneName` | `string` | No | — | Head bone or node name, used for first-person camera attachment. |
+| `firstPersonCameraOffset` | `[number, number, number]` | No | built-in fallback | Local first-person camera offset; relative to the head bone if `headBoneName` is set, otherwise to the capsule. |
 | `capsuleRadiusRatio` | `number` | No | `1` | Capsule radius multiplier for collision tuning. |
+| `acceleration` | `number` | No | `30` | XZ acceleration response speed; higher values mean faster acceleration. |
+| `deceleration` | `number` | No | `30` | XZ deceleration response speed; higher values mean the character stops faster. |
 
 ### `MobileControlsOptions`
 
@@ -425,9 +478,9 @@ type VehicleOptions = {
 | --- | --- | --- | --- | --- |
 | `joystick` | `boolean` | No | `true` | Show joystick. |
 | `jump` | `boolean` | No | `true` | Show jump button. |
-| `fly` | `boolean` | No | `true` | Show fly toggle button. |
+| `fly` | `boolean` | No | `true` | Show fly button. |
 | `view` | `boolean` | No | `true` | Show view toggle button. |
-| `vehicle` | `boolean` | No | `true` | Show vehicle enter/exit button. |
+| `vehicle` | `boolean` | No | `true` | Show enter/exit vehicle button. |
 
 ### `VehicleOptions`
 
@@ -437,7 +490,7 @@ type VehicleOptions = {
 | `position` | `THREE.Vector3` | Yes | — | Initial world position. |
 | `wheelsNames` | `string[]` | Yes | — | Wheel node names in order: front-left, front-right, rear-left, rear-right. |
 | `scale` | `number` | No | `1` | Vehicle model scale. |
-| `animations.openDoorAnim` | `string` | No | — | Door animation clip name. |
+| `animations.openDoorAnim` | `string` | No | — | Door open/close clip name. |
 | `boardingPoint` | `THREE.Vector3` | Yes | — | Boarding point in local space. |
 | `seatOffset` | `THREE.Vector3` | No | `(0, 0, 0)` | Seat offset applied after entering the vehicle. |
 | `chassisRatio` | `number` | No | `0.2` | Chassis height ratio. |
@@ -445,12 +498,9 @@ type VehicleOptions = {
 | `followVehicleDirection` | `boolean` | No | `true` | Whether the camera follows the vehicle direction while driving. |
 | `speedMultiplier` | `number` | No | `1` | Per-vehicle speed multiplier. |
 
-# Notes
+# Feedback
 
-- `init` expects `playerModelConfig`, not the old `playerModel`.
-- `headBoneName` replaces the old `headObjName`.
-- `firstPersonCameraOffset` is supported by the current implementation.
-- Vehicle support should be paired with `enterCarAnim` and `exitCarAnim`.
+If you have any questions or good ideas, feel free to submit an [issue](https://github.com/hh-hang/three-player-controller/issues).
 
 # Credits
 
@@ -458,9 +508,9 @@ type VehicleOptions = {
 
 [three](https://github.com/mrdoob/three.js)
 
-# Feedback
-
-If you have any questions or good ideas, feel free to submit an [issue](https://github.com/hh-hang/three-player-controller/issues)
-
 [npm]: https://img.shields.io/npm/v/three-player-controller
 [npm-url]: https://www.npmjs.com/package/three-player-controller
+[github]: https://img.shields.io/badge/GitHub-181717.svg?style=flat&logo=github&logoColor=white
+[github-url]: https://github.com/hh-hang/three-player-controller
+[x]: https://img.shields.io/badge/X-000000.svg?style=flat&logo=x&logoColor=white
+[x-url]: https://x.com/vgyuvhang

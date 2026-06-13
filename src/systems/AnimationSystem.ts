@@ -254,7 +254,7 @@ export class AnimationSystem {
                 for (const key in snapshot) {
                     if (snapshot[key] !== currentInput[key]) {
                         inputChanged = true;
-                        break; // 一旦发现不匹配，立即中断循环
+                        break; // 不匹配，中断
                     }
                 }
             }
@@ -285,7 +285,7 @@ export class AnimationSystem {
         if (v.isBoardingAnim) { v.isBoardingAnim = false; v.doorClosed = false; }
         if (v.doorTimer) { clearTimeout(v.doorTimer); v.doorTimer = null; }
 
-        const { fwd, bkd, lft, rgt, shift, space, ctrlKey } = this.ctrl.input;
+        const { fwd, bkd, lft, rgt, shift, space } = this.ctrl.input;
 
         // 飞行状态下的动画逻辑
         if (this.ctrl.isFlying) {

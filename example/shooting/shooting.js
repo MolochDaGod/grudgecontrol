@@ -141,7 +141,6 @@ async function init() {
             headBoneName: "mixamorigHead",
             firstPersonPitchOffset: FIRST_PERSON_PITCH_OFFSET_BY_MODEL[PLAYER_MODEL_URL] ?? 0,
             rotateY: - Math.PI / 2,
-            flyEnabled: false,
         },
         initPos: initPos,
         minCamDistance: 10,
@@ -149,6 +148,7 @@ async function init() {
         enableOverShoulderView: true,
         mouseSensitivity: MOUSE_SENSITIVITY,
         camLookAtHeightRatio: 0.9,
+        keyMap: { toggleFly: null }, 
     });
 
     localPlayer.getPlayerModel()?.traverse((c) => {

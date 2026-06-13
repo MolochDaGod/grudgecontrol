@@ -8,7 +8,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 import { MobileControls } from "./utils/mobileControls";
-import type { PlayerControllerOptions, PlayerModelOptions, VehicleInstance, VehicleOptions, DynamicColliderEntry } from "./types";
+import type { PlayerControllerOptions, PlayerModelOptions, VehicleInstance, VehicleOptions, DynamicColliderEntry, KeyMap } from "./types";
 import { AnimationSystem } from "./systems/AnimationSystem";
 import { CameraSystem } from "./systems/CameraSystem";
 import { InputSystem } from "./systems/InputSystem";
@@ -33,13 +33,12 @@ export class playerController {
 
     // ==================== 玩家配置 ====================
     playerModelConfig!: PlayerModelOptions; // 模型配置项
-    private initPos!: THREE.Vector3; // 初始出生位置
+    private initPos: THREE.Vector3 = new THREE.Vector3(0, 0, 0); // 初始出生位置
     gravity = -2400; // 重力加速度
     jumpHeight = 600; // 跳跃初速度
     playerSpeed = 300; // 行走速度
     playerFlySpeed = 2100; // 飞行速度
     private curPlayerSpeed = 0; // 当前实际速度
-    playerFlyEnabled = true; // 飞行是否开启
     enableOverShoulderView = false; // 越肩视角开关
     private isShowMobileControls = true; // 显示移动端控件
 
@@ -138,9 +137,7 @@ export class playerController {
         this.controls = opts.controls;
 
         this.playerModelConfig = m;
-        this.initPos = opts.initPos
-            ? new THREE.Vector3(opts.initPos.x, opts.initPos.y, opts.initPos.z)
-            : new THREE.Vector3(0, 0, 0);
+        this.initPos = opts.initPos ? opts.initPos.clone() : this.initPos;
 
         // 应用玩家参数
         const pm = this.playerModelConfig;
@@ -149,7 +146,6 @@ export class playerController {
         this.playerSpeed = (pm.speed ?? this.playerSpeed) * s;
         this.playerFlySpeed = (pm.flySpeed ?? this.playerFlySpeed) * s;
         this.curPlayerSpeed = this.playerSpeed;
-        this.playerFlyEnabled = pm.flyEnabled ?? this.playerFlyEnabled;
         this.playerCapsuleRadiusRatio = pm.capsuleRadiusRatio ?? this.playerCapsuleRadiusRatio;
         this.playerAcceleration = pm.acceleration ?? this.playerAcceleration;
         this.playerDeceleration = pm.deceleration ?? this.playerDeceleration;
@@ -171,6 +167,9 @@ export class playerController {
         this.enableOverShoulderView = opts.enableOverShoulderView ?? this.enableOverShoulderView;
         this.isFirstPerson = opts.isFirstPerson ?? this.isFirstPerson;
         this.timeScale = opts.timeScale ?? this.timeScale;
+
+        // 自定义键位
+        if (opts.keyMap) this.input.buildKeyMap(opts.keyMap);
 
         // 初始化移动端控件
         if (this.isShowMobileControls) {
@@ -1048,8 +1047,6 @@ export class playerController {
     changeView() { this.cam.changeView(); }
     // 设置第一人称
     setFirstPersonCamera(v = 0) { this.cam.setFirstPerson(v); }
-    // 设置指针锁定
-    setPointerLock() { this.cam.setPointerLock(); }
     // 设置越肩视角
     setOverShoulderView(v: boolean) { this.cam.setOverShoulder(v); }
     // 屏幕中心检测
@@ -1058,6 +1055,8 @@ export class playerController {
     // --- 输入 ---
     // 设置输入状态
     setInput(input: Parameters<InputSystem["setInput"]>[0]) { this.input.setInput(input); }
+    // 运行时自定义键位
+    setKeyMap(map?: KeyMap) { this.input.buildKeyMap(map); }
     // 绑定输入事件
     onAllEvent() { this.input.bindEvents(); }
     // 解绑输入事件
