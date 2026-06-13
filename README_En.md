@@ -6,7 +6,7 @@
 [![Github][github]][github-url]
 [![X][x]][x-url]
 
-A lightweight, out-of-the-box third-person / first-person player controller built on three.js and three-mesh-bvh. Features capsule-based character collision, BVH collision detection, character animation, first/third-person view switching, and camera obstacle avoidance — using three-mesh-bvh to optimize collision performance for large scenes.
+A lightweight player controller for three.js, ready out of the box. It provides capsule-based character collision, animation, first/third-person view switching, and camera obstacle avoidance, with three-mesh-bvh accelerating collision detection for high performance in large scenes.
 
 # Demo
 
@@ -510,7 +510,7 @@ If you have any questions or good ideas, feel free to submit an [issue](https://
 
 [npm]: https://img.shields.io/npm/v/three-player-controller
 [npm-url]: https://www.npmjs.com/package/three-player-controller
-[github]: https://img.shields.io/badge/GitHub-181717.svg?style=flat&logo=github&logoColor=white
-[github-url]: https://github.com/hh-hang/three-player-controller
-[x]: https://img.shields.io/badge/X-000000.svg?style=flat&logo=x&logoColor=white
+[github]: https://img.shields.io/badge/-hh--hang-181717?style=flat&logo=github&logoColor=white&labelColor=888
+[github-url]: https://github.com/hh-hang
+[x]: https://img.shields.io/badge/-vgyuvhang-000000?style=flat&logo=x&logoColor=white&labelColor=888
 [x-url]: https://x.com/vgyuvhang
