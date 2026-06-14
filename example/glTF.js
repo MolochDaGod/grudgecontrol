@@ -756,6 +756,8 @@ function initGUI() {
         minCamDistance: 50,
         maxCamDistance: 220,
         camLookAtHeightRatio: 0.8,
+        enableSpringCamera: false,
+        springCameraTime: 0.05,
         thirdMouseMode: 1,
         enableZoom: false,
         debug: false,
@@ -874,6 +876,8 @@ function initGUI() {
     gui.add(params, "minCamDistance", 0, 200, 1).onChange((v) => player.setMinCamDistance(v));
     gui.add(params, "maxCamDistance", 50, 1000, 1).onChange((v) => player.setMaxCamDistance(v));
     gui.add(params, "camLookAtHeightRatio", 0, 1, 0.01).onChange((v) => player.setCamLookAtHeightRatio(v));
+    gui.add(params, "enableSpringCamera").name("Spring Camera").onChange((v) => player.cam.enableSpringCamera = v);
+    gui.add(params, "springCameraTime", 0.01, 1, 0.01).name("Spring Time").onChange((v) => player.cam.springCameraTime = v);
     gui.add(params, "thirdMouseMode", { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 }).onChange((v) => player.setThirdMouseMode(Number(v)));
     gui.add(params, "enableZoom").onChange((v) => player.setEnableZoom(v));
     gui.add(params, "debug").onChange((v) => player.setDebug(v));

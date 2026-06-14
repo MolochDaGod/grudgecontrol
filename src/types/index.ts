@@ -71,7 +71,7 @@ export type PlayerControllerOptions = {
     enableOverShoulderView?: boolean; // 是否启用过肩视角，默认 false
     isFirstPerson?: boolean; // 初始是否进入第一人称，默认 false
     enableSpringCamera?: boolean; // 是否启用弹簧相机，默认 false
-    springCameraTime?: number; // 弹簧相机平滑时间（秒），默认 0.15
+    springCameraTime?: number; // 弹簧相机平滑时间（秒），默认 0.05
     timeScale?: number; // 时间缩放系数，<1 慢动作 >1 快进，默认 1
     keyMap?: KeyMap; // 自定义键位映射
 };

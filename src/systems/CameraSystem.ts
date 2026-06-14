@@ -17,7 +17,7 @@ export class CameraSystem {
     private lookAtPoint = new THREE.Vector3(); // 预分配的看向点向量
 
     enableSpringCamera = false;
-    springCameraTime = 0.15;
+    springCameraTime = 0.05;
     private _springVelocity = new THREE.Vector3();
     private _springResult = new THREE.Vector3();
 

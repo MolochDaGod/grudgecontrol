@@ -167,7 +167,7 @@ await player.init({
     enableOverShoulderView: false, // whether over-shoulder view is enabled
     isFirstPerson: false,          // whether to start in first-person
     enableSpringCamera: false,     // whether to enable spring camera
-    springCameraTime: 0.15,        // spring camera smooth time (seconds); lower = tighter tracking
+    springCameraTime: 0.05,        // spring camera smooth time (seconds); lower = tighter tracking
 
     // Misc (optional)
     mouseSensitivity: 5,           // mouse sensitivity
@@ -433,7 +433,7 @@ player.onTowardChange = (dx, dy, speed) => {};     // fired when look / facing i
 | `enableOverShoulderView` | `boolean` | No | `false` | Whether over-shoulder view is enabled. |
 | `isFirstPerson` | `boolean` | No | `false` | Whether to start directly in first-person. |
 | `enableSpringCamera` | `boolean` | No | `false` | Whether to enable spring camera (the target follows the character with spring-damper smoothing). |
-| `springCameraTime` | `number` | No | `0.15` | Spring smooth time (seconds); lower = tighter tracking. |
+| `springCameraTime` | `number` | No | `0.05` | Spring smooth time (seconds); lower = tighter tracking. |
 | `camLookAtHeightRatio` | `number` | No | `0.8` | Third-person camera look-at height ratio (0 = capsule bottom, 1 = top). |
 | `timeScale` | `number` | No | `1` | Time scale multiplier; < 1 slow motion, > 1 fast forward. |
 | `keyMap` | `KeyMap` | No | default bindings | Custom key binding map. See [Custom Key Mapping](#custom-key-mapping). |
