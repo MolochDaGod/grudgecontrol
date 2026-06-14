@@ -24,6 +24,12 @@ export class VehicleSystem {
     steerQuat = new THREE.Quaternion(); // 转向四元数
     rotQuat = new THREE.Quaternion(); // 旋转四元数
 
+    // ==================== 防卡死自动脱困 ====================
+    stuckTimer = 0; // 卡住计时器
+    stuckSpeedThreshold = 0.5; // 视为"几乎不动"的水平速度阈值
+    stuckTimeThreshold = 1; // 持续多久判定卡住（秒）
+    stuckHopRatio = 0.5; // 脱困向上冲量对应的抬升高度 = 车高 × 此值
+
     // ==================== 上车流程状态 ====================
     isMovingToBoarding = false; // 正在走向上车点
     waypoints: THREE.Vector3[] = []; // 路径节点列表
@@ -323,6 +329,29 @@ export class VehicleSystem {
         const driftFriction = ((c.input.rgt || c.input.lft) && c.input.shift) ? 0.5 : 2;
         vehicleController.setWheelSideFrictionStiffness(2, driftFriction);
         vehicleController.setWheelSideFrictionStiffness(3, driftFriction);
+
+        // 防卡死自动脱困：有油门却长时间几乎不动，沿行进方向施加向上+前向冲量顶离
+        const linv = chassisBody.linvel();
+        if ((c.input.fwd || c.input.bkd) && Math.hypot(linv.x, linv.z) < this.stuckSpeedThreshold) {
+            this.stuckTimer += delta;
+        } else {
+            this.stuckTimer = 0;
+        }
+        if (this.stuckTimer > this.stuckTimeThreshold) {
+            const g = 9.81;
+            const vUp = Math.sqrt(2 * g * v.size.h * this.stuckHopRatio); // 抬升到约车高×ratio 所需的起跳速度
+            const mass = chassisBody.mass();
+            const dir = c.input.bkd ? -1 : 1;
+            // 车身水平前向（局部 +X，与坡度补偿一致）
+            const fl = Math.hypot(forward.x, forward.z);
+            const fx = fl > 0.001 ? forward.x / fl : 0;
+            const fz = fl > 0.001 ? forward.z / fl : 0;
+            chassisBody.applyImpulse(
+                new this.RAPIER.Vector3(fx * dir * mass * vUp * 0.6, mass * vUp, fz * dir * mass * vUp * 0.6),
+                true,
+            );
+            this.stuckTimer = 0;
+        }
 
         this.updateInertia(delta);
 
