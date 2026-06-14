@@ -839,7 +839,7 @@ export class playerController {
 
         // 第三人称相机跟随
         if (!this.isFirstPerson) {
-            const lookTarget = this.cam.applySpringToTarget(delta);
+            const lookTarget = this.cam.springTarget(this.cam.getLookAtPoint(), delta);
             this.camera.position.sub(this.controls.target);
             this.camera.position.add(lookTarget);
             this.controls.target.copy(lookTarget);
@@ -848,8 +848,6 @@ export class playerController {
             if (!this.cam.zoomEnabled) {
                 this.cam.updateWithRaycast(
                     this.controls.target,
-                    this.cam.playerToCam.subVectors(this.camera.position, this.controls.target).length(),
-                    this.cam.maxDist,
                 );
             }
         }

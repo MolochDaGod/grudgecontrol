@@ -23,7 +23,6 @@ export class VehicleSystem {
 
     steerQuat = new THREE.Quaternion(); // 转向四元数
     rotQuat = new THREE.Quaternion(); // 旋转四元数
-    camBehindDir = new THREE.Vector3(0, 0, 1); // 相机跟随方向
 
     // ==================== 上车流程状态 ====================
     isMovingToBoarding = false; // 正在走向上车点
@@ -305,7 +304,6 @@ export class VehicleSystem {
 
         // 驱动力
         const accelerateForce = this.params.power.accelerateForce * v.speedMultiplier;
-        const maxSpeed = this.params.power.maxSpeed * v.speedMultiplier;
         const engineForce = (Number(c.input.fwd) - Number(c.input.bkd)) * accelerateForce * factor;
         for (let i = 0; i < 4; i++) vehicleController.setWheelEngineForce(i, engineForce);
 
@@ -330,44 +328,34 @@ export class VehicleSystem {
 
         // 相机跟随
         if (!c.isFirstPerson) {
-            const lookTarget = vehicleGroup.position.clone();
+            const lookTarget = c.cam.springTarget(vehicleGroup.position, delta).clone();
             c.camera.position.sub(c.controls.target);
             c.controls.target.copy(lookTarget);
             c.camera.position.add(lookTarget);
             c.controls.update();
 
-            const velocity = chassisBody.linvel();
-            const currentSpeed = new THREE.Vector3(velocity.x, velocity.y, velocity.z).length();
-            const speedRatio = Math.min(currentSpeed / maxSpeed, 1);
             const baseDist = v.size.l * 0.8;
-            const maxDist = v.size.l * 5;
-            const desiredDist = THREE.MathUtils.lerp(baseDist, maxDist, speedRatio);
+            const desiredDist = baseDist;
 
-            c.cam.playerToCam.subVectors(c.camera.position, vehicleGroup.position);
-            const direction = c.cam.playerToCam.clone().normalize();
-            c.cam.raycaster.set(vehicleGroup.position, direction);
-            c.cam.raycaster.far = desiredDist;
+            c.cam.updateWithRaycast(c.controls.target, desiredDist);
 
-            const hits = c.cam.raycaster.intersectObject(c.collider!, false);
-            if (hits.length > 0) {
-                const safeDist = Math.max(hits[0].distance - c.cam.epsilon, baseDist);
-                c.camera.position.lerp(vehicleGroup.position.clone().add(direction.clone().multiplyScalar(safeDist)), c.cam.collisionLerp);
-            } else {
-                c.cam.raycaster.far = maxDist;
-                const maxHits = c.cam.raycaster.intersectObject(c.collider!, false);
-                const safeDist = maxHits.length > 0 ? Math.min(desiredDist, maxHits[0].distance - c.cam.epsilon) : desiredDist;
-                c.camera.position.lerp(vehicleGroup.position.clone().add(direction.clone().multiplyScalar(safeDist)), c.cam.collisionLerp);
-            }
-
+            // 相机跟随车辆速度方向：绕 Y 轴把相机转到行进（速度）方向的正后方，高度不变
             if ((c.input.fwd || c.input.bkd) && this.params.followVehicleDirection) {
                 const vel = chassisBody.linvel();
-                const velVec = new THREE.Vector3(vel.x, vel.y, vel.z);
-                if (velVec.length() > 0.3) {
-                    this.camBehindDir.lerp(velVec.normalize().negate(), c.cam.collisionLerp).normalize();
-                    const targetCamPos = lookTarget.clone()
-                        .add(this.camBehindDir.clone().multiplyScalar(desiredDist))
-                        .add(new THREE.Vector3(0, v.size.h, 0));
-                    c.camera.position.lerp(targetCamPos, c.cam.collisionLerp);
+                if (Math.hypot(vel.x, vel.z) > 0.3) {
+                    // 目标方位角：相机应位于速度方向的正后方
+                    const targetAngle = Math.atan2(-vel.x, -vel.z);
+                    // 当前相机相对看向点的水平方位角与半径
+                    const offX = c.camera.position.x - c.controls.target.x;
+                    const offZ = c.camera.position.z - c.controls.target.z;
+                    const radius = Math.hypot(offX, offZ);
+                    const curAngle = Math.atan2(offX, offZ);
+                    // 沿最短弧插值
+                    const diff = Math.atan2(Math.sin(targetAngle - curAngle), Math.cos(targetAngle - curAngle));
+                    const newAngle = curAngle + diff * c.cam.vehicleTurnLerp;
+                    // 修改改XZ，保持水平半径与 Y 高度不变
+                    c.camera.position.x = c.controls.target.x + Math.sin(newAngle) * radius;
+                    c.camera.position.z = c.controls.target.z + Math.cos(newAngle) * radius;
                     c.controls.update();
                 }
             }

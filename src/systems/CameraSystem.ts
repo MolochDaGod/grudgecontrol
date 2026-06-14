@@ -18,6 +18,7 @@ export class CameraSystem {
 
     enableSpringCamera = false;
     springCameraTime = 0.05;
+    vehicleTurnLerp = 0.01;
     private _springVelocity = new THREE.Vector3();
     private _springResult = new THREE.Vector3();
 
@@ -31,9 +32,8 @@ export class CameraSystem {
         (this.raycaster as any).firstHitOnly = true;
     }
 
-    // 弹簧阻尼插值，返回本帧的看向点；enableSpringCamera 关闭时直接返回看向点
-    applySpringToTarget(delta: number): THREE.Vector3 {
-        const dest = this.getLookAtPoint();
+    // 通用弹簧阻尼：把 controls.target 朝 dest 平滑跟随，返回本帧的目标点
+    springTarget(dest: THREE.Vector3, delta: number): THREE.Vector3 {
         if (!this.enableSpringCamera) return dest;
         const cur = this.ctrl.controls.target;
         const v = this._springVelocity;
@@ -225,16 +225,16 @@ export class CameraSystem {
     }
 
     // 射线防穿墙
-    updateWithRaycast(origin: THREE.Vector3, desiredDist: number, maxDist: number) {
+    updateWithRaycast(origin: THREE.Vector3, maxDist: number = this.maxDist, minDist = this.minDist) {
         this.playerToCam.subVectors(this.ctrl.camera.position, origin);
         const direction = this.playerToCam.clone().normalize();
         this.raycaster.set(origin, direction);
-        this.raycaster.far = desiredDist;
+        this.raycaster.far = maxDist;
 
         const hits = this.raycaster.intersectObject(this.ctrl.collider!, false);
         // 有遮挡：贴近安全距离
         if (hits.length > 0) {
-            const safeDist = Math.max(hits[0].distance - this.epsilon, this.minDist);
+            const safeDist = Math.max(hits[0].distance - this.epsilon, minDist);
             this.ctrl.camera.position.lerp(origin.clone().add(direction.multiplyScalar(safeDist)), this.collisionLerp);
         } else {
             // 无遮挡：尝试拉到最大距离
