@@ -27,7 +27,9 @@ export class InputSystem {
     private boundKeydown = async (e: KeyboardEvent) => this.onKeydown(e); // 键盘按下绑定
     private boundKeyup = (e: KeyboardEvent) => this.onKeyup(e); // 键盘抬起绑定
     private boundMouseMove = (e: MouseEvent) => this.onMouseMove(e); // 鼠标移动绑定
-    private boundMouseClick = () => this.ctrl.cam.setPointerLock(); // 鼠标点击绑定
+    private boundMouseClick = (e: MouseEvent) => {
+        if (e.target === this.ctrl.controls.domElement) this.ctrl.cam.setPointerLock(); // 鼠标点击绑定
+    };
     private boundBlur = () => this.resetKeys(); // 页面失焦时重置按键状态
 
     private codeToAction = new Map<string, KeyAction>(); // 键码 -> 动作 反查表
