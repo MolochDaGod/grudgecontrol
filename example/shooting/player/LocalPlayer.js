@@ -141,9 +141,9 @@ export class LocalPlayer {
 
         // 视角切换
         this._player.onViewChange = (isFirstPerson) => {
-            this.onViewChange?.(isFirstPerson);
             if (isFirstPerson) {
                 if (headBoneName) {
+                    console.log(headBoneName);
                     this._camera.position.z = 8;
                     this._camera.position.x = 15;
                 } else {
