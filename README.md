@@ -5,6 +5,7 @@
 [![NPM Package][npm]][npm-url]
 [![Github][github]][github-url]
 [![X][x]][x-url]
+[![CesiumJS](https://img.shields.io/badge/CesiumJS-player_controller-blue)](https://github.com/hh-hang/cesium-player-controller)
 
 基于 three.js 的轻量级玩家控制器，开箱即用，提供人物胶囊体碰撞、动画、第一 / 三人称切换、相机避障；借助 three-mesh-bvh 加速碰撞检测，大场景下高性能运行。
 

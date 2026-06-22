@@ -5,6 +5,7 @@
 [![NPM Package][npm]][npm-url]
 [![Github][github]][github-url]
 [![X][x]][x-url]
+[![CesiumJS](https://img.shields.io/badge/CesiumJS-player_controller-blue)](https://github.com/hh-hang/cesium-player-controller)
 
 A lightweight player controller for three.js, ready out of the box. It provides capsule-based character collision, animation, first/third-person view switching, and camera obstacle avoidance, with three-mesh-bvh accelerating collision detection for high performance in large scenes.
 
