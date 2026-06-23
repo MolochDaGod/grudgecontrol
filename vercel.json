@@ -4,6 +4,11 @@
   "outputDirectory": "dist",
   "installCommand": "npm ci",
   "framework": null,
+  "build": {
+    "env": {
+      "VERCEL": "1"
+    }
+  },
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://api.grudge-studio.com/api/:path*" },
     { "source": "/auth/:path*", "destination": "https://id.grudge-studio.com/auth/:path*" },
