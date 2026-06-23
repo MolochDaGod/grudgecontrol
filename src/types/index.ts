@@ -34,6 +34,8 @@ export type PlayerModelOptions = {
     capsuleRadiusRatio?: number; // 胶囊体半径倍率，默认 1
     acceleration?: number; // XZ 加速响应速度，默认 30
     deceleration?: number; // XZ 减速响应速度，默认 30
+    /** External animation GLB/FBX URLs keyed by clip name (idle, walk, run, jump, …) */
+    animationUrls?: Record<string, string>;
 };
 
 export type MobileControlsOptions = {

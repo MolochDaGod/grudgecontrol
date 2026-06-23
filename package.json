@@ -1,8 +1,8 @@
 {
-    "name": "three-player-controller",
-    "version": "0.4.8",
-    "description": "Third-person / first-person player controller for three.js (three-mesh-bvh based)",
-    "author": "hh-hang",
+    "name": "grudge-control",
+    "version": "1.0.0",
+    "description": "Grudge Studio character controller for Three.js — grudge6 races, CDN assets, and showcase demos",
+    "author": "Grudge Studio",
     "license": "MIT",
     "main": "./dist/index.js",
     "module": "./dist/index.mjs",
@@ -47,7 +47,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/hh-hang/three-player-controller"
+        "url": "https://github.com/MolochDaGod/grudgecontrol.git"
     },
-    "homepage": "https://github.com/hh-hang/three-player-controller"
+    "homepage": "https://grudgecontrol.vercel.app"
 }

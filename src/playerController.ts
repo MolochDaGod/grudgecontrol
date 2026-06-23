@@ -14,6 +14,7 @@ import { CameraSystem } from "./systems/CameraSystem";
 import { InputSystem } from "./systems/InputSystem";
 import { VehicleSystem } from "./systems/VehicleSystem";
 import { applyCapsuleCollision, createCollisionTemps, type CollisionTemps } from "./utils/capsuleCollision";
+import { loadExternalAnimationClips, loadModelAsset } from "./utils/grudgeAssetLoader";
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
@@ -206,12 +207,20 @@ export class playerController {
     // 加载模型与动画
     private async loadPlayerModelGLB() {
         try {
-            const gltf = await this.loader.loadAsync(this.playerModelConfig.url) as GLTF;
-            this.playerModel = gltf.scene;
+            const { scene, animations: embeddedAnimations } = await loadModelAsset(this.playerModelConfig.url);
+            this.playerModel = scene;
+
+            let animations = [...embeddedAnimations];
+            if (this.playerModelConfig.animationUrls) {
+                const external = await loadExternalAnimationClips(
+                    this.playerModelConfig.animationUrls,
+                    this.playerModel,
+                );
+                animations = [...animations, ...external];
+            }
 
             // 初始化动画混合器
             this.animation.mixer = new THREE.AnimationMixer(this.playerModel);
-            const animations = gltf.animations ?? [];
             this.animation.clips = animations;
             this.animation.actions = new Map();
 

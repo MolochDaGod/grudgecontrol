@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Grudge Control — Grudge6 Showcase</title>
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>" />
+        <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+        <style>
+            *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+            :root {
+                --gold: #e8a020;
+                --bg: #0d0f14;
+                --panel: rgba(12, 14, 20, 0.88);
+                --border: rgba(232, 160, 32, 0.25);
+                --text: #f2f0ea;
+                --muted: #9aa3b2;
+            }
+            html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; }
+            #container { position: fixed; inset: 0; }
+            #hud {
+                position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 0.85rem 1.1rem;
+                background: linear-gradient(180deg, rgba(0,0,0,0.65), transparent);
+                pointer-events: none;
+            }
+            #hud > * { pointer-events: auto; }
+            .brand { font-family: Cinzel, serif; font-weight: 900; letter-spacing: 0.08em; font-size: 1rem; color: var(--gold); }
+            .brand span { color: var(--muted); font-family: Inter, sans-serif; font-weight: 600; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; margin-left: 0.6rem; }
+            .hud-links { display: flex; gap: 0.6rem; }
+            .hud-links a {
+                color: var(--text); text-decoration: none; font-size: 0.78rem; font-weight: 600;
+                padding: 0.35rem 0.7rem; border: 1px solid var(--border); border-radius: 999px;
+                background: rgba(0,0,0,0.35); transition: border-color 0.15s, color 0.15s;
+            }
+            .hud-links a:hover { border-color: var(--gold); color: var(--gold); }
+            #sidebar {
+                position: fixed; top: 4.5rem; left: 1rem; bottom: 1rem; width: 280px; z-index: 15;
+                background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+                backdrop-filter: blur(12px); display: flex; flex-direction: column; overflow: hidden;
+            }
+            #sidebar h2 {
+                font-family: Cinzel, serif; font-size: 0.95rem; padding: 1rem 1rem 0.5rem;
+                color: var(--gold); letter-spacing: 0.06em;
+            }
+            #sidebar p { font-size: 0.78rem; color: var(--muted); padding: 0 1rem 0.75rem; line-height: 1.45; }
+            #char-list { flex: 1; overflow-y: auto; padding: 0 0.5rem 0.5rem; }
+            .char-btn {
+                width: 100%; text-align: left; border: 1px solid transparent; background: transparent;
+                color: var(--text); padding: 0.65rem 0.75rem; border-radius: 10px; cursor: pointer;
+                display: flex; align-items: center; gap: 0.65rem; margin-bottom: 0.25rem;
+                transition: background 0.15s, border-color 0.15s;
+            }
+            .char-btn:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
+            .char-btn.active { background: rgba(232,160,32,0.12); border-color: var(--gold); }
+            .char-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+            .char-meta { display: flex; flex-direction: column; gap: 0.1rem; }
+            .char-name { font-size: 0.82rem; font-weight: 600; }
+            .char-faction { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+            #controls {
+                position: fixed; right: 1rem; bottom: 1rem; z-index: 15;
+                background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+                padding: 0.85rem 1rem; font-size: 0.72rem; color: var(--muted); line-height: 1.55;
+                backdrop-filter: blur(10px); max-width: 220px;
+            }
+            #controls strong { color: var(--text); display: block; margin-bottom: 0.35rem; font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; }
+            #loading {
+                position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+                background: rgba(5,6,10,0.92); transition: opacity 0.4s;
+            }
+            #loading.hidden { opacity: 0; pointer-events: none; }
+            .loader-box { text-align: center; }
+            .loader-box h1 { font-family: Cinzel, serif; color: var(--gold); margin-bottom: 0.5rem; letter-spacing: 0.1em; }
+            .loader-box p { color: var(--muted); font-size: 0.85rem; }
+            @media (max-width: 768px) {
+                #sidebar { width: calc(100% - 2rem); max-height: 42vh; bottom: auto; }
+                #controls { display: none; }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="loading">
+            <div class="loader-box">
+                <h1>GRUDGE CONTROL</h1>
+                <p id="load-status">Loading Grudge6 characters from CDN…</p>
+            </div>
+        </div>
+        <div id="hud">
+            <div class="brand">Grudge Control <span>Grudge6 Showcase</span></div>
+            <div class="hud-links">
+                <a href="./index.html">All Demos</a>
+                <a href="https://grudge-studio.com" target="_blank" rel="noopener">Grudge Studio</a>
+                <a href="https://id.grudge-studio.com" target="_blank" rel="noopener">Grudge ID</a>
+            </div>
+        </div>
+        <aside id="sidebar">
+            <h2>Play As</h2>
+            <p>Select any of the six grudge6 races or extended characters. Models stream from <code>assets.grudge-studio.com</code>.</p>
+            <div id="char-list"></div>
+        </aside>
+        <div id="controls">
+            <strong>Controls</strong>
+            WASD — Move<br />
+            Shift — Sprint<br />
+            Space — Jump<br />
+            V — Toggle view<br />
+            F — Fly mode<br />
+            Click canvas — Lock mouse
+        </div>
+        <div id="container"></div>
+        <script type="module" src="./grudge6.js"></script>
+    </body>
+</html>
