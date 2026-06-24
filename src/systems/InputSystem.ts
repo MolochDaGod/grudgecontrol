@@ -12,6 +12,13 @@ const defaultKeyMap: Record<KeyAction, string[]> = {
     toggleView: ["KeyV"],
     toggleFly: ["KeyF"],
     toggleVehicle: ["KeyE"],
+    // Combat — mouse is the primary path (pointer-lock); these are keyboard fallbacks.
+    attack: ["KeyJ"],
+    attackHeavy: ["KeyK"],
+    aim: ["KeyL"],
+    knock: ["KeyG"],
+    targetNext: ["Tab"],
+    targetPrev: [],
 };
 
 export class InputSystem {
@@ -24,12 +31,18 @@ export class InputSystem {
     space = false; // 跳跃键
     shift = false; // 加速键
 
+    combatMouse = true; // 指针锁定时 LMB/RMB/MMB 用于战斗
+    private lastTapTime: Partial<Record<KeyAction, number>> = {}; // 方向键上次按下时间（双击检测）
+
     private boundKeydown = async (e: KeyboardEvent) => this.onKeydown(e); // 键盘按下绑定
     private boundKeyup = (e: KeyboardEvent) => this.onKeyup(e); // 键盘抬起绑定
     private boundMouseMove = (e: MouseEvent) => this.onMouseMove(e); // 鼠标移动绑定
     private boundMouseClick = (e: MouseEvent) => {
         if (e.target === this.ctrl.controls.domElement) this.ctrl.cam.setPointerLock(); // 鼠标点击绑定
     };
+    private boundMouseDown = (e: MouseEvent) => this.onMouseDown(e); // 鼠标按下（战斗）
+    private boundMouseUp = (e: MouseEvent) => this.onMouseUp(e); // 鼠标抬起（战斗）
+    private boundContextMenu = (e: MouseEvent) => { if (this.combatMouse && document.pointerLockElement) e.preventDefault(); }; // 战斗下禁用右键菜单
     private boundBlur = () => this.resetKeys(); // 页面失焦时重置按键状态
 
     private codeToAction = new Map<string, KeyAction>(); // 键码 -> 动作 反查表
@@ -61,6 +74,7 @@ export class InputSystem {
         lookDeltaX: number; lookDeltaY: number;
         jump: boolean; shift: boolean;
         toggleView: boolean; toggleFly: boolean; toggleVehicle: boolean;
+        attack: boolean; aim: boolean; knock: boolean; targetNext: boolean;
     }>) {
         const c = this.ctrl;
 
@@ -81,6 +95,12 @@ export class InputSystem {
         if (input.toggleView) this.applyAction("toggleView", true);
         if (input.toggleFly) this.applyAction("toggleFly", true);
         if (input.toggleVehicle) this.applyAction("toggleVehicle", true);
+
+        // 战斗
+        if (input.attack) this.applyAction("attack", true);
+        if (typeof input.aim === "boolean") this.applyAction("aim", input.aim);
+        if (input.knock) this.applyAction("knock", true);
+        if (input.targetNext) this.applyAction("targetNext", true);
     }
 
     // 绑定输入事件
@@ -91,6 +111,9 @@ export class InputSystem {
         window.addEventListener("keyup", this.boundKeyup);
         window.addEventListener("mousemove", this.boundMouseMove);
         window.addEventListener("click", this.boundMouseClick);
+        window.addEventListener("mousedown", this.boundMouseDown);
+        window.addEventListener("mouseup", this.boundMouseUp);
+        window.addEventListener("contextmenu", this.boundContextMenu);
         window.addEventListener("blur", this.boundBlur);
     }
 
@@ -102,6 +125,9 @@ export class InputSystem {
         window.removeEventListener("keyup", this.boundKeyup);
         window.removeEventListener("mousemove", this.boundMouseMove);
         window.removeEventListener("click", this.boundMouseClick);
+        window.removeEventListener("mousedown", this.boundMouseDown);
+        window.removeEventListener("mouseup", this.boundMouseUp);
+        window.removeEventListener("contextmenu", this.boundContextMenu);
         window.removeEventListener("blur", this.boundBlur);
     }
 
@@ -146,11 +172,7 @@ export class InputSystem {
                     this.space = true;
                     if (c.controllerMode === 1) return; // 载具模式不跳跃
                     if (c.isFlying) { c.animation.setAnimationByPressed(); return; } // 飞行中仅切动画
-                    if (!c.playerIsOnGround) return; // 不在地面不能跳
-                    if (c.animation.isJumping()) return;  // 跳跃中不重复触发
-                    c.animation.startJump();
-                    c.playerVelocity.y = c.jumpHeight;
-                    c.setOnGround(false); // 跳跃后设置为不在地面
+                    c.requestJump(); // 地面跳 + 二段跳（含后跳射击）
                 } else {
                     this.space = false;
                     if (c.isFlying) c.animation.setAnimationByPressed();
@@ -176,13 +198,63 @@ export class InputSystem {
                     if (c.controllerMode === 0) c.vehicle.enter(); else c.vehicle.exit();
                 }
                 break;
+            // 近战攻击（LMB / 键位）
+            case "attack": if (pressed) c.combat.attackPrimary(); break;
+            // 重击
+            case "attackHeavy": if (pressed) c.combat.attackHeavy(); break;
+            // 矄准/射击（RMB / 键位）：按下矄准并开火，松开取消矄准
+            case "aim":
+                c.combat.setAiming(pressed);
+                if (pressed) c.combat.fire();
+                break;
+            // 击退（MMB / 键位）
+            case "knock": if (pressed) c.combat.knock(); break;
+            // 目标循环
+            case "targetNext": if (pressed) c.target.cycle(1); break;
+            case "targetPrev": if (pressed) c.target.cycle(-1); break;
         }
     }
 
     // 键盘按下处理
     private onKeydown(e: KeyboardEvent) {
+        if (e.repeat) return; // 忽略按住自动重复（防止误触发二段跳/双击）
         const action = this.codeToAction.get(e.code);
-        if (action) this.applyAction(action, true);
+        if (!action) return;
+        if (action === "targetNext" || action === "targetPrev") e.preventDefault(); // Tab 不切焦点
+        // 双击方向键 → 闪避/冲刺
+        if (action === "forward" || action === "backward" || action === "left" || action === "right") {
+            const now = performance.now();
+            const last = this.lastTapTime[action] ?? 0;
+            if (now - last <= this.ctrl.dodgeDoubleTapMs) { this.triggerDodge(action); this.lastTapTime[action] = 0; }
+            else this.lastTapTime[action] = now;
+        }
+        this.applyAction(action, true);
+    }
+
+    // 双击方向键触发闪避
+    private triggerDodge(action: KeyAction) {
+        const map: Record<string, [number, number]> = {
+            forward: [0, -1], backward: [0, 1], left: [-1, 0], right: [1, 0],
+        };
+        const m = map[action];
+        if (!m) return;
+        const dir = this.ctrl.getCameraRelativeDir(m[0], m[1]);
+        this.ctrl.startDodge(dir);
+    }
+
+    // 鼠标按下（指针锁定下的战斗输入）
+    private onMouseDown(e: MouseEvent) {
+        const c = this.ctrl;
+        if (!this.combatMouse || !document.pointerLockElement) return;
+        if (e.button === 0) c.combat.attackPrimary();                              // LMB 近战
+        else if (e.button === 2) { c.combat.setAiming(true); c.combat.fire(); }    // RMB 矄准/射击
+        else if (e.button === 1) { e.preventDefault(); c.combat.knock(); }         // MMB 击退
+    }
+
+    // 鼠标抬起
+    private onMouseUp(e: MouseEvent) {
+        if (!this.combatMouse) return;
+        if (e.button === 2) this.ctrl.combat.setAiming(false); // 松开 RMB 取消矄准
     }
 
     // 键盘抬起处理

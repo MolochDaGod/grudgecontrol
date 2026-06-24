@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Grudge Control — Combat Showcase</title>
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>" />
+        <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+        <style>
+            *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+            :root {
+                --gold: #e8a020; --bg: #0d0f14; --panel: rgba(12, 14, 20, 0.88);
+                --border: rgba(232, 160, 32, 0.25); --text: #f2f0ea; --muted: #9aa3b2;
+                --hp: #d23b3b; --hp-bg: rgba(0,0,0,0.55);
+            }
+            html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; }
+            #container { position: fixed; inset: 0; }
+            #hud {
+                position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 0.85rem 1.1rem; background: linear-gradient(180deg, rgba(0,0,0,0.65), transparent); pointer-events: none;
+            }
+            #hud > * { pointer-events: auto; }
+            .brand { font-family: Cinzel, serif; font-weight: 900; letter-spacing: 0.08em; font-size: 1rem; color: var(--gold); }
+            .brand span { color: var(--muted); font-family: Inter, sans-serif; font-weight: 600; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; margin-left: 0.6rem; }
+            .hud-links { display: flex; gap: 0.6rem; }
+            .hud-links a {
+                color: var(--text); text-decoration: none; font-size: 0.78rem; font-weight: 600;
+                padding: 0.35rem 0.7rem; border: 1px solid var(--border); border-radius: 999px; background: rgba(0,0,0,0.35);
+            }
+            .hud-links a:hover { border-color: var(--gold); color: var(--gold); }
+            /* Crosshair */
+            #crosshair {
+                position: fixed; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%);
+                z-index: 18; pointer-events: none; border: 2px solid rgba(255,210,127,0.85); border-radius: 50%;
+                box-shadow: 0 0 6px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,210,127,0.4);
+            }
+            #crosshair::after { content: ""; position: absolute; left: 50%; top: 50%; width: 2px; height: 2px; transform: translate(-50%,-50%); background: rgba(255,210,127,0.95); border-radius: 50%; }
+            /* Target frame */
+            #target-frame {
+                position: fixed; top: 4.2rem; left: 50%; transform: translateX(-50%); z-index: 18;
+                min-width: 220px; padding: 0.5rem 0.75rem; background: var(--panel); border: 1px solid var(--border);
+                border-radius: 10px; backdrop-filter: blur(10px); display: none;
+            }
+            #target-frame.show { display: block; }
+            #target-frame .tf-row { display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.3rem; }
+            #target-frame .tf-name { color: var(--gold); font-weight: 600; }
+            #target-frame .tf-kind { color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.62rem; }
+            .bar { height: 8px; border-radius: 5px; background: var(--hp-bg); overflow: hidden; }
+            .bar > i { display: block; height: 100%; background: linear-gradient(90deg, #ff5a5a, #d23b3b); transition: width 0.12s; }
+            /* Floating enemy health bars */
+            .enemy-hp {
+                position: fixed; z-index: 16; width: 54px; height: 6px; transform: translate(-50%, -50%);
+                background: var(--hp-bg); border-radius: 4px; overflow: hidden; pointer-events: none; display: none;
+            }
+            .enemy-hp > i { display: block; height: 100%; background: linear-gradient(90deg, #ff5a5a, #d23b3b); }
+            #controls {
+                position: fixed; right: 1rem; bottom: 1rem; z-index: 15; background: var(--panel);
+                border: 1px solid var(--border); border-radius: 12px; padding: 0.85rem 1rem; font-size: 0.72rem;
+                color: var(--muted); line-height: 1.55; backdrop-filter: blur(10px); max-width: 240px;
+            }
+            #controls strong { color: var(--text); display: block; margin-bottom: 0.35rem; font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; }
+            #controls b { color: var(--gold); font-weight: 600; }
+            #stats {
+                position: fixed; left: 1rem; bottom: 1rem; z-index: 15; background: var(--panel);
+                border: 1px solid var(--border); border-radius: 12px; padding: 0.7rem 0.9rem; font-size: 0.72rem; color: var(--muted);
+                backdrop-filter: blur(10px);
+            }
+            #stats b { color: var(--text); }
+            #loading { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(5,6,10,0.92); transition: opacity 0.4s; }
+            #loading.hidden { opacity: 0; pointer-events: none; }
+            .loader-box { text-align: center; }
+            .loader-box h1 { font-family: Cinzel, serif; color: var(--gold); margin-bottom: 0.5rem; letter-spacing: 0.1em; }
+            .loader-box p { color: var(--muted); font-size: 0.85rem; }
+            @media (max-width: 768px) { #controls, #stats { display: none; } }
+        </style>
+    </head>
+    <body>
+        <div id="loading">
+            <div class="loader-box">
+                <h1>GRUDGE CONTROL</h1>
+                <p id="load-status">Loading combat showcase…</p>
+            </div>
+        </div>
+        <div id="hud">
+            <div class="brand">Grudge Control <span>Combat Showcase</span></div>
+            <div class="hud-links">
+                <a href="../index.html">All Demos</a>
+                <a href="https://grudge-studio.com" target="_blank" rel="noopener">Grudge Studio</a>
+            </div>
+        </div>
+
+        <div id="crosshair"></div>
+        <div id="target-frame">
+            <div class="tf-row"><span class="tf-name" id="tf-name">—</span><span class="tf-kind" id="tf-kind"></span></div>
+            <div class="bar"><i id="tf-hp" style="width:100%"></i></div>
+        </div>
+
+        <div id="stats">Targets up: <b id="alive-count">0</b> · Hits: <b id="hit-count">0</b></div>
+
+        <div id="controls">
+            <strong>Combat Controls</strong>
+            Click canvas — <b>lock mouse</b> (combat mode)<br />
+            <b>LMB</b> — melee combo (3-hit)<br />
+            <b>RMB</b> — aim + fire ranged<br />
+            <b>MMB</b> — knockback pulse<br />
+            <b>Tab</b> — cycle target (soft-lock otherwise)<br />
+            <b>WASD</b> — move · <b>Shift</b> — sprint<br />
+            <b>Double-tap</b> dir — dodge / dash<br />
+            <b>Space</b> — jump · double-jump<br />
+            Back + Space — backflip jump-shot<br />
+            <span style="opacity:.7">(keys: J melee · L fire · G knock)</span>
+        </div>
+
+        <div id="container"></div>
+        <script type="module" src="./combat.js"></script>
+    </body>
+</html>

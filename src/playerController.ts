@@ -8,11 +8,13 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 import { MobileControls } from "./utils/mobileControls";
-import type { PlayerControllerOptions, PlayerModelOptions, VehicleInstance, VehicleOptions, DynamicColliderEntry, KeyMap } from "./types";
+import type { PlayerControllerOptions, PlayerModelOptions, VehicleInstance, VehicleOptions, DynamicColliderEntry, KeyMap, AttackDef, DodgeOptions } from "./types";
 import { AnimationSystem } from "./systems/AnimationSystem";
 import { CameraSystem } from "./systems/CameraSystem";
 import { InputSystem } from "./systems/InputSystem";
 import { VehicleSystem } from "./systems/VehicleSystem";
+import { CombatSystem } from "./systems/CombatSystem";
+import { TargetSystem } from "./systems/TargetSystem";
 import { applyCapsuleCollision, createCollisionTemps, type CollisionTemps } from "./utils/capsuleCollision";
 import { loadExternalAnimationClips, loadModelAsset } from "./utils/grudgeAssetLoader";
 
@@ -57,6 +59,20 @@ export class playerController {
     isFlying = false; // 飞行状态
     isChangeControllerTransitionTimer: any = null; // 模式切换计时器
     enableToward = true; // 启用朝向输入
+
+    // ==================== 跳跃 / 闪避 ====================
+    maxJumps = 2; // 最大跳跃次数（含二段跳）
+    private jumpCount = 0; // 当前已用跳跃次数
+    isDodging = false; // 是否处于闪避中
+    dodgeSpeed = 1400; // 闪避速度基准（按 scale 缩放）
+    dodgeDuration = 0.28; // 闪避持续时间（秒）
+    dodgeCooldownMs = 550; // 闪避冷却（毫秒）
+    dodgeIframes = true; // 闪避无敌帧
+    dodgeDoubleTapMs = 250; // 双击识别窗口（毫秒）
+    dodgeAnimKey: string | null = null; // 闪避动画 key
+    private dodgeTimer = 0; // 闪避剩余时间（秒）
+    private dodgeCooldownUntil = 0; // 闪避冷却结束时间戳（ms）
+    private dodgeDir = new THREE.Vector3(); // 闪避方向（世界 XZ）
 
     // ==================== 玩家物体 ====================
     playerCapsule!: THREE.Mesh & { capsuleInfo?: any }; // 玩家碰撞胶囊
@@ -120,6 +136,8 @@ export class playerController {
     cam = new CameraSystem(this); // 相机系统
     input = new InputSystem(this); // 输入系统
     vehicle = new VehicleSystem(this); // 载具系统
+    target = new TargetSystem(this); // 目标锁定系统（Tab 硬锁定 + 软锁定）
+    combat = new CombatSystem(this); // 战斗系统（LMB 近战 / RMB 远程 / MMB 击退）
 
     constructor() {
         (this.groundRaycaster as any).firstHitOnly = true;
@@ -711,22 +729,36 @@ export class playerController {
         // 速度驱动
         const accelStep = this.playerAcceleration * this.decelBase * delta; // 加速步长
         const decelStep = this.playerDeceleration * this.decelBase * delta; // 减速步长
-        const targetX = this.moveDir.x * this.curPlayerSpeed; // 目标速度X
-        const targetZ = this.moveDir.z * this.curPlayerSpeed; // 目标速度Z
-        const diffX = targetX - this.playerVelocity.x; // 速度差X
-        const diffZ = targetZ - this.playerVelocity.z; // 速度差Z
-        // XZ 作为整体2D向量限幅
-        const hasXZInput = this.moveDir.x !== 0 || this.moveDir.z !== 0;
-        const xzDiffLen = Math.hypot(diffX, diffZ);
-        if (xzDiffLen > 0) {
-            const xzApplied = Math.min(xzDiffLen, hasXZInput ? accelStep : decelStep);
-            this.playerVelocity.x += (diffX / xzDiffLen) * xzApplied;
-            this.playerVelocity.z += (diffZ / xzDiffLen) * xzApplied;
-        }
-        if (this.isFlying) {
-            const targetY = this.moveDir.y * this.curPlayerSpeed;
-            const diffY = targetY - this.playerVelocity.y;
-            this.playerVelocity.y += Math.sign(diffY) * Math.min(Math.abs(diffY), this.moveDir.y !== 0 ? accelStep : decelStep);
+        const lockMove = this.combat.isAttacking && !!this.combat.currentDef?.lockMovement; // 出招锁定位移
+        if (this.isDodging) {
+            // 闪避：以固定速度沿闪避方向冲刺，忽略常规加减速
+            const ds = this.dodgeSpeed * this.playerModelConfig.scale;
+            this.playerVelocity.x = this.dodgeDir.x * ds;
+            this.playerVelocity.z = this.dodgeDir.z * ds;
+            this.dodgeTimer -= delta;
+            if (this.dodgeTimer <= 0) this.isDodging = false;
+        } else if (lockMove) {
+            // 出招锁定：清零水平速度
+            this.playerVelocity.x = 0;
+            this.playerVelocity.z = 0;
+        } else {
+            const targetX = this.moveDir.x * this.curPlayerSpeed; // 目标速度X
+            const targetZ = this.moveDir.z * this.curPlayerSpeed; // 目标速度Z
+            const diffX = targetX - this.playerVelocity.x; // 速度差X
+            const diffZ = targetZ - this.playerVelocity.z; // 速度差Z
+            // XZ 作为整体2D向量限幅
+            const hasXZInput = this.moveDir.x !== 0 || this.moveDir.z !== 0;
+            const xzDiffLen = Math.hypot(diffX, diffZ);
+            if (xzDiffLen > 0) {
+                const xzApplied = Math.min(xzDiffLen, hasXZInput ? accelStep : decelStep);
+                this.playerVelocity.x += (diffX / xzDiffLen) * xzApplied;
+                this.playerVelocity.z += (diffZ / xzDiffLen) * xzApplied;
+            }
+            if (this.isFlying) {
+                const targetY = this.moveDir.y * this.curPlayerSpeed;
+                const diffY = targetY - this.playerVelocity.y;
+                this.playerVelocity.y += Math.sign(diffY) * Math.min(Math.abs(diffY), this.moveDir.y !== 0 ? accelStep : decelStep);
+            }
         }
 
         // 地面检测
@@ -821,8 +853,9 @@ export class playerController {
             }
         }
 
-        // 玩家朝向
-        if (!this.isFirstPerson) {
+        // 玩家朝向（软锁定出招时由战斗系统接管朝向）
+        const softFace = this.combat.isAttacking && this.combat.softLockFacing && !!this.target.getActive();
+        if (!this.isFirstPerson && !softFace) {
             const camDirFlat = this.camDir.clone().setY(0).normalize().negate();
             const moveDirFlat = this.moveDir.clone().normalize().negate();
 
@@ -875,6 +908,9 @@ export class playerController {
             }
         }
 
+        // 更新目标锁定与战斗系统
+        this.target.update(delta);
+        this.combat.update(delta);
         // 设置动画
         this.animation.setAnimationByPressed();
         // 更新动画混合器
@@ -918,7 +954,7 @@ export class playerController {
         if (this.playerIsOnGround === val) return;
         this.playerIsOnGround = val;
         this.onGroundChange?.(val);
-        if (val) this.animation.onLand();
+        if (val) { this.jumpCount = 0; this.animation.onLand(); }
         else this.animation.onBecomeAirborne();
     }
 
@@ -933,6 +969,63 @@ export class playerController {
         this.playerVelocity.y = 0;
         this.playerCapsule.position.y = groundY;
         this.setOnGround(true);
+    }
+
+    // ==================== 跳跃 / 闪避 / 朝向 ====================
+
+    // 请求跳跃（支持二段跳）。飞行/载具由 InputSystem 处理。
+    requestJump() {
+        if (this.controllerMode === 1 || this.isFlying || this.isDodging) return;
+        if (this.playerIsOnGround) {
+            this.jumpCount = 1;
+            this.animation.startJump();
+            this.playerVelocity.y = this.jumpHeight;
+            this.setOnGround(false);
+        } else if (this.jumpCount < this.maxJumps) {
+            // 二段跳
+            this.jumpCount++;
+            this.animation.startJump(true);
+            this.playerVelocity.y = this.jumpHeight;
+            // 后跳射击：空中向后跳时触发一次远程攻击（风筝/拉怔）
+            if (this.input.bkd) this.combat.fire();
+        }
+    }
+
+    // 触发闪避/冲刺（双击方向键调用）。dirWorld 省略时使用当前移动方向或朝向。
+    startDodge(dirWorld?: THREE.Vector3) {
+        if (this.controllerMode === 1 || this.isFlying || this.isDodging) return;
+        const now = performance.now();
+        if (now < this.dodgeCooldownUntil) return;
+        const d = this.dodgeDir;
+        if (dirWorld && dirWorld.lengthSq() > 1e-6) d.copy(dirWorld);
+        else if (this.moveDir.lengthSq() > 1e-6) d.copy(this.moveDir);
+        else this.playerCapsule.getWorldDirection(d);
+        d.setY(0);
+        if (d.lengthSq() < 1e-6) return;
+        d.normalize();
+        this.isDodging = true;
+        this.dodgeTimer = this.dodgeDuration;
+        this.dodgeCooldownUntil = now + this.dodgeCooldownMs;
+        if (this.dodgeAnimKey) this.animation.play(this.dodgeAnimKey, { force: true });
+    }
+
+    // 配置闪避参数
+    setDodgeOptions(opts: DodgeOptions) {
+        if (opts.speed != null) this.dodgeSpeed = opts.speed;
+        if (opts.durationMs != null) this.dodgeDuration = opts.durationMs / 1000;
+        if (opts.cooldownMs != null) this.dodgeCooldownMs = opts.cooldownMs;
+        if (opts.iframes != null) this.dodgeIframes = opts.iframes;
+        if (opts.doubleTapMs != null) this.dodgeDoubleTapMs = opts.doubleTapMs;
+        if (opts.clip) { this.dodgeAnimKey = "dodge"; this.animation.register("dodge", opts.clip, { loop: false, clampWhenFinished: true }); }
+    }
+
+    // 将输入本地方向转为相机相关的世界方向（XZ 平面）
+    getCameraRelativeDir(localX: number, localZ: number, out = new THREE.Vector3()) {
+        this.camera.getWorldDirection(this.camDir);
+        const angle = 2 * Math.PI - (Math.atan2(this.camDir.z, this.camDir.x) + Math.PI / 2);
+        out.set(localX, 0, localZ);
+        if (out.lengthSq() > 0) out.normalize().applyAxisAngle(this.upVector, angle);
+        return out;
     }
 
     // 动态修改缩放
@@ -995,6 +1088,34 @@ export class playerController {
     getCollider() { return this.collider; }
     // 获取当前站立的动态碰撞体
     getActiveDynamicCollider() { return this.activeDynamicCollider; }
+    // 获取闪避状态
+    getIsDodging() { return this.isDodging; }
+    // 闪避无敌帧（i-frames）是否生效
+    isInvulnerable() { return this.isDodging && this.dodgeIframes; }
+
+    // --- 战斗 / 目标锁定 ---
+    // 注册近战招式
+    registerAttack(key: string, def: AttackDef) { this.combat.registerAttack(key, def); }
+    // 注册连击
+    registerCombo(name: string, keys: string[], opts?: { primary?: boolean }) { this.combat.registerCombo(name, keys, opts); }
+    // LMB 近战（主连击）
+    attack() { return this.combat.attackPrimary(); }
+    // 重击
+    heavyAttack() { return this.combat.attackHeavy(); }
+    // RMB 矄准开火
+    aimFire() { return this.combat.fire(); }
+    // 设置矄准状态
+    setAiming(on: boolean) { this.combat.setAiming(on); }
+    // MMB 击退
+    knock() { return this.combat.knock(); }
+    // 注册可锁定目标
+    registerTargets(targets: THREE.Object3D[]) { this.target.register(targets); }
+    // Tab 循环目标
+    cycleTarget(dir: 1 | -1 = 1) { this.target.cycle(dir); }
+    // 清除硬锁定目标
+    clearTarget() { this.target.clearHard(); }
+    // 获取当前生效目标（硬锁定优先，否则软锁定）
+    getActiveTarget() { return this.target.getActive(); }
 
     // 设置鼠标灵敏度
     setMouseSensitivity(value: number) {
@@ -1076,6 +1197,8 @@ export class playerController {
     // --- 销毁 ---
     destroy() {
         this.input.unbindEvents();
+        this.combat.dispose();
+        this.target.dispose();
 
         // 清除玩家对象
         if (this.playerCapsule) { this.playerCapsule.remove(this.camera); this.scene.remove(this.playerCapsule); }

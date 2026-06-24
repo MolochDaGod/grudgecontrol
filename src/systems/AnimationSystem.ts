@@ -243,6 +243,8 @@ export class AnimationSystem {
 
     // 按键状态触发动画
     setAnimationByPressed() {
+        // 战斗出招 / 闪避期间由对应系统接管动画
+        if (this.ctrl.combat?.isAttacking || this.ctrl.isDodging) return;
         // 检查并处理覆盖动画中断逻辑
         if (this.isOverrideAnimationPlaying) {
             const currentInput = this.ctrl.input as Record<string, any>;

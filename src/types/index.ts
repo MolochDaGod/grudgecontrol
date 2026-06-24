@@ -50,7 +50,7 @@ export type MobileControlsOptions = {
 export type KeyAction =
     | "forward" | "backward" | "left" | "right"
     | "sprint" | "jump" | "toggleView" | "toggleFly" | "toggleVehicle"
-    | "attack" | "attackHeavy";
+    | "attack" | "attackHeavy" | "aim" | "knock" | "targetNext" | "targetPrev";
 
 // 自定义键位映射：未填用默认键，传 code/数组覆盖，传 null 禁用
 export type KeyMap = Partial<Record<KeyAction, string | string[] | null>>;
@@ -117,7 +117,71 @@ export type CombatOptions = {
     allowAerialAttacks?: boolean; // 是否允许在空中（跳跃下落）出招，默认 true
     allowFlyingAttacks?: boolean; // 是否允许在飞行模式出招，默认 false
     bufferInput?: boolean; // 是否缓存出招输入以衔接连击，默认 true
-    targets?: THREE.Object3D[]; // 默认近战命中候选目标
+    targets?: THREE.Object3D[]; // 默认近战/远程命中候选目标
+    softLockFacing?: boolean; // 出招时是否自动面向当前目标（软锁定），默认 true
+};
+
+// 远程攻击招式定义（RMB 矄准/射击）
+export type RangedDef = {
+    clip?: string; // 射击动画片段名（可选）
+    timeScale?: number; // 播放速度倍率，默认 1
+    damage?: number; // 伤害数值
+    cooldownMs?: number; // 射速间隔（毫秒），默认 300
+    range?: number; // 射程（世界单位，按 scale 缩放），默认 4000
+    spread?: number; // 散布角（弧度），默认 0
+    element?: string; // 伤害类型标签
+    muzzleOffset?: [number, number, number]; // 枪口局部偏移
+};
+
+// 远程命中结果
+export type RangedHit = {
+    target: THREE.Object3D; // 命中目标
+    point: THREE.Vector3; // 命中点
+    distance: number; // 命中距离
+    damage: number; // 伤害数值
+};
+
+// 击退（中键 MMB）配置
+export type KnockOptions = {
+    clip?: string; // 击退动画片段名（可选）
+    radius?: number; // 生效半径（世界单位，按 scale 缩放），默认 220
+    force?: number; // 击退力度，默认 600
+    arcDeg?: number; // 生效锥形半角（度），360=全周，默认 360
+    cooldownMs?: number; // 冷却（毫秒），默认 1200
+    damage?: number; // 附带伤害，默认 0
+};
+
+// 击退事件载荷
+export type KnockEvent = {
+    target: THREE.Object3D; // 被击退目标
+    direction: THREE.Vector3; // 击退方向（单位向量）
+    force: number; // 击退力度
+    damage: number; // 附带伤害
+};
+
+// 闪避/冲刺（双击方向键）配置
+export type DodgeOptions = {
+    clip?: string; // 闪避动画片段名（可选）
+    speed?: number; // 闪避初速度基准（按 scale 缩放），默认 1400
+    durationMs?: number; // 闪避持续时间（毫秒），默认 280
+    cooldownMs?: number; // 冷却（毫秒），默认 550
+    iframes?: boolean; // 闪避期间是否提供无敌帧，默认 true
+    doubleTapMs?: number; // 双击识别窗口（毫秒），默认 250
+};
+
+// 目标锁定系统配置
+export type TargetOptions = {
+    maxRange?: number; // 可锁定最大距离（按 scale 缩放），默认 6000
+    softLockRange?: number; // 软锁定生效距离（按 scale 缩放），默认 3000
+    maxAngleDeg?: number; // 锁定候选相对镜头前方的最大半角（度），默认 70
+    isAlive?: (target: THREE.Object3D) => boolean; // 判定目标是否存活，默认总是 true
+};
+
+// 当前目标信息（供 UI 目标框/血条使用）
+export type TargetInfo = {
+    object: THREE.Object3D; // 目标对象
+    hard: boolean; // 是否为 Tab 硬锁定（false=软锁定）
+    distance: number; // 与玩家距离
 };
 
 // ==================== 车辆配置 ====================
