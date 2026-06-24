@@ -12,7 +12,7 @@
   "rewrites": [
     { "source": "/ai/:path*", "destination": "https://ai.grudge-studio.com/:path*" },
     { "source": "/api/:path*", "destination": "https://api.grudge-studio.com/api/:path*" },
-    { "source": "/auth/:path*", "destination": "https://id.grudge-studio.com/auth/:path*" },
+    { "source": "/api/auth/:path*", "destination": "https://id.grudge-studio.com/api/auth/:path*" },
     { "source": "/assets/:path*", "destination": "https://assets.grudge-studio.com/:path*" },
     { "source": "/Models/:path*", "destination": "https://assets.grudge-studio.com/models/:path*" }
   ],
