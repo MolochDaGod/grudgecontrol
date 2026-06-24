@@ -49,7 +49,8 @@ export type MobileControlsOptions = {
 // 可重映射的输入动作
 export type KeyAction =
     | "forward" | "backward" | "left" | "right"
-    | "sprint" | "jump" | "toggleView" | "toggleFly" | "toggleVehicle";
+    | "sprint" | "jump" | "toggleView" | "toggleFly" | "toggleVehicle"
+    | "attack" | "attackHeavy";
 
 // 自定义键位映射：未填用默认键，传 code/数组覆盖，传 null 禁用
 export type KeyMap = Partial<Record<KeyAction, string | string[] | null>>;
@@ -76,6 +77,47 @@ export type PlayerControllerOptions = {
     springCameraTime?: number; // 弹簧相机平滑时间（秒），默认 0.05
     timeScale?: number; // 时间缩放系数，<1 慢动作 >1 快进，默认 1
     keyMap?: KeyMap; // 自定义键位映射
+};
+
+// ==================== 战斗配置 (Combat) ====================
+
+// 单个攻击招式定义
+export type AttackDef = {
+    clip: string; // 模型中的攻击动画片段名
+    timeScale?: number; // 播放速度倍率，默认 1
+    durationMs?: number; // 指定动画时长（毫秒），优先于 timeScale 推导速度
+    damage?: number; // 伤害数值，透传给 onHit 消费方
+    cooldownMs?: number; // 该招式再次触发的最小间隔（毫秒），默认 0
+    comboWindowMs?: number; // 招式结束后允许衔接下一段连击的时间窗（毫秒），默认 350
+    hitFraction?: number; // 命中判定发生在动画的进度点（0~1），默认 0.5
+    range?: number; // 近战触及距离（世界单位，按 scale 缩放），默认 120
+    arcDeg?: number; // 近战命中锥形半角（度），默认 60
+    lockMovement?: boolean; // 出招期间是否锁定 XZ 位移，默认 false
+    element?: string; // 自定义伤害类型标签
+    next?: string; // 快速衔接的默认下一段招式 key
+};
+
+// 近战命中结果
+export type MeleeHit = {
+    target: THREE.Object3D; // 命中的目标对象
+    point: THREE.Vector3; // 命中点（目标世界坐标）
+    distance: number; // 与攻击者的距离
+};
+
+// 攻击事件载荷
+export type AttackEvent = {
+    key: string; // 招式 key
+    index: number; // 连击序号（从 0 开始）
+    combo: string | null; // 当前连击名（无则为 null）
+    def: AttackDef; // 招式定义
+};
+
+// 战斗系统配置
+export type CombatOptions = {
+    allowAerialAttacks?: boolean; // 是否允许在空中（跳跃下落）出招，默认 true
+    allowFlyingAttacks?: boolean; // 是否允许在飞行模式出招，默认 false
+    bufferInput?: boolean; // 是否缓存出招输入以衔接连击，默认 true
+    targets?: THREE.Object3D[]; // 默认近战命中候选目标
 };
 
 // ==================== 车辆配置 ====================
