@@ -15,9 +15,6 @@ const defaultKeyMap: Record<KeyAction, string[]> = {
     // Combat — mouse is the primary path (pointer-lock); these are keyboard fallbacks.
     attack: ["KeyJ"],
     attackHeavy: ["KeyK"],
-    // Combat — mouse is primary (pointer-lock); keyboard fallbacks below.
-    attack: ["KeyJ", "Mouse0"],
-    attackHeavy: ["KeyK", "Mouse2"],
     aim: ["KeyL"],
     knock: ["KeyG"],
     targetNext: ["Tab"],
