@@ -12,6 +12,8 @@ const defaultKeyMap: Record<KeyAction, string[]> = {
     toggleView: ["KeyV"],
     toggleFly: ["KeyF"],
     toggleVehicle: ["KeyE"],
+    attack: ["KeyJ", "Mouse0"],
+    attackHeavy: ["KeyK", "Mouse2"],
 };
 
 export class InputSystem {
