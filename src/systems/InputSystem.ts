@@ -12,6 +12,9 @@ const defaultKeyMap: Record<KeyAction, string[]> = {
     toggleView: ["KeyV"],
     toggleFly: ["KeyF"],
     toggleVehicle: ["KeyE"],
+    // Combat — mouse is the primary path (pointer-lock); these are keyboard fallbacks.
+    attack: ["KeyJ"],
+    attackHeavy: ["KeyK"],
     // Combat — mouse is primary (pointer-lock); keyboard fallbacks below.
     attack: ["KeyJ", "Mouse0"],
     attackHeavy: ["KeyK", "Mouse2"],
