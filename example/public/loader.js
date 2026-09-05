@@ -4,7 +4,7 @@
     const baseUrl = scriptSrc.substring(0, scriptSrc.lastIndexOf("/") + 1);
     const gifUrl = baseUrl + "img/loader.gif";
     const gifSize = 120;
-    const title = "three-player-controller";
+    const title = "Grudge Control";
     const fade = 600;
 
     /* Google Fonts */
@@ -112,9 +112,9 @@
             fill.style.width = p + "%";
             if (pct) pct.textContent = p + "%";
         } else {
-            // total 未知时显示已加载量
+            // When total is unknown, show bytes already loaded
             const mb = (loaded / 1048576).toFixed(1);
-            fill.style.width = "100%"; // 用满格表示"仍在加载"
+            fill.style.width = "100%"; // Full bar means "still loading"
             if (pct) pct.textContent = mb + " MB";
         }
     };

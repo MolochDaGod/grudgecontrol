@@ -1,5 +1,5 @@
-// HUD：准星 + 武器选择栏 + 弹药显示
-// 不依赖任何 Three.js 对象，只操作 DOM
+// HUD: crosshair + weapon slots + ammo display
+// No Three.js objects — DOM only
 export class HUD {
     constructor(weaponSlots) {
         this._slots = weaponSlots; // [{ key, mode, label }]
@@ -12,7 +12,7 @@ export class HUD {
         this._hitTimer = null;
     }
 
-    // ==================== 初始化 ====================
+    // ==================== Init ====================
 
     build() {
         this._weaponHud.innerHTML = "";
@@ -26,7 +26,7 @@ export class HUD {
         }
     }
 
-    // ==================== 武器槽 ====================
+    // ==================== Weapon slots ====================
 
     update(currentMode) {
         this._weaponHud.querySelectorAll(".weapon-slot").forEach((el) => {
@@ -34,7 +34,7 @@ export class HUD {
         });
     }
 
-    // ==================== 弹药 ====================
+    // ==================== Ammo ====================
 
     updateAmmo(current, max) {
         if (this._ammoCurrent) this._ammoCurrent.textContent = current;
@@ -49,7 +49,7 @@ export class HUD {
         if (this._ammoHud) this._ammoHud.style.display = "none";
     }
 
-    // ==================== 准星 ====================
+    // ==================== Crosshair ====================
 
     showCrosshair() { this._crosshair.style.display = "block"; }
     hideCrosshair() { this._crosshair.style.display = "none"; }

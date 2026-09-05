@@ -18,7 +18,7 @@ let renderer;
 let scene;
 let stats;
 
-// 区域裁剪
+// Region culling
 let nearRegionPlugin = null;
 let farRegionPlugin = null;
 let nearRegion = null;
@@ -33,7 +33,7 @@ async function init() {
 
     const cont = document.querySelector("#container");
 
-    // 渲染器
+    // Renderer
     renderer = new WebGLRenderer({ antialias: true });
     renderer.setSize(cont.clientWidth, cont.clientHeight);
     renderer.shadowMap.enabled = true;
@@ -42,14 +42,14 @@ async function init() {
     renderer.setAnimationLoop(animate);
     cont.appendChild(renderer.domElement);
 
-    // 相机
+    // Camera
     camera = new PerspectiveCamera(60, cont.clientWidth / cont.clientHeight, 0.01, 10000);
     camera.position.set(1e3, 1e3, 1e3).multiplyScalar(0.5);
 
-    // 控制器
+    // Controls
     controls = new OrbitControls(camera, renderer.domElement);
 
-    // 平行光
+    // Directional light
     const color = 0xffffff;
     const intensity = 10;
     const light = new DirectionalLight(color, intensity);
@@ -67,11 +67,11 @@ async function init() {
     light.shadow.camera.far = 100;
     scene.add(light);
     scene.add(light.target);
-    // 环境光
+    // Ambient light
     const ambient = new AmbientLight(0xffffff, 3.0);
     scene.add(ambient);
 
-    // 背景
+    // Background
     new HDRLoader().load(
         "./img/1.hdr",
         (texture) => {
@@ -80,11 +80,11 @@ async function init() {
         },
         undefined,
         (err) => {
-            console.warn("HDR 加载失败：", err);
+            console.warn("HDR load failed:", err);
         }
     );
 
-    // 帧率
+    // FPS
     stats = new Stats();
     Object.assign(stats.dom.style, {
         position: "fixed",
@@ -101,15 +101,15 @@ async function init() {
 
     await initPlayer();
 
-    // 窗口大小监听
+    // Window resize listener
     onWindowResize();
     window.addEventListener("resize", onWindowResize, false);
 
-    // 关闭加载页面
+    // Hide loading overlay
     window.hideLoader();
 }
 
-// 初始化区域裁剪插件
+// Init region-cull plugins
 function initRegionCull() {
     nearRegionPlugin = new LoadRegionPlugin();
     tiles.registerPlugin(nearRegionPlugin);
@@ -128,14 +128,14 @@ function initRegionCull() {
 
 }
 
-// 初始化玩家控制器
+// Init player controller
 async function initPlayer() {
     renderer.render(scene, camera);
 
-    // 加载碰撞体
+    // Load collider
     const colliderGltf = await new GLTFLoader().loadAsync("./glb/EiffelCollider.glb");
 
-    // 初始化玩家控制器
+    // Init player controller
     player = new playerController();
     await player.init({
         scene,
@@ -170,10 +170,10 @@ async function initPlayer() {
         scale: 0.9,
         position: new Vector3(80, 80, 80),
         wheelsNames: [
-            "WHEEL_LF", // 前左
-            "WHEEL_RF", // 前右
-            "WHEEL_LR", // 后左
-            "WHEEL_RR", // 后右
+            "WHEEL_LF", // front left
+            "WHEEL_RF", // front right
+            "WHEEL_LR", // rear left
+            "WHEEL_RR", // rear right
         ],
         animations: {
             openDoorAnim: "opendoor",
@@ -187,7 +187,7 @@ async function initPlayer() {
     });
 }
 
-// 创建3DTiles渲染器
+// Create 3D Tiles renderer
 function reinstantiateTiles() {
     tiles = new TilesRenderer();
     const apiToken =
@@ -218,7 +218,7 @@ function reinstantiateTiles() {
     tiles.setCamera(camera);
 }
 
-// 渲染循环更新
+// Render-loop update
 function animate() {
     if (!tiles) return;
 
@@ -241,7 +241,7 @@ function animate() {
     stats?.update();
 }
 
-// 响应窗口尺寸变化
+// Handle window resize
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     renderer.setSize(window.innerWidth, window.innerHeight);

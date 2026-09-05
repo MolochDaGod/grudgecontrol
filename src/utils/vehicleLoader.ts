@@ -21,9 +21,9 @@ export type VehicleLoaderContext = {
     playerScale: number;
 };
 
-// ==================== 工具函数 ====================
+// ==================== Helpers ====================
 
-// 获取包围盒
+// Bounding box
 function getBbox(object: THREE.Object3D) {
     const bbox = new THREE.Box3().setFromObject(object);
     const center = new THREE.Vector3();
@@ -33,7 +33,7 @@ function getBbox(object: THREE.Object3D) {
     return { bbox, center, size };
 }
 
-// 创建障碍物检测器
+// Obstacle checker for boarding path
 function createObstacleChecker(
     vehicleGroup: THREE.Group,
     bbox: THREE.Box3,
@@ -41,7 +41,7 @@ function createObstacleChecker(
     playerScale: number,
 ): ObstacleChecker {
     return {
-        // 射线检测路径是否被车辆遮挡
+        // Ray vs rotated vehicle AABB
         isBlocked(start: THREE.Vector3, end: THREE.Vector3): boolean {
             const vehiclePos = vehicleGroup.position;
             const vehicleQuat = vehicleGroup.quaternion;
@@ -51,7 +51,7 @@ function createObstacleChecker(
             bbox.getSize(size);
             center.applyQuaternion(vehicleQuat).add(vehiclePos);
 
-            // 构建旋转后的包围盒角点
+            // Rotated AABB corners
             const halfSize = size.clone().multiplyScalar(0.5 * scale);
             const corners: THREE.Vector3[] = [];
             for (let x = -1; x <= 1; x += 2)
@@ -63,7 +63,7 @@ function createObstacleChecker(
                                 .add(center),
                         );
 
-            // 扩展包围盒并做射线检测
+            // Expand AABB and ray-test
             const expandedBBox = new THREE.Box3();
             corners.forEach(c => expandedBBox.expandByPoint(c));
             expandedBBox.expandByScalar(100 * playerScale);
@@ -75,7 +75,7 @@ function createObstacleChecker(
             return intersects !== null && start.distanceTo(intersects) < length;
         },
 
-        // 生成绕行导航节点
+        // Detour nodes around the vehicle
         getNavigationNodes(start: THREE.Vector3, _goal: THREE.Vector3): THREE.Vector3[] {
             const nodes = [] as THREE.Vector3[];
             const vehiclePos = vehicleGroup.position;
@@ -89,7 +89,7 @@ function createObstacleChecker(
             const halfWidth = (bboxSize.x / 2) * scale;
             const groundY = start.y;
 
-            // 两个距离层级各生成四个角点
+            // Two distance rings, four corners each
             for (const margin of [300 * playerScale, 500 * playerScale]) {
                 nodes.push(vehiclePos.clone().add(fwd.clone().multiplyScalar(halfLen + margin)).add(right.clone().multiplyScalar(-halfWidth - margin)).setY(groundY));
                 nodes.push(vehiclePos.clone().add(fwd.clone().multiplyScalar(halfLen + margin)).add(right.clone().multiplyScalar(halfWidth + margin)).setY(groundY));
@@ -101,9 +101,9 @@ function createObstacleChecker(
     };
 }
 
-// ==================== 主函数 ====================
+// ==================== Main ====================
 
-// 加载车辆模型
+// Load a vehicle model
 export async function loadVehicleModel(
     opts: VehicleOptions,
     ctx: VehicleLoaderContext,
@@ -115,7 +115,7 @@ export async function loadVehicleModel(
     const suspensionRestLengthRatio = opts.suspensionRestLengthRatio ?? 0.2;
     const speedMultiplier = opts.speedMultiplier ?? 1;
 
-    // 更新车辆物理参数
+    // Update vehicle physics params
     vehicleParams.power.accelerateForce = 50 * scale;
     vehicleParams.power.brakeForce = 200 * scale;
     vehicleParams.power.maxSpeed = 10000 * scale;
@@ -123,11 +123,11 @@ export async function loadVehicleModel(
 
     const vehicleModel = await loader.loadAsync(opts.url);
 
-    // 计算模型缩放比
+    // Model scale vs target length
     const { size: originalSize } = getBbox(vehicleModel.scene);
     const modelScale = vehicleLength / Math.max(originalSize.x, originalSize.y, originalSize.z);
 
-    // 绑定开门动画
+    // Bind door-open clip
     const vehicleMixer = new THREE.AnimationMixer(vehicleModel.scene);
     const vehicleActions = new Map<string, THREE.AnimationAction>();
     const animations = vehicleModel.animations ?? [];
@@ -142,17 +142,17 @@ export async function loadVehicleModel(
         vehicleActions.set("openDoor", action);
     }
 
-    // 查找轮子节点
+    // Find wheel nodes
     const wheelObjects: THREE.Object3D[] = [];
     for (const name of opts.wheelsNames) {
         let found = false;
         vehicleModel.scene.traverse(child => {
             if (child.name === name && !found) { wheelObjects.push(child); found = true; }
         });
-        if (!found) console.warn(`未找到轮子: ${name}`);
+        if (!found) console.warn(`Wheel not found: ${name}`);
     }
 
-    // 临时挂载获取世界坐标
+    // Temp attach to sample world transforms
     const tempGroup = new THREE.Group();
     scene.add(tempGroup);
     vehicleModel.scene.scale.multiplyScalar(modelScale * scale);
@@ -162,7 +162,7 @@ export async function loadVehicleModel(
     tempGroup.add(vehicleModel.scene);
     tempGroup.updateMatrixWorld(true);
 
-    // 收集轮子世界变换信息
+    // Collect wheel world transforms
     let wheelRadius = 0, wheelWidth = 0, suspensionRestLength = 0, chassisHeight = 0, wheelSizeInit = false;
     const wheelsInfo: any[] = [];
 
@@ -174,7 +174,7 @@ export async function loadVehicleModel(
         wheel.getWorldQuaternion(worldQuat);
         wheel.getWorldScale(worldScale);
 
-        // 只计算一次轮子尺寸
+        // Measure wheel size once
         if (!wheelSizeInit) {
             const { size: ws } = getBbox(wheel);
             wheelRadius = Number((Math.max(ws.x, ws.y, ws.z) / 2).toFixed(2));
@@ -190,13 +190,13 @@ export async function loadVehicleModel(
     tempGroup.remove(vehicleModel.scene);
     scene.remove(tempGroup);
 
-    // 创建车辆根节点
+    // Vehicle root
     const vehicleGroup = new THREE.Group();
     scene.add(vehicleGroup);
     vehicleGroup.add(vehicleModel.scene);
     vehicleGroup.updateMatrixWorld(true);
 
-    // 轮子包装组（独立旋转）
+    // Wheel wrappers (independent rotation)
     const wheelWrappers: THREE.Group[] = [];
     for (let i = 0; i < wheelsInfo.length; i++) {
         const wheel = wheelsInfo[i];
@@ -215,7 +215,7 @@ export async function loadVehicleModel(
         wheelWrappers.push(wheelWrapper);
     }
 
-    // 创建车身物理碰撞体
+    // Chassis collider
     const halfExtents = size.clone().multiplyScalar(0.5);
     halfExtents.y -= chassisHeight / 2;
     vehicleModel.scene.position.y -= chassisHeight / 2;
@@ -232,7 +232,7 @@ export async function loadVehicleModel(
     );
     world.createCollider(RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z), chassisBody);
 
-    // 物理调试盒
+    // Physics debug box
     const physicsBoxMesh = new THREE.Mesh(
         new THREE.BoxGeometry(halfExtents.x * 2, halfExtents.y * 2, halfExtents.z * 2),
         new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.3 }),

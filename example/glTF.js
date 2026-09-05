@@ -63,7 +63,7 @@ let previewMesh = null;
 let previewMode = false;
 let previewHintEl = null;
 
-// CSM 基准参数
+// CSM baseline params
 const CSM_BASE = { maxFar: 30, lightNear: 0.1, lightFar: 50, lightMargin: 30, lightIntensity: 10 };
 const previewRaycaster = new Raycaster();
 const previewMouse = new Vector2();
@@ -71,7 +71,7 @@ const previewMouse = new Vector2();
 const modelUrl = "./glb/burnout_revenge_-_central_route_crash_junction.glb";
 const pos = new Vector3(21.5, 4, 15);
 
-// 人物模型配置
+// Player model config
 function easeEndsLinearMiddle(progress, easeRatio = 0.18) {
     const ease = Math.min(Math.max(easeRatio, 0.001), 0.49);
     const maxSpeed = 1 / (1 - ease);
@@ -80,7 +80,7 @@ function easeEndsLinearMiddle(progress, easeRatio = 0.18) {
     return maxSpeed * (progress - ease / 2);
 }
 
-// 根据整条路径的总长度定位平台
+// Place the platform along the full path length
 function setPositionOnXPath(mesh, progress) {
     if (!dynamicPlatformXSegments.length || dynamicPlatformXLength <= 0) return;
 
@@ -160,7 +160,7 @@ const PLAYER_MODELS = {
     },
 };
 
-// 车辆配置
+// Vehicle configs
 const VEHICLE_CONFIGS = {
     bugatti: {
         url: "./glb/bugatti.glb",
@@ -232,7 +232,7 @@ function recreateCSM(scale) {
     csm.dispose();
     const maxTextureSize = renderer.capabilities.maxTextureSize;
     csm = createCSM(Math.min(2048, maxTextureSize), scale);
-    // 重新绑定场景内所有网格的材质
+    // Rebind materials on every mesh in the scene
     scene.traverse((child) => {
         if (child.isMesh) setupCSMMaterial(child.material);
     });
@@ -248,14 +248,14 @@ function getScaledVehicle(key) {
     return { ...v, scale: v.scale * globalScale };
 }
 
-// 创建动态平台
+// Create a dynamic platform
 function createDynamicPlatform({
     position,
     radius = 0.16,
     cloudScale = [0.32, 0.15, 0.32],
     motion = null,
 }) {
-    // 网格
+    // Mesh
     const mesh = new Mesh(
         new CircleGeometry(radius, 32),
         new MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.7, metalness: 0, roughness: 0.5, side: DoubleSide }),
@@ -266,7 +266,7 @@ function createDynamicPlatform({
     scene.add(mesh);
     player.addDynamicCollider(mesh);
 
-    // 体积云
+    // Volume cloud
     const cloud = createVolumeCloud({
         scale: cloudScale,
         opacity: 0.28,
@@ -276,7 +276,7 @@ function createDynamicPlatform({
     cloud.rotation.x = Math.PI / 2;
     mesh.add(cloud);
 
-    // 缓存数据
+    // Cached data
     const entry = {
         mesh,
         cloud,
@@ -287,17 +287,17 @@ function createDynamicPlatform({
     return entry;
 }
 
-// 更新动态平台
+// Update dynamic platforms
 function updateDynamicPlatforms() {
     const t = animClock.getElapsedTime();
     dynamicPlatforms.forEach((entry) => {
         const { mesh, basePosition, motion, cloud } = entry;
         if (motion) {
-            // 还原基点
+            // Restore base position
             if (motion.axis === "y") {
                 mesh.position.copy(basePosition);
                 const amount = Math.sin(t * motion.speed) * motion.distance;
-                // 纵向往返
+                // Vertical round trip
                 mesh.position.y = basePosition.y + amount + motion.distance;
             } else if (motion.axis === "x") {
                 if (player.getActiveDynamicCollider()?.source === mesh && player.getIsOnGround()) {
@@ -313,15 +313,15 @@ function updateDynamicPlatforms() {
                 entry.lastMotionTime = t;
             }
         }
-        // 更新体积云
+        // Update volume cloud
         updateVolumeCloud(cloud, camera);
     });
 }
 
-// 移除平台
+// Remove platforms
 function removeDynamicPlatforms() {
     dynamicPlatforms.forEach(({ mesh, cloud }) => {
-        // 清理碰撞
+        // Clear collision
         player?.removeDynamicCollider(mesh);
         disposeVolumeCloud(cloud);
         scene.remove(mesh);
@@ -334,7 +334,7 @@ function removeDynamicPlatforms() {
 async function init() {
     const cont = document.querySelector("#container");
 
-    // 渲染器
+    // Renderer
     renderer = new WebGLRenderer({ antialias: true });
     renderer.setSize(cont.clientWidth, cont.clientHeight);
     renderer.shadowMap.enabled = false;
@@ -343,12 +343,12 @@ async function init() {
     renderer.setAnimationLoop(animate);
     cont.appendChild(renderer.domElement);
 
-    // 相机
+    // Camera
     camera = new PerspectiveCamera(60, cont.clientWidth / cont.clientHeight, 0.01, 1000);
     camera.position.copy(pos);
     camera.lookAt(pos.x, pos.y, pos.z + 1);
 
-    // 控制器
+    // Controls
     controls = new MapControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.maxDistance = 2000;
@@ -359,7 +359,7 @@ async function init() {
 
     const maxTextureSize = renderer.capabilities.maxTextureSize;
     const shadowMapSize = Math.min(2048, maxTextureSize);
-    // 级联阴影
+    // Cascaded shadows
     csm = createCSM(shadowMapSize, 1);
     csm.lights.forEach((light, index) => {
         const biasMult = Math.pow(2, index);
@@ -367,11 +367,11 @@ async function init() {
         light.shadow.normalBias = 0.002 * biasMult;
     });
 
-    // 环境光
+    // Ambient light
     const ambient = new AmbientLight(0xffffff, 5);
     scene.add(ambient);
 
-    // 背景
+    // Background
     new HDRLoader().load(
         "./img/1.hdr",
         (texture) => {
@@ -379,10 +379,10 @@ async function init() {
             scene.background = texture;
         },
         undefined,
-        (err) => console.warn("HDR 加载失败：", err)
+        (err) => console.warn("HDR load failed:", err)
     );
 
-    // 帧率显示
+    // FPS display
     stats = new Stats();
     Object.assign(stats.dom.style, {
         position: "fixed",
@@ -393,7 +393,7 @@ async function init() {
     });
     document.body.appendChild(stats.dom);
 
-    // 射线交点可视化小球
+    // Raycast hit visualization sphere
     const sphereGeo = new SphereGeometry(0.05, 16, 16);
     const sphereMat = new MeshBasicMaterial({ color: 0x00ffff, opacity: 0.8, transparent: true, depthTest: false });
     raycastSphere = new Mesh(sphereGeo, sphereMat);
@@ -401,12 +401,12 @@ async function init() {
     raycastSphere.renderOrder = 999;
     scene.add(raycastSphere);
 
-    // 加载场景
+    // Load scene
     initGltfLoader();
     await initGLBScene(modelUrl);
     renderer.render(scene, camera);
 
-    // 人物控制器
+    // Player controller
     player = new playerController();
     await player.init({
         scene,
@@ -419,7 +419,7 @@ async function init() {
         enableOverShoulderView: true,
     });
 
-    // 骨骼可视化
+    // Skeleton visualization
     const playerModel = player.getPlayerModel();
     if (playerModel) {
         skeletonHelper = new SkeletonHelper(playerModel);
@@ -427,7 +427,7 @@ async function init() {
         scene.add(skeletonHelper);
     }
 
-    // 创建动态平台
+    // Create a dynamic platform
     const liftPlatform = createDynamicPlatform({
         position: new Vector3(22, 2.76, 9.7),
         motion: { axis: "y", distance: 4, speed: 0.5 },
@@ -440,7 +440,7 @@ async function init() {
         motion: { axis: "x", distance: 3, speed: 0.1 },
     });
 
-    // 阴影
+    // Shadows
     player.getPlayerModel()?.traverse((child) => {
         if (child.isMesh) {
             child.castShadow = true;
@@ -449,16 +449,16 @@ async function init() {
         }
     });
 
-    // 调试
+    // Debug
     initGUI();
 
     window.addEventListener("resize", onWindowResize, false);
 
-    // 关闭加载页面
+    // Hide loading overlay
     window.hideLoader();
 }
 
-// 初始化glb加载器
+// Init GLB loader
 function initGltfLoader() {
     gltfLoader = new GLTFLoader();
     const dracoLoader = new DRACOLoader();
@@ -470,7 +470,7 @@ function initGltfLoader() {
     gltfLoader.setKTX2Loader(ktx2Loader);
 }
 
-// 加载场景
+// Load scene
 async function initGLBScene(url, modelScale = [10, 10, 10]) {
     try {
         const gltf = await gltfLoader.loadAsync(url);
@@ -486,15 +486,15 @@ async function initGLBScene(url, modelScale = [10, 10, 10]) {
         });
         scene.add(model);
     } catch (e) {
-        console.error("GLB 加载失败：", e);
+        console.error("GLB load failed:", e);
     }
 }
 
-// 更换场景
+// Replace scene
 async function replaceScene(file) {
     const blobUrl = URL.createObjectURL(file);
 
-    // 退出指针锁定
+    // Exit pointer lock
     if (document.pointerLockElement) {
         await new Promise((resolve) => {
             document.addEventListener("pointerlockchange", resolve, { once: true });
@@ -502,7 +502,7 @@ async function replaceScene(file) {
         });
     }
 
-    // 移除旧场景并释放 GPU 资源
+    // Remove old scene and free GPU resources
     const old = scene.getObjectByName("sceneGLB");
     if (old) {
         old.traverse((child) => {
@@ -515,23 +515,23 @@ async function replaceScene(file) {
         scene.remove(old);
     }
 
-    // 销毁旧玩家
+    // Destroy previous player
     removeDynamicPlatforms();
     player?.destroy();
     player = null;
 
-    // 加载新场景
+    // Load new scene
     await initGLBScene(blobUrl, [1, 1, 1]);
 
-    // 释放上一个 blob URL，保存新的
+    // Revoke previous blob URL, keep the new one
     if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
     currentBlobUrl = blobUrl;
 
-    // 进入预览模式
+    // Enter preview mode
     await enterPreviewMode(guiParams?.playerModel ?? "person1");
 }
 
-// 进入预览模式
+// Enter preview mode
 async function enterPreviewMode(playerModelKey) {
     previewMode = true;
 
@@ -562,12 +562,12 @@ async function enterPreviewMode(playerModelKey) {
             display: "flex", flexDirection: "column", alignItems: "center", gap: "8px",
         });
         const tip = document.createElement("span");
-        tip.textContent = "移动鼠标预览人物位置 · 双击确认放置";
+        tip.textContent = "Move the mouse to preview player position · Double-click to confirm placement";
         const sliderRow = document.createElement("div");
         Object.assign(sliderRow.style, { display: "flex", alignItems: "center", gap: "8px" });
         const label = document.createElement("span");
-        label.textContent = "人物比例：";
-        // 对数刻度：slider在log10空间线性滑动，0.01~1000 各数量级间距相同
+        label.textContent = "Player scale:";
+        // Log scale: slider is linear in log10 space so 0.01-1000 share equal decade spacing
         const slider = document.createElement("input");
         slider.type = "range";
         slider.min = "-2";   // log10(0.01)
@@ -588,7 +588,7 @@ async function enterPreviewMode(playerModelKey) {
         previewHintEl.append(tip, sliderRow);
         document.body.appendChild(previewHintEl);
     } else {
-        // 重置滑块值
+        // Reset slider value
         const slider = previewHintEl.querySelector("input[type=range]");
         const sliderVal = previewHintEl.querySelector("span:last-child");
         if (slider) { slider.value = String(Math.log10(globalScale)); }
@@ -600,7 +600,7 @@ async function enterPreviewMode(playerModelKey) {
     renderer.domElement.addEventListener("dblclick", onPreviewDblClick);
 }
 
-// 退出预览模式
+// Exit preview mode
 function exitPreviewMode() {
     previewMode = false;
     controls.enableZoom = true;
@@ -623,7 +623,7 @@ function exitPreviewMode() {
     renderer.domElement.removeEventListener("dblclick", onPreviewDblClick);
 }
 
-// 预览：鼠标移动 → 射线交点跟随
+// Preview: mouse move → follow raycast hit
 function onPreviewMouseMove(e) {
     if (!previewMode || !previewMesh) return;
     previewMouse.set(
@@ -642,7 +642,7 @@ function onPreviewMouseMove(e) {
     }
 }
 
-// 预览：双击 → 确认位置，初始化玩家
+// Preview: double-click → confirm position and init player
 async function onPreviewDblClick() {
     if (!previewMode || !previewMesh?.visible) return;
     const initPos = previewMesh.position.clone();
@@ -675,7 +675,7 @@ async function onPreviewDblClick() {
     });
 }
 
-// 每帧调用
+// Per-frame update
 function animate() {
     if (player) {
         player.update();
@@ -693,7 +693,7 @@ function animate() {
     stats?.update();
 }
 
-// 更新中心射线交点
+// Update center raycast hit
 function updateCenterRaycast() {
     if (!guiParams?.centerRaycast) return;
     const hit = player.getCenterScreenRaycastHit();
@@ -712,7 +712,7 @@ function onWindowResize() {
     renderer.setPixelRatio(window.devicePixelRatio * 1);
 }
 
-// 调试
+// Debug
 function initGUI() {
     const gui = new GUI({ title: "Debug Panel", width: 280 });
     Object.assign(gui.domElement.style, {
@@ -726,7 +726,7 @@ function initGUI() {
         gui.domElement.addEventListener(type, (e) => e.stopPropagation());
     });
 
-    // 上传场景按钮
+    // Upload scene button
     const uploadInput = document.createElement("input");
     uploadInput.type = "file";
     uploadInput.accept = ".gltf,.glb";
@@ -736,7 +736,7 @@ function initGUI() {
         const file = e.target.files?.[0];
         if (!file) return;
         await replaceScene(file);
-        uploadInput.value = ""; // 允许重复上传同名文件
+        uploadInput.value = ""; // Allow re-uploading a file with the same name
     });
     gui.add({ upload: () => uploadInput.click() }, "upload").name("Change Scene (.glb/.gltf)");
 
@@ -795,7 +795,7 @@ function initGUI() {
                 });
             }
 
-            // 重建骨骼可视化
+            // Rebuild skeleton visualization
             if (skeletonHelper) {
                 scene.remove(skeletonHelper);
                 skeletonHelper.dispose();
@@ -827,7 +827,7 @@ function initGUI() {
                 if (!cfg) return;
                 const playerPos = player.getPosition();
 
-                // 取相机朝向的水平分量，沿该方向偏移生成车辆
+                // Use the camera's horizontal facing to offset the spawned vehicle
                 const camDir = new Vector3();
                 camera.getWorldDirection(camDir);
                 camDir.y = 0;
@@ -842,7 +842,7 @@ function initGUI() {
                         child.castShadow = true;
                         child.receiveShadow = true;
                         setupCSMMaterial(child.material);
-                        // 设置金属材质
+                        // Apply metallic material
                         child.material.metalness = 0.8;
                         child.material.roughness = 0.0;
                     }

@@ -1,15 +1,15 @@
 import * as THREE from "three";
 
-// 胶囊碰撞所需的临时对象
+// Scratch objects for capsule collision
 export interface CollisionTemps {
-    invMat: THREE.Matrix4;    // 碰撞体世界矩阵的逆矩阵
-    localSeg: THREE.Line3;    // 胶囊段在碰撞体本地空间的副本
-    localBox: THREE.Box3;     // 胶囊段在碰撞体本地空间的包围盒
-    closestSeg: THREE.Vector3; // 胶囊段最近点
-    closestTri: THREE.Vector3; // 三角面最近点
+    invMat: THREE.Matrix4;    // inverse of collider world matrix
+    localSeg: THREE.Line3;    // capsule segment in collider local space
+    localBox: THREE.Box3;     // AABB of the capsule segment in collider local space
+    closestSeg: THREE.Vector3; // closest point on the capsule segment
+    closestTri: THREE.Vector3; // closest point on the triangle
 }
 
-// 创建一组预分配的临时对象
+// Allocate one set of scratch objects
 export function createCollisionTemps(): CollisionTemps {
     return {
         invMat: new THREE.Matrix4(),
@@ -21,12 +21,12 @@ export function createCollisionTemps(): CollisionTemps {
 }
 
 /**
- * 将胶囊与单个网格做 BVH 碰撞检测
- * @param capsule       胶囊所在的 Object3D（位置会被直接修改）
- * @param capsuleInfo   胶囊描述：局部空间线段 + 半径
- * @param collider      目标碰撞网格
- * @param temps         预分配临时对象
- * @param skipTri       可选：返回 true 则跳过该三角面
+ * BVH capsule-vs-mesh collision. Mutates capsule.position.
+ * @param capsule       Object3D that owns the capsule (position is written)
+ * @param capsuleInfo   capsule in local space: segment + radius
+ * @param collider      target collision mesh
+ * @param temps         preallocated scratch
+ * @param skipTri       optional: return true to skip this triangle
  */
 export function applyCapsuleCollision(
     capsule: THREE.Object3D,
@@ -35,35 +35,35 @@ export function applyCapsuleCollision(
     temps: CollisionTemps,
     skipTri?: (tri: any, dir: THREE.Vector3) => boolean,
 ): void {
-    // 胶囊段变换到碰撞体本地空间
+    // Transform capsule segment into collider local space
     temps.invMat.copy(collider.matrixWorld).invert();
     temps.localSeg.start.copy(capsuleInfo.segment.start).applyMatrix4(capsule.matrixWorld).applyMatrix4(temps.invMat);
     temps.localSeg.end.copy(capsuleInfo.segment.end).applyMatrix4(capsule.matrixWorld).applyMatrix4(temps.invMat);
 
-    // 构建本地包围盒
+    // Local AABB
     temps.localBox.makeEmpty();
     temps.localBox.expandByPoint(temps.localSeg.start).expandByPoint(temps.localSeg.end);
     temps.localBox.expandByScalar(capsuleInfo.radius);
 
-    // 碰撞查询
+    // Collision query
     (collider.geometry as any)?.boundsTree?.shapecast({
         intersectsBounds: (box: THREE.Box3) => box.intersectsBox(temps.localBox),
         intersectsTriangle: (tri: any) => {
-            // 初步筛选
+            // Broad filter
             const distance = tri.closestPointToSegment(temps.localSeg, temps.closestSeg, temps.closestTri);
             if (distance >= capsuleInfo.radius) return;
 
-            // 二次筛选
+            // Narrow filter
             const dir = temps.closestTri.clone().sub(temps.closestSeg).normalize();
             if (skipTri?.(tri, dir)) return;
 
-            // 推开胶囊段
+            // Push the capsule segment out
             temps.localSeg.start.addScaledVector(dir, capsuleInfo.radius - distance);
             temps.localSeg.end.addScaledVector(dir, capsuleInfo.radius - distance);
         },
     });
 
-    // 应用碰撞修正
+    // Apply correction
     const newPos = temps.closestSeg.copy(temps.localSeg.start).applyMatrix4(collider.matrixWorld);
     const delta = temps.closestTri.subVectors(newPos, capsule.position);
     const offset = Math.max(0, delta.length() - 1e-5);

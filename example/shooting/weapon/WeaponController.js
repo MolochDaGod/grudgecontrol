@@ -2,11 +2,11 @@ import { AnimationMixer, LoopOnce, Object3D, Quaternion, Vector3 } from "three";
 
 export const MODE = Object.freeze({ NORMAL: "normal", PRIMARY: "primary" });
 
-const _muzzleWorldPos = new Vector3(); // 枪口世界坐标
+const _muzzleWorldPos = new Vector3(); // Muzzle world position
 
 export class WeaponController {
     constructor({ scene, camera, localPlayer, decalSystem, effects, hud, zombieManager }) {
-        // ==================== 场景引用 ====================
+        // ==================== Scene refs ====================
         this._scene = scene;
         this._camera = camera;
         this._player = localPlayer;
@@ -15,70 +15,70 @@ export class WeaponController {
         this._hud = hud;
         this._zombieManager = zombieManager;
 
-        // ==================== 武器配置 ====================
-        this._gunScale = 0.1; // 枪模型缩放
-        this._gunPos = [1, 26.5, 2]; // 枪挂载到右手骨骼的位置偏移
-        this._gunBarrelDir = new Vector3(0, 0, -1); // 枪管沿模型局部 -Z
-        this._gunTargetDir = new Vector3(0, 1, 0); // 手骨 +Y = 手指方向
+        // ==================== Weapon config ====================
+        this._gunScale = 0.1; // Gun model scale
+        this._gunPos = [1, 26.5, 2]; // Offset when parented to the right-hand bone
+        this._gunBarrelDir = new Vector3(0, 0, -1); // Barrel along model local -Z
+        this._gunTargetDir = new Vector3(0, 1, 0); // Hand bone +Y = finger direction
         this._gunRoll = Math.PI / 2;
-        this._gunMuzzleOffset = [0, 80, -480]; // 枪口偏移 [左, 上, 前]
+        this._gunMuzzleOffset = [0, 80, -480]; // Muzzle offset [left, up, forward]
 
-        // ==================== 武器模型 ====================
-        this._weaponModel = null; // 枪模型根节点
-        this._muzzlePoint = null; // 枪口标记点（供特效定位）
-        this._weaponMixer = null; // 武器动画混合器
-        this._weaponReloadAction = null; // 换弹动画
-        this._weaponShootAction = null; // 射击动画
-        this._shotSound = null; // 射击音效
-        this._shakeIntensity = 0; // 当前镜头抖动强度
-        this._shakeDecay = 10; // 抖动衰减系数
+        // ==================== Weapon model ====================
+        this._weaponModel = null; // Gun model root
+        this._muzzlePoint = null; // Muzzle marker (for FX placement)
+        this._weaponMixer = null; // Weapon animation mixer
+        this._weaponReloadAction = null; // Reload clip
+        this._weaponShootAction = null; // Fire clip
+        this._shotSound = null; // Fire SFX
+        this._shakeIntensity = 0; // Current camera-shake intensity
+        this._shakeDecay = 10; // Shake decay coefficient
 
-        // ==================== 模式 & 武器槽 ====================
+        // ==================== Mode & slots ====================
         this._currentMode = MODE.NORMAL;
         this._weaponSlots = [
             { key: "1", mode: MODE.PRIMARY, label: "Rifle" },
             { key: "4", mode: MODE.NORMAL, label: "Fists" },
         ];
 
-        // ==================== 相机距离限制 ====================
-        this._normalMaxCam = 220; // 徒手模式最远距离
-        this._armedMaxCam = 100; // 瞄准模式最远距离
+        // ==================== Camera distance limits ====================
+        this._normalMaxCam = 220; // Unarmed max distance
+        this._armedMaxCam = 100; // Aiming max distance
 
-        // ==================== 移速配置 ====================
+        // ==================== Move speed ====================
         this._baseSpeed = 300;
-        this._armedSpeed = 240; // 持枪移速 = baseSpeed * 0.8
+        this._armedSpeed = 240; // Armed speed = baseSpeed * 0.8
 
-        // ==================== 开火状态机 ====================
-        this._isAiming = false; // 是否瞄准中（RMB 触发，含视角缩放）
-        this._isSoftAiming = false; // 是否软瞄准中（单击开火触发，不缩放视角）
-        this._isFiring = false; // 是否连射中
-        this._isTriggerDown = false; // 鼠标左键是否按住
-        this._isReloading = false; // 是否换弹中
-        this._magSize = 30; // 弹夹容量
-        this._currentAmmo = 30; // 当前子弹数
-        this._totalAmmo = 300; // 总备用弹药量
-        this._firstShotTimer = null; // 180ms 后必出一枪的计时器
-        this._holdAimTimer = null; // 停火后 2s 才放枪的计时器
+        // ==================== Fire state machine ====================
+        this._isAiming = false; // Aiming (RMB, includes FOV zoom)
+        this._isSoftAiming = false; // Soft aim (click-to-fire, no FOV zoom)
+        this._isFiring = false; // Full-auto in progress
+        this._isTriggerDown = false; // LMB held
+        this._isReloading = false; // Reloading
+        this._magSize = 30; // Magazine size
+        this._currentAmmo = 30; // Current ammo
+        this._totalAmmo = 300; // Reserve ammo
+        this._firstShotTimer = null; // Timer that always fires one shot after 180ms
+        this._holdAimTimer = null; // Timer that lowers the gun 2s after cease-fire
         this._lastFireTime = 0;
-        this._elapsed = 0; // 由 update() 每帧更新，供 setTimeout 回调读取
+        this._elapsed = 0; // Updated each frame by update(); read by setTimeout callbacks
 
-        this._reloadTimer1 = null; // 换弹半程计时器
-        this._reloadTimer2 = null; // 换弹完成计时器
-        this._RELOAD_DURATION_MS = 2000; // 换弹动画时长，需根据实际模型动画调整
-        this._FIRE_RATE_S = 0.1; // 连射间隔（秒）
-        this._FIRE_ANIM_FADE_MS = 180; // 与 playAnimation 默认 fade(0.18s) 对齐
-        this._HOLD_AIM_DURATION = 2000; // 停火后保持瞄准状态时长（ms）
+        this._reloadTimer1 = null; // Mid-reload timer
+        this._reloadTimer2 = null; // Reload-complete timer
+        this._RELOAD_DURATION_MS = 2000; // Reload clip length; tune to the actual model clip
+        this._FIRE_RATE_S = 0.1; // Full-auto interval (seconds)
+        this._FIRE_ANIM_FADE_MS = 180; // Matches playAnimation default fade (0.18s)
+        this._HOLD_AIM_DURATION = 2000; // Keep-aim duration after cease-fire (ms)
 
-        // ==================== 射线命中缓存 ====================
-        this._frameHit = null; // 每帧射线命中结果
+        // ==================== Ray-hit cache ====================
+        this._frameHit = null; // This frame's ray hit
 
-        // ==================== 多人扩展 ====================
-        this.onHitPlayer = null; // (playerId, damage) => void，由外部注入
+        // ==================== Multiplayer hook ====================
+        this.onHitPlayer = null; // (playerId, damage) => void, injected by host
     }
 
-    // ==================== 初始化 ====================
+    // ==================== Init ====================
 
-    // 加载武器模型并挂载到右手骨骼
+    // Load the weapon model and parent it to the right-hand bone
     async load(gltfLoader, baseUrl) {
         const gltf = await gltfLoader.loadAsync(baseUrl + "./glb/ak47.glb");
         this._weaponModel = gltf.scene;
@@ -86,7 +86,7 @@ export class WeaponController {
         const person = this._player.getPlayerModel();
         const rightHand = person?.getObjectByName("mixamorigRightHand");
         if (!rightHand) {
-            console.warn("[WeaponController] 未找到右手骨骼 mixamorigRightHand");
+            console.warn("[WeaponController] Right-hand bone mixamorigRightHand not found");
             return;
         }
 
@@ -102,11 +102,11 @@ export class WeaponController {
             }
         });
 
-        // 找到备用弹夹骨骼，初始缩为 0 隐藏
+        // Spare-mag bone: start scaled to ~0 so it stays hidden
         this._magazineBone = this._weaponModel.getObjectByName("Bone002_01");
         if (this._magazineBone) this._magazineBone.scale.setScalar(0.0001);
 
-        // 对齐枪管方向并附加滚转
+        // Align barrel direction and apply roll
         const alignQ = new Quaternion().setFromUnitVectors(this._gunBarrelDir, this._gunTargetDir);
         const rollQ = new Quaternion().setFromAxisAngle(this._gunTargetDir, this._gunRoll);
         this._weaponModel.quaternion.copy(rollQ.multiply(alignQ));
@@ -114,26 +114,27 @@ export class WeaponController {
         this._weaponModel.visible = false;
         rightHand.add(this._weaponModel);
 
-        // 枪口标记点（供特效定位）
+        // Muzzle marker (for FX placement)
         this._muzzlePoint = new Object3D();
         this._muzzlePoint.position.set(...this._gunMuzzleOffset);
         this._weaponModel.add(this._muzzlePoint);
 
-        // 初始化武器动画
+        // Weapon animation
         this._weaponMixer = new AnimationMixer(this._weaponModel);
         const reloadClip = gltf.animations.find(a => a.name === "Armature.003|reload");
         if (reloadClip) {
             this._weaponReloadAction = this._weaponMixer.clipAction(reloadClip);
             this._weaponReloadAction.setLoop(LoopOnce);
-            // 关键修改：取消锁定在最后一帧。
-            // 这样动画结束后，骨骼会自动通过 Mixer 的权重回归到 Bind Pose（初始插在枪上的位置）。
+            // Do not clamp on the last frame.
+            // After the clip ends, mixer weights let bones fall back to bind pose
+            // (the mag seated in the gun).
             this._weaponReloadAction.clampWhenFinished = false;
             this._weaponReloadAction.timeScale = 1.3;
         }
 
     }
 
-    // 注册所有射击相关动画集
+    // Register all shooting-related locomotion sets
     setupAnimations() {
         this._player.registerLocomotionSet("primary", {
             idle: "rifle_idle",
@@ -148,7 +149,7 @@ export class WeaponController {
             jumping: "rifle_jump",
         });
 
-        // 上半身专用动画：仅覆写脊椎以上骨骼，下半身继续播放移动动画
+        // Upper-body clips: overwrite spine-and-above only; lower body keeps locomotion
         this._player.registerUpperAnimation("upper_shoot", "rifle_shoot3", { loop: true, timeScale: 0.5 });
         this._player.registerUpperAnimation("upper_reload", "reload", { loop: false, timeScale: 1.5 });
         this._player.registerUpperAnimation("upper_aim", "rifle_idle_aim3", { loop: true, timeScale: 0.5 });
@@ -156,7 +157,7 @@ export class WeaponController {
         this._player.initIdleHipsQ("rifle_idle_aim3");
     }
 
-    // 绑定键鼠输入
+    // Bind mouse/keyboard
     bindInput() {
         document.addEventListener("mousedown", (e) => {
             if (!this._canRunCombatLogic()) return;
@@ -190,38 +191,38 @@ export class WeaponController {
         }, { passive: true });
     }
 
-    // ==================== 主循环 ====================
+    // ==================== Main loop ====================
 
-    // 每帧由 shooting.js 主循环调用
+    // Called each frame from shooting.js
     update(elapsed, dt) {
         this._elapsed = elapsed;
         const canRunCombatLogic = this._canRunCombatLogic();
 
-        // 飞行时强制取消换弹
+        // Cancel reload while flying
         if (this._currentMode === MODE.PRIMARY && this._isReloading && this._player.getIsFlying()) {
             this._cancelReload();
         }
-        // 飞行/跳跃等不可战斗状态时强制中断武器逻辑（换弹中不打断，由换弹自己管）
+        // Force-stop weapon logic in non-combat states (fly/jump, etc.); reload handles itself
         if (this._currentMode === MODE.PRIMARY && !canRunCombatLogic && !this._isReloading) {
             this._forceStopCombatLogic();
         }
 
-        // 第一人称：静止时自动进入瞄准，移动时退出
+        // First person: auto-aim while standing still, exit while moving
         if (this._currentMode === MODE.PRIMARY && this._player.getIsFirstPerson()) {
             if (canRunCombatLogic && !this._isAiming) this.enterAim();
             else if (!canRunCombatLogic && this._isAiming) this.exitAim();
         }
 
-        // 更新粒子特效
+        // Particle FX
         this._effects?.update(dt);
 
-        // 更新武器动画混合器
+        // Weapon animation mixer
         if (this._weaponMixer) this._weaponMixer.update(dt);
 
-        // 非换弹时每帧强制隐藏备用弹夹骨骼（mixer 更新后覆写）
+        // Hide the spare-mag bone every frame when not reloading (overwrite after mixer update)
         if (this._magazineBone && !this._isReloading) this._magazineBone.scale.setScalar(0.0001);
 
-        // 镜头抖动（指数衰减）
+        // Camera shake (exponential decay)
         if (this._shakeIntensity > 0.0001) {
             this._camera.rotation.x += (Math.random() - 0.5) * this._shakeIntensity;
             this._camera.rotation.y += (Math.random() - 0.5) * this._shakeIntensity * 0.4;
@@ -230,14 +231,14 @@ export class WeaponController {
             this._shakeIntensity = 0;
         }
 
-        // 更新射线命中缓存
+        // Ray-hit cache
         this._frameHit = this._player.getCenterScreenRaycastHit();
 
-        // 连射节拍
+        // Full-auto cadence
         if (canRunCombatLogic && this._isFiring && elapsed - this._lastFireTime >= this._FIRE_RATE_S) {
             if (this._currentAmmo <= 0) {
                 this._stopFiring();
-                // 只有总弹药大于0时才触发自动换弹
+                // Auto-reload only when reserve ammo remains
                 if (this._totalAmmo > 0) this.reload();
             } else {
                 this._lastFireTime = elapsed;
@@ -246,10 +247,10 @@ export class WeaponController {
         }
     }
 
-    // ==================== 状态查询 ====================
+    // ==================== Queries ====================
 
-    // 是否处于任意武器激活状态（等待首发 / 连射 / hold-aim 冷却 / 瞄准）
-    // SpineIK 和主循环通过此方法判断是否需要驱动 IK
+    // Any weapon-active state (waiting first shot / full-auto / hold-aim cooldown / aiming)
+    // SpineIK and the main loop use this to decide whether to drive IK
     isGunEngaged() {
         return (
             this._isAiming ||
@@ -296,12 +297,12 @@ export class WeaponController {
         }
     }
 
-    // ==================== 模式切换 & 瞄准 ====================
+    // ==================== Mode switch & aim ====================
 
     switchMode(newMode) {
         if (this._currentMode === newMode || this._isReloading) return;
 
-        // 退出旧模式
+        // Leave old mode
         if (this._currentMode === MODE.PRIMARY) {
             this.exitAim();
             this._isSoftAiming = false;
@@ -320,7 +321,7 @@ export class WeaponController {
 
         this._currentMode = newMode;
 
-        // 进入新模式
+        // Enter new mode
         if (this._currentMode === MODE.PRIMARY) {
             this._player.switchLocomotionSet("primary");
             this._player.setPlayerSpeed(this._armedSpeed);
@@ -331,7 +332,7 @@ export class WeaponController {
         if (this._weaponModel) this._weaponModel.visible = (this._currentMode === MODE.PRIMARY);
     }
 
-    // 进入瞄准模式；soft=true 时为软瞄准，跳过视角缩放
+    // Enter aim; soft=true skips FOV zoom
     enterAim(soft = false) {
         if (soft) {
             if (this._isSoftAiming) return;
@@ -350,7 +351,7 @@ export class WeaponController {
         }
     }
 
-    // 退出瞄准模式；soft=true 时为软瞄准，跳过视角还原
+    // Exit aim; soft=true skips FOV restore
     exitAim(soft = false) {
         if (soft) {
             if (!this._isSoftAiming) return;
@@ -371,37 +372,37 @@ export class WeaponController {
         }
     }
 
-    // 换弹
+    // Reload
     reload() {
         if (this._currentMode !== MODE.PRIMARY || this._isReloading || this._totalAmmo <= 0 || this._currentAmmo === this._magSize) return;
         if (this._player.getIsFlying()) return;
 
         this._isReloading = true;
 
-        // 1. 中断当前所有攻击状态
+        // 1. Interrupt all attack state
         this._isTriggerDown = false;
         this._isFiring = false;
         if (this._weaponShootAction) this._weaponShootAction.stop();
         if (this._firstShotTimer) { clearTimeout(this._firstShotTimer); this._firstShotTimer = null; }
         this._cancelHoldAimTimer();
-        this.exitAim(); // 换弹时强制退出瞄准
+        this.exitAim(); // Force-exit aim while reloading
 
-        // 2. 播放换弹动画（仅上半身，下半身继续播放移动动画）
+        // 2. Play reload on upper body only; lower body keeps locomotion
         this._player.playUpperBody("upper_reload", { force: true, fade: 0.18 });
 
-        // 换弹音效
+        // Reload SFX
         this._effects?.triggerReloadSound();
 
-        // 显示备用弹夹骨骼
+        // Show spare-mag bone
         if (this._magazineBone) this._magazineBone.scale.setScalar(1);
 
-        // 播放武器自身的换弹动画
+        // Play the weapon's own reload clip
         if (this._weaponReloadAction) {
             this._weaponReloadAction.reset();
             this._weaponReloadAction.play();
         }
 
-        // 动画播放到一半时停止，同时隐藏备用弹夹骨骼（避免 snap-back 到悬空位置时可见）
+        // Halfway through: stop the clip and hide the spare mag (avoid a visible snap-back to mid-air)
         this._reloadTimer1 = setTimeout(() => {
             this._reloadTimer1 = null;
             if (this._isReloading && this._weaponReloadAction) {
@@ -410,26 +411,26 @@ export class WeaponController {
             if (this._magazineBone) this._magazineBone.scale.setScalar(0.0001);
         }, this._RELOAD_DURATION_MS / 2);
 
-        // 3. 锁定状态直到动画结束
+        // 3. Lock state until the clip finishes
         this._reloadTimer2 = setTimeout(() => {
             this._reloadTimer2 = null;
-            // 此时 _isReloading 变回 false，允许开火
+            // _isReloading is false again — firing is allowed
             this._isReloading = false;
 
-            // 停止上半身换弹动画，让全身 locomotion 动画重新完整接管上半身
+            // Stop the upper-body reload so full-body locomotion takes over the upper body again
             this._player.stopUpperBody(0.18);
 
-            // 确保动画彻底停止（以防上面的一半时间停止没触发成功）
+            // Ensure the clip is fully stopped (in case the halfway stop missed)
             if (this._weaponReloadAction) this._weaponReloadAction.stop();
 
-            // 计算需要补充的子弹数量
+            // Transfer reserve into the mag
             const need = this._magSize - this._currentAmmo;
             const transfer = Math.min(need, this._totalAmmo);
             this._currentAmmo += transfer;
             this._totalAmmo -= transfer;
             this._hud.updateAmmo?.(this._currentAmmo, this._totalAmmo);
 
-            // 换弹结束后，衔接回持枪状态
+            // After reload, return to armed pose
             if (this._currentMode === MODE.PRIMARY) {
                 this._player.switchLocomotionSet("primary_aim");
                 if (this._isAiming || this._isSoftAiming || !this._player.isMoving) {
@@ -442,19 +443,19 @@ export class WeaponController {
         }, this._RELOAD_DURATION_MS);
     }
 
-    // ==================== 开火状态机 ====================
+    // ==================== Fire state machine ====================
 
     _startFiring() {
         if (!this._canRunCombatLogic()) return;
         if (this._firstShotTimer || this._isFiring) return;
 
-        // 没子弹时按左键，直接触发换弹
+        // Empty mag + LMB → reload
         if (this._currentAmmo <= 0) {
             if (this._totalAmmo > 0) this.reload();
             return;
         }
 
-        // 切换到软瞄准状态
+        // Soft-aim if not already aiming
         if (!this._isAiming && !this._isSoftAiming) {
             this.enterAim(true);
         }
@@ -462,7 +463,7 @@ export class WeaponController {
         this._cancelHoldAimTimer();
         this._isTriggerDown = true;
 
-        // 无论鼠标是否松开，180ms 后必定打出第一枪
+        // First shot always fires after 180ms, even if LMB is already released
         this._firstShotTimer = setTimeout(() => {
             this._firstShotTimer = null;
             if (!this._canRunCombatLogic()) {
@@ -473,9 +474,9 @@ export class WeaponController {
             this._lastFireTime = this._elapsed;
 
             if (this._isTriggerDown) {
-                this._isFiring = true; // 持续按住 → 连射
+                this._isFiring = true; // Held → full-auto
             } else {
-                // 单击松开：打出第一枪后处理后续状态
+                // Click-release: handle follow-up after the first shot
                 if (this._weaponShootAction) this._weaponShootAction.stop();
                 if (this._isAiming || this._isSoftAiming || !this._player.isMoving) {
                     this._scheduleHoldAim();
@@ -491,10 +492,10 @@ export class WeaponController {
         if (this._weaponShootAction) this._weaponShootAction.stop();
 
         if (!this._isFiring) {
-            // 换弹中或 hold-aim 缓冲期内松开鼠标，不打断上半身动画
+            // Releasing LMB during reload or hold-aim buffer does not interrupt upper-body anim
             if (this._isReloading || this._holdAimTimer) return;
 
-            // 单发（鼠标在 180ms 定时器触发前就松开）：恢复或停止上半身
+            // Single shot (LMB released before the 180ms timer): restore or stop upper body
             if (this._isAiming || this._isSoftAiming) {
                 this._player.playUpperBody("upper_aim", { fade: 0.18 });
             } else {
@@ -515,28 +516,28 @@ export class WeaponController {
     _fireOnce() {
         if (!this._canRunCombatLogic()) return;
 
-        // 播放音效
+        // Play SFX
         if (this._shotSound && this._shotSound.buffer) {
             if (this._shotSound.isPlaying) this._shotSound.stop();
             this._shotSound.play();
         }
 
-        // 第三人称触发镜头抖动
+        // Third-person camera shake
         if (!this._player.getIsFirstPerson()) {
-            this._shakeIntensity = 0.01; // 弧度单位，0.02 约为 1.1 度
+            this._shakeIntensity = 0.01; // Radians; 0.02 ≈ 1.1 degrees
         }
 
         this._currentAmmo--;
         this._hud.updateAmmo?.(this._currentAmmo, this._totalAmmo);
 
-        // 枪口火焰 + 音效：无论命中什么都必须先触发
+        // Muzzle flash + SFX: always fire first, regardless of what was hit
         if (this._effects && this._muzzlePoint) {
             this._muzzlePoint.updateWorldMatrix(true, false);
             this._muzzlePoint.getWorldPosition(_muzzleWorldPos);
             this._effects.triggerMuzzleFlash(_muzzleWorldPos, this._camera);
         }
 
-        // 多人模式：检测是否命中远程玩家（dmgMult 由命中部位决定：头×2，躯干×1，四肢×0.75）
+        // Multiplayer: remote-player hit (dmgMult by body part: head×2, torso×1, limbs×0.75)
         const hitPlayerId = this._frameHit?.object?.userData?.playerId;
         if (hitPlayerId && this.onHitPlayer) {
             const dmgMult = this._frameHit.object.userData.dmgMult ?? 1.0;
@@ -556,12 +557,12 @@ export class WeaponController {
 
     _triggerShootAnim() {
         if (!this._canRunCombatLogic()) return;
-        // 上半身播放开火动画，下半身继续播放当前移动动画
+        // Upper body plays fire; lower body keeps current locomotion
         this._player.playUpperBody("upper_shoot", { force: true, fade: 0.18 });
         if (this._weaponShootAction) this._weaponShootAction.play();
     }
 
-    // 停火后延迟 2s 自动退出瞄准姿态
+    // 2s after cease-fire, auto-exit the aim pose
     _scheduleHoldAim() {
         this._cancelHoldAimTimer();
         this._holdAimTimer = setTimeout(() => {

@@ -18,7 +18,7 @@ import { getDatabase, ref, set, onValue, onDisconnect, remove, get, onChildAdded
 const BASE = import.meta.env.BASE_URL;
 
 // ================================================================
-// Firebase 配置
+// Firebase config
 // ================================================================
 const FIREBASE_CONFIG = {
     apiKey: "AIzaSyAHRbY8kGEkRT-dWYvdKgxBKPfAhKRP72E",
@@ -30,7 +30,7 @@ const FIREBASE_CONFIG = {
     appId: "1:499506286184:web:08b8a9b77f2f9c1a11b5dd",
 };
 
-// ==================== 房间 & 身份 ====================
+// ==================== Room & identity ====================
 const MAX_PLAYERS = 10;
 if (!location.hash) location.replace(location.href + "#room1");
 const roomId = "3dgs-" + (location.hash.slice(1) || "room1");
@@ -42,10 +42,10 @@ const myRef = ref(db, `rooms/${roomId}/players/${playerId}`);
 onDisconnect(myRef).remove();
 window.addEventListener("beforeunload", () => remove(myRef));
 
-// ==================== 场景配置 ====================
+// ==================== Scene config ====================
 const SPLAT_URL = BASE + "3DGS/outdoor4.sog";
 const COLLIDER_URL = BASE + "glb/outdoor4.collision.glb";
-// 出生点列表，玩家按入房顺序依次分配
+// Spawn points, assigned in join order
 const SPAWN_POINTS = [
     new THREE.Vector3(0.895, 0.1, 0.822),
     new THREE.Vector3(-0.101, 0.1, 1.354),
@@ -58,7 +58,7 @@ const SPAWN_POINTS = [
     new THREE.Vector3(1.649, 0.1, -0.369),
     new THREE.Vector3(0.987, 0.1, 0.422),
 ];
-// 角色库（与 HTML data-idx 对应），每项含完整模型配置
+// Character roster (matches HTML data-idx); each entry is a full model config
 const CHARACTER_LIST = [
     {
         name: "Josh",
@@ -160,14 +160,14 @@ const CHARACTER_LIST = [
         noGun: true,
     }
 ];
-let selectedModelUrl = CHARACTER_LIST[2].url; // 默认 Swat（index 2）
+let selectedModelUrl = CHARACTER_LIST[2].url; // default Swat (index 2)
 
 const PLAYER_MODEL = { ...CHARACTER_LIST[2] };
 
-// 持枪时远程玩家的动画映射（clipName → rifleClipName）
+// Rifle anim map for remote players (clipName → rifleClipName)
 const RIFLE_ANIM_MAP = { idle1: "rifle_idle", walk: "rifle_walk", run: "rifle_run", jump: "rifle_jump" };
 
-// 多部位骨骼碰撞盒定义（HITBOX_DEBUG=true 时显示绿色线框）
+// Per-bone hitbox defs (green wireframe when HITBOX_DEBUG=true)
 const HITBOX_DEBUG = false;
 const HITBOX_DEFS = [
     { bone: "mixamorigHead", w: 20, h: 22, d: 20, oy: 10, part: "head", dmg: 2.0 },
@@ -177,10 +177,10 @@ const HITBOX_DEFS = [
     { bone: "mixamorigLeftUpLeg", w: 14, h: 68, d: 14, oy: 46, part: "leg", dmg: 0.75 },
     { bone: "mixamorigRightUpLeg", w: 14, h: 68, d: 14, oy: 46, part: "leg", dmg: 0.75 },
 ];
-// upperAnim key → full clip name（用于远程玩家全身播放）
+// upperAnim key → full clip name (full-body playback on remotes)
 const UPPER_CLIP_MAP = { upper_aim: "rifle_idle_aim3", upper_shoot: "rifle_shoot3", upper_reload: "reload" };
 
-// ==================== 场景变量 ====================
+// ==================== Scene vars ====================
 let localPlayer = null;
 let weapon = null;
 let audioListener = null;
@@ -192,39 +192,39 @@ let camera, renderer, controls;
 const clock = new THREE.Clock();
 const gltfLoader = new GLTFLoader();
 
-// 本地血量 & 名字 & 死亡状态 & 击杀死亡统计
+// Local HP, name, death state, and K/D
 let myHp = 100;
 let isDead = false;
 let myName = "";
 let localKills = 0;
 let localDeaths = 0;
-let spawnIndex = 0; // 当前出生点索引，在 init() 和复活时递增
+let spawnIndex = 0; // current spawn index, incremented in init() and on respawn
 let isChatting = false;
 let lastChatTime = 0;
-const CHAT_COOLDOWN = 1000; // 发送冷却（ms）
+const CHAT_COOLDOWN = 1000; // send cooldown (ms)
 
-// AntMan 蚁人技能状态
+// AntMan shrink-skill state
 let antManIsSmall = false;
 let antManIsScaling = false;
 let antManScaleFrame = null;
-const _lastHitterOf = new Map(); // targetId → attackerId，用于击杀归属
-let lastAttackerOnMe = null;     // 最后一次攻击本玩家的 playerId
+const _lastHitterOf = new Map(); // targetId → attackerId, for kill credit
+let lastAttackerOnMe = null;     // playerId of the last attacker on this player
 
 const _nameAdj = ["Iron", "Ghost", "Shadow", "Storm", "Silent", "Rapid", "Neon", "Steel", "Dark", "Void"];
 const _nameNoun = ["Wolf", "Fox", "Eagle", "Hawk", "Viper", "Tiger", "Bear", "Crow", "Lynx", "Cobra"];
-// 生成随机英文战斗名（形容词 + 名词）
+// Random English combat name (adjective + noun)
 function randomName() {
     return _nameAdj[Math.floor(Math.random() * _nameAdj.length)]
         + _nameNoun[Math.floor(Math.random() * _nameNoun.length)];
 }
 
-// 显示名字输入弹窗，从 localStorage 预填上次的名字和角色，但始终显示让用户确认
+// Show the name modal; prefill last name/character from localStorage, always wait for confirm
 function waitForName() {
     const savedName = localStorage.getItem("mp_name");
     const savedCharIdx = parseInt(localStorage.getItem("mp_char_idx") ?? "2");
     selectedModelUrl = CHARACTER_LIST[savedCharIdx]?.url ?? CHARACTER_LIST[2].url;
 
-    // 用 BASE 设置角色头像路径
+    // Set character avatar paths from BASE
     const charImgs = [
         BASE + "img/multiplayer/char_josh.png",
         BASE + "img/multiplayer/char_tommy.png",
@@ -246,11 +246,11 @@ function waitForName() {
         input.value = savedName || randomName();
         input.select();
 
-        // 恢复上次选中的角色
+        // Restore last selected character
         cards.forEach(c => c.classList.remove("selected"));
         (cards[savedCharIdx] ?? cards[2]).classList.add("selected");
 
-        // 角色切换
+        // Character switch
         cards.forEach(card => card.addEventListener("click", () => {
             cards.forEach(c => c.classList.remove("selected"));
             card.classList.add("selected");
@@ -271,11 +271,11 @@ function waitForName() {
     });
 }
 
-// 打开聊天输入框，暂停游戏输入
+// Open chat input and pause game input
 function openChat() {
     if (isChatting || isDead || !localPlayer) return;
     isChatting = true;
-    localPlayer.offAllEvent();      // 先解绑，再释放锁，减少漏事件窗口
+    localPlayer.offAllEvent();      // unbind first, then release pointer lock, to shrink the missed-event window
     document.exitPointerLock?.();
     const wrap = document.getElementById("chat-input-wrap");
     const input = document.getElementById("chat-input");
@@ -286,7 +286,7 @@ function openChat() {
     setTimeout(() => input.focus(), 20);
 }
 
-// 关闭聊天输入框，恢复游戏输入
+// Close chat input and restore game input
 function closeChat(send) {
     if (!isChatting) return;
     const input = document.getElementById("chat-input");
@@ -305,7 +305,7 @@ function closeChat(send) {
     localPlayer?.onAllEvent();
 }
 
-// 在屏幕上显示一条聊天消息（最多保留 5 条，8 秒后消失）
+// Show a chat message on screen (keep at most 5; fade after 8s)
 function addChatMessage(name, text) {
     const box = document.getElementById("chat-messages");
     if (!box) return;
@@ -317,10 +317,10 @@ function addChatMessage(name, text) {
     setTimeout(() => el.parentNode && el.parentNode.removeChild(el), 8000);
 }
 
-// 触发本地玩家死亡：停止输入、播死亡动画、推送死亡状态到 Firebase
+// Trigger local death: stop input, play death anim, push dead state to Firebase
 function triggerDeath() {
     if (isDead) return;
-    if (PLAYER_MODEL.noGun) return; // noGun 角色没有死亡动画，不响应死亡
+    if (PLAYER_MODEL.noGun) return; // noGun characters have no death anim and ignore death
     isDead = true;
     localDeaths++;
     updateKillBar();
@@ -334,14 +334,14 @@ function triggerDeath() {
     sendState();
 }
 
-// 本地玩家复活：重置血量、恢复输入、传送到下一个出生点、推送复活状态到 Firebase
+// Local respawn: reset HP, restore input, teleport to next spawn, push alive state to Firebase
 function triggerRespawn() {
     isDead = false;
     myHp = 100;
     updateMyHPUI();
     document.getElementById("death-overlay").style.display = "none";
 
-    // 按顺序选下一个出生点并传送
+    // Advance to the next spawn point and teleport
     spawnIndex = (spawnIndex + 1) % SPAWN_POINTS.length;
     const respawnPos = SPAWN_POINTS[spawnIndex];
     const capsule = localPlayer._player?.getPlayerCapsule();
@@ -353,43 +353,43 @@ function triggerRespawn() {
     sendState();
 }
 
-// ==================== 远程玩家 ====================
+// ==================== Remote players ====================
 const remotePlayers = new Map();
 
 class RemotePlayer {
     constructor(id, charIdx = 2) {
-        this.id = id; // 远程玩家 ID
-        this.charIdx = charIdx; // 角色索引
-        this._charCfg = CHARACTER_LIST[charIdx] ?? CHARACTER_LIST[2]; // 角色配置
-        this.model = null; // 模型
-        this.gunModel = null; // 枪械模型
-        this.mixer = null; // 动画混音器
-        this.actions = new Map(); // 动画动作映射表
-        this.currentClip = null; // 当前播放的动画动作
-        this.targetPos = new THREE.Vector3(); // 目标位置
-        this.targetQuat = new THREE.Quaternion(); // 目标旋转
-        this.loaded = false; // 是否加载完成
-        this._isDead = false; // 是否死亡
-        this.kills = 0; // 击杀数
-        this.deaths = 0; // 死亡数
-        this.name = ""; // 显示名称
-        this.nameLabelEl = null; // 显示名称元素
-        this._headBone = null; // 头骨
-        this._gunSound = null; // 枪械音效
-        this._lastShotSeq = null; // 上一次枪击序列
+        this.id = id; // remote player ID
+        this.charIdx = charIdx; // character index
+        this._charCfg = CHARACTER_LIST[charIdx] ?? CHARACTER_LIST[2]; // character config
+        this.model = null; // model
+        this.gunModel = null; // gun model
+        this.mixer = null; // animation mixer
+        this.actions = new Map(); // animation action map
+        this.currentClip = null; // currently playing clip
+        this.targetPos = new THREE.Vector3(); // target position
+        this.targetQuat = new THREE.Quaternion(); // target rotation
+        this.loaded = false; // whether load finished
+        this._isDead = false; // whether dead
+        this.kills = 0; // kill count
+        this.deaths = 0; // death count
+        this.name = ""; // display name
+        this.nameLabelEl = null; // name label element
+        this._headBone = null; // head bone
+        this._gunSound = null; // gun audio
+        this._lastShotSeq = null; // last shot sequence
     }
 
-    // 异步加载模型、动画、碰撞盒、枪械；完成后 loaded = true
+    // Async load model, anims, hitboxes, gun; set loaded = true when done
     async load() {
-        // 根据角色索引加载对应模型
+        // Load the model for this character index
         const modelUrl = CHARACTER_LIST[this.charIdx]?.url ?? CHARACTER_LIST[2].url;
         const gltf = await gltfLoader.loadAsync(modelUrl);
         this.model = gltf.scene;
-        // 不在此处设置 scale，先让模型保持自然尺寸，待计算包围盒后再设置
+        // Do not set scale here; keep natural size until the bounding box is measured
         this.model.visible = false;
         scene.add(this.model);
 
-        // 注册所有动画（标准 + 枪械）
+        // Register all clips (standard + rifle)
         this.mixer = new THREE.AnimationMixer(this.model);
         for (const clip of gltf.animations) {
             const action = this.mixer.clipAction(clip);
@@ -405,7 +405,7 @@ class RemotePlayer {
             this.actions.set(clip.name, action);
         }
 
-        // noGun 角色无需碰撞盒（不参与枪击判定）
+        // noGun characters skip hitboxes (not in gun hit tests)
         this._hitboxes = [];
         if (!this._charCfg.noGun) {
             const hitboxMat = HITBOX_DEBUG
@@ -419,17 +419,17 @@ class RemotePlayer {
                 mesh.userData.hitPart = def.part;
                 mesh.userData.dmgMult = def.dmg;
                 mesh.layers.set(0);
-                mesh.layers.enable(2); // layer 2：可被武器射线检测
+                mesh.layers.enable(2); // layer 2: visible to weapon rays
                 mesh.visible = HITBOX_DEBUG;
                 mesh.position.set(0, def.oy, 0);
                 bone.add(mesh);
                 this._hitboxes.push(mesh);
             }
 
-            // 加载枪模型挂到右手
+            // Load the gun model onto the right hand
             await this._loadGun();
 
-            // 挂载空间化枪声（距离衰减，远近有别）
+            // Attach spatial gunshot audio (distance attenuation)
             if (audioListener && gunShotBuffer && this.gunModel) {
                 this._gunSound = new THREE.PositionalAudio(audioListener);
                 this._gunSound.setBuffer(gunShotBuffer);
@@ -439,12 +439,12 @@ class RemotePlayer {
             }
         }
 
-        // 播放初始动画并更新骨骼矩阵
+        // Play the idle clip and update bone matrices
         this._switchAnim(this._charCfg.idleAnim);
         this.mixer.update(0);
         this.model.updateMatrixWorld(true);
 
-        // 将模型归一化到 180 单位高度，再乘配置 scale
+        // Normalize model height to 180 units, then multiply by config scale
         const _bboxSize = new THREE.Vector3();
         new THREE.Box3().setFromObject(this.model).getSize(_bboxSize);
         const _modelScale = _bboxSize.y > 0 ? (180 / _bboxSize.y) : 1;
@@ -465,14 +465,14 @@ class RemotePlayer {
         this._buildChatBubble();
     }
 
-    // 加载 AK47 模型并挂载到右手骨骼
+    // Load the AK47 and attach it to the right-hand bone
     async _loadGun() {
         const gltf = await gltfLoader.loadAsync(BASE + "glb/ak47.glb");
         this.gunModel = gltf.scene;
         this.gunModel.scale.setScalar(0.1);
         this.gunModel.position.set(1, 26.5, 2);
 
-        // 对齐枪管方向（与 WeaponController 一致）
+        // Align barrel direction (same as WeaponController)
         const alignQ = new THREE.Quaternion().setFromUnitVectors(
             new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0)
         );
@@ -484,33 +484,33 @@ class RemotePlayer {
         if (rightHand) rightHand.add(this.gunModel);
     }
 
-    // 收到 Firebase 状态包时同步位置、朝向、动画、名字（每 50ms 触发一次）
+    // Apply a Firebase state packet: pos, rot, anim, name (about every 50ms)
     applyState(state) {
-        if (!this.model) return; // load() 尚未完成，跳过
+        if (!this.model) return; // load() not finished yet, skip
 
         if (this._isDead) {
             if (!state.dead) {
-                // 敌人已复活：重置死亡状态，切回 idle，继续正常同步
+                // Remote respawned: clear dead, switch to idle, resume sync
                 this._isDead = false;
                 this._switchAnim(this._charCfg.idleAnim);
             } else {
-                return; // 仍处于死亡状态，忽略
+                return; // still dead, ignore
             }
         }
 
-        // 收到死亡状态：定位到死亡坐标，播死亡动画，不再接受后续更新
+        // Death state: snap to death pose, play death anim, ignore further updates
         if (state.dead && !this._isDead) {
             this._isDead = true;
             this.targetPos.set(state.x, state.y, state.z);
             this.targetQuat.set(state.qx, state.qy, state.qz, state.qw);
             this._switchAnim("death");
-            // 最后一击是本地玩家则记录击杀
+            // Credit a local kill if we landed the last hit
             if (_lastHitterOf.get(this.id) === playerId) {
                 localKills++;
                 _lastHitterOf.delete(this.id);
                 updateKillBar();
             }
-            // 显示击杀动态（killedBy 可能是本地玩家或其他远程玩家）
+            // Show kill feed (killedBy may be local or another remote)
             const kbId = state.killedBy;
             const killerName = kbId === playerId
                 ? myName
@@ -522,7 +522,7 @@ class RemotePlayer {
         if (state.kills !== undefined) { this.kills = state.kills; updateKillBar(); }
         if (state.deaths !== undefined) this.deaths = state.deaths;
 
-        // AntMan 缩放同步
+        // AntMan scale sync
         if (state.scale !== undefined && this._baseScale !== undefined) {
             const ratio = state.scale / this._charCfg.scale;
             this.model.scale.setScalar(this._baseScale * ratio);
@@ -531,7 +531,7 @@ class RemotePlayer {
         this.targetPos.set(state.x, state.y, state.z);
         this.targetQuat.set(state.qx, state.qy, state.qz, state.qw);
 
-        // 远程枪声：首次收到时记录基准值，后续检测到计数器增加则播放空间音效
+        // Remote gunshot: record baseline on first packet, play spatial audio when the counter increases
         if (state.shotSeq !== undefined) {
             if (this._lastShotSeq === null) {
                 this._lastShotSeq = state.shotSeq;
@@ -542,10 +542,10 @@ class RemotePlayer {
             }
         }
 
-        // 枪模型显隐
+        // Gun model visibility
         if (this.gunModel) this.gunModel.visible = (state.weapon === "primary");
 
-        // 动画解析：upperAnim 优先，否则按 weapon 模式选 clip
+        // Resolve clip: upperAnim wins, else pick by weapon mode
         const resolvedClip = state.upperAnim
             ? (UPPER_CLIP_MAP[state.upperAnim] ?? state.anim)
             : (state.weapon === "primary" ? (RIFLE_ANIM_MAP[state.anim] ?? state.anim) : state.anim);
@@ -553,7 +553,7 @@ class RemotePlayer {
         if (resolvedClip && resolvedClip !== this.currentClip) this._switchAnim(resolvedClip);
 
         if (!this.model.visible) {
-            // 首次显示直接吸附，避免从原点插值进场
+            // Snap on first show so the model does not lerp in from the origin
             this.model.position.copy(this.targetPos);
             this.model.quaternion.copy(this.targetQuat);
             this.model.visible = true;
@@ -565,7 +565,7 @@ class RemotePlayer {
         }
     }
 
-    // 淡切到指定动画 clip（0.2s 过渡）
+    // Crossfade to the given clip (0.2s)
     _switchAnim(clipName) {
         const next = this.actions.get(clipName);
         if (!next) return;
@@ -575,7 +575,7 @@ class RemotePlayer {
         this.currentClip = clipName;
     }
 
-    // 创建头顶悬浮名字 DOM 标签
+    // Create the floating name DOM label
     _buildNameLabel() {
         const el = document.createElement("div");
         el.className = "player-name-label";
@@ -606,7 +606,7 @@ class RemotePlayer {
         }, 5000);
     }
 
-    // 每帧：平滑插值位置/旋转，驱动动画 mixer
+    // Per frame: lerp pos/rot, tick the mixer
     tick(delta) {
         if (!this.loaded || !this.model) return;
         this.model.position.lerp(this.targetPos, 0.3);
@@ -614,7 +614,7 @@ class RemotePlayer {
         this.mixer?.update(delta);
     }
 
-    // 每帧：将名字标签投影到屏幕（头骨骼上方世界坐标偏移，透视自动缩放）
+    // Per frame: project the name label to screen (world offset above the head bone; perspective scales it)
     updateNameLabel(camera, renderer) {
         if (!this.nameLabelEl || !this.model?.visible) {
             if (this.nameLabelEl) this.nameLabelEl.style.display = "none";
@@ -625,7 +625,7 @@ class RemotePlayer {
         if (this._headBone) {
             this._headBone.updateWorldMatrix(true, false);
             this._headBone.getWorldPosition(worldPos);
-            // 在世界坐标空间加偏移
+            // Add offset in world space
             worldPos.y += this._charCfg.scale * 30;
         } else {
             this.model.getWorldPosition(worldPos);
@@ -649,7 +649,7 @@ class RemotePlayer {
         }
     }
 
-    // 释放几何体/材质/DOM，将模型移出场景（玩家离线时调用）
+    // Dispose geometry/materials/DOM and remove the model (called when the player leaves)
     dispose() {
         if (this.model) {
             this.model.traverse(child => {
@@ -672,14 +672,14 @@ class RemotePlayer {
     }
 }
 
-// ==================== Firebase 状态同步 ====================
+// ==================== Firebase state sync ====================
 const _sendPos = new THREE.Vector3();
 const _sendQuat = new THREE.Quaternion();
 let lastSendTime = 0;
 const SEND_INTERVAL = 17;
-let currentUpperKey = null; // 跟踪上半身动画 key
+let currentUpperKey = null; // track upper-body anim key
 
-// 将本地玩家当前状态推送到 Firebase（位置、朝向、动画、血量、死亡标志）
+// Push local player state to Firebase (pos, rot, anim, HP, dead)
 function sendState() {
     if (!localPlayer) return;
     const model = localPlayer.getPlayerModel();
@@ -710,17 +710,17 @@ function sendState() {
     });
 }
 
-// 向指定玩家的命中队列写入伤害记录，由对方客户端消费
+// Write a damage record to the target's hit queue for the other client to consume
 function onHitPlayer(targetId, damage) {
     _lastHitterOf.set(targetId, playerId);
     set(ref(db, `rooms/${roomId}/hits/${targetId}/${Date.now()}`), { damage, by: playerId });
 }
 
-const PLAYER_STALE_MS = 60000; // 超过阈值没有心跳视为已离线
+const PLAYER_STALE_MS = 60000; // no heartbeat past this threshold counts as offline
 
-// 初始化 Firebase 监听：玩家状态同步 + 心跳超时清理 + 命中事件接收
+// Init Firebase listeners: player sync, stale cleanup, incoming hits
 function initFirebaseSync() {
-    // 清理上次未正常退出的残留玩家
+    // Remove leftover players that did not disconnect cleanly
     get(ref(db, `rooms/${roomId}/players`)).then(snap => {
         if (!snap.exists()) return;
         const now = Date.now();
@@ -731,13 +731,13 @@ function initFirebaseSync() {
         }
     });
 
-    // 玩家状态监听
+    // Player state listener
     const roomRef = ref(db, `rooms/${roomId}/players`);
     onValue(roomRef, snapshot => {
         const data = snapshot.val() ?? {};
         for (const [id, state] of Object.entries(data)) {
             if (id === playerId) continue;
-            // 心跳超时：从 Firebase 删除，触发本地 dispose
+            // Heartbeat timeout: delete from Firebase, which triggers local dispose
             if (Date.now() - (state.t ?? 0) > PLAYER_STALE_MS) {
                 remove(ref(db, `rooms/${roomId}/players/${id}`));
                 continue;
@@ -765,19 +765,19 @@ function initFirebaseSync() {
         }
     });
 
-    // 监听聊天消息（只接收加入后的新消息）
+    // Listen for chat (only messages after we joined)
     const joinTime = Date.now();
     const chatRef = ref(db, `rooms/${roomId}/chat`);
     onChildAdded(chatRef, snap => {
         const { name, text, t } = snap.val();
-        if (t < joinTime - 3000) return; // 过滤早于加入时间 3 秒的历史消息
+        if (t < joinTime - 3000) return; // drop history older than 3s before join
         addChatMessage(name, text);
         const senderId = snap.key.replace(/^\d+_/, '');
         remotePlayers.get(senderId)?.showChatBubble(text);
-        if (Date.now() - t > 30000) remove(snap.ref); // 清理超过 30 秒的旧消息
+        if (Date.now() - t > 30000) remove(snap.ref); // delete messages older than 30s
     });
 
-    // 监听其他玩家产生的弹痕（自己的跳过，入场前 3 秒的忽略，读完即删）
+    // Listen for other players' decals (skip own, ignore >3s before join, delete after read)
     const decalsRef = ref(db, `rooms/${roomId}/decals`);
     onChildAdded(decalsRef, snap => {
         const d = snap.val();
@@ -787,23 +787,23 @@ function initFirebaseSync() {
         remove(snap.ref);
     });
 
-    // 监听命中本玩家的事件
+    // Listen for hits on this player
     const myHitsRef = ref(db, `rooms/${roomId}/hits/${playerId}`);
     onChildAdded(myHitsRef, snap => {
         const { damage, by } = snap.val();
         if (by) lastAttackerOnMe = by;
-        // noGun 角色免疫枪击伤害
+        // noGun characters are immune to gun damage
         if (!isDead && !PLAYER_MODEL.noGun) {
             myHp = Math.max(0, myHp - damage);
             updateMyHPUI();
             if (myHp <= 0) triggerDeath();
         }
-        remove(snap.ref); // 读完即删
+        remove(snap.ref); // delete after read
     });
 }
 
 // ==================== UI ====================
-// 显示进出房间通知（与击杀动态共用容器，5 秒后消失）
+// Join/leave notice (shares the kill-feed container, fades after 5s)
 function addRoomNotify(name, action) {
     const feed = document.getElementById("kill-feed");
     if (!feed) return;
@@ -816,7 +816,7 @@ function addRoomNotify(name, action) {
     setTimeout(() => el.parentNode && el.parentNode.removeChild(el), 5000);
 }
 
-// 添加一条击杀动态（最多保留 3 条，10 秒后自动消失）
+// Add a kill-feed row (keep at most 3; auto-remove after 10s)
 function addKillFeedEntry(killerName, victimName) {
     const feed = document.getElementById("kill-feed");
     if (!feed) return;
@@ -829,16 +829,16 @@ function addKillFeedEntry(killerName, victimName) {
     setTimeout(() => entry.parentNode && entry.parentNode.removeChild(entry), 10000);
 }
 
-// 初始化 UI（mp-panel 已移除，保留空函数兼容调用点）
+// Init UI (mp-panel removed; empty stub kept for call sites)
 function initUI() { }
 
-// 更新在线人数显示
+// Update online-count display
 function updateCountUI() {
     const el = document.getElementById("mp-count");
     if (el) el.textContent = String(1 + remotePlayers.size);
 }
 
-// 更新本地玩家头像血量填充和数字显示
+// Update local avatar HP fill and number
 function updateMyHPUI() {
     const fill = document.getElementById("avatar-hp-fill");
     const num = document.getElementById("my-hp-num");
@@ -853,20 +853,20 @@ function updateMyHPUI() {
     if (num) num.textContent = String(myHp);
 }
 
-// 显示房间已满提示，阻止进入游戏
+// Show the room-full overlay and block joining
 function showRoomFull() {
     const overlay = document.getElementById("room-full-overlay");
     if (overlay) {
         overlay.style.display = "flex";
     } else {
-        alert(`房间已满（最多 ${MAX_PLAYERS} 人），请换个房间`);
+        alert(`Room is full (max ${MAX_PLAYERS} players). Try another room.`);
     }
     window.hideLoader?.();
 }
 
-// ==================== 软排斥 ====================
+// ==================== Soft repulsion ====================
 const _repDir = new THREE.Vector3();
-// 软排斥：防止本地玩家与远程玩家模型重叠
+// Soft repulsion: keep the local player from overlapping remotes
 function applyRepulsion() {
     const capsule = localPlayer?._player?.getPlayerCapsule();
     if (!capsule) return;
@@ -880,7 +880,7 @@ function applyRepulsion() {
     }
 }
 
-// ==================== AntMan 蚁人技能 ====================
+// ==================== AntMan shrink skill ====================
 function antManAnimateToScale(targetScale, duration = 1) {
     if (antManScaleFrame !== null) { cancelAnimationFrame(antManScaleFrame); antManScaleFrame = null; }
     antManIsScaling = true;
@@ -895,8 +895,8 @@ function antManAnimateToScale(targetScale, duration = 1) {
     antManScaleFrame = requestAnimationFrame(tick);
 }
 
-// ==================== 渲染循环 ====================
-// 刷新顶部击杀栏：左侧本人击杀，右侧房间第一击杀
+// ==================== Render loop ====================
+// Refresh the top kill bar: local kills on the left, room-best on the right
 function updateKillBar() {
     const myEl = document.getElementById("kb-my-kills");
     const topEl = document.getElementById("kb-top-kills");
@@ -909,7 +909,7 @@ function updateKillBar() {
     topEl.textContent = topKills;
 }
 
-// 刷新计分板内容并排序（按击杀降序，相同则死亡升序）
+// Refresh the scoreboard (kills desc, then deaths asc)
 function updateScoreboard() {
     const rows = [
         { name: myName, kills: localKills, deaths: localDeaths, isLocal: true },
@@ -929,7 +929,7 @@ function updateScoreboard() {
     });
 }
 
-// 主渲染循环（由 renderer.setAnimationLoop 驱动）
+// Main render loop (driven by renderer.setAnimationLoop)
 let prevGunEngaged = false;
 function animate() {
     const delta = Math.min(clock.getDelta(), 0.05);
@@ -948,7 +948,7 @@ function animate() {
             if (gunEngaged) spineIK?.restoreBones();
             localPlayer.update(delta);
 
-            // 聊天期间跳过 SpineIK，防止释放指针锁时漏进的 mousemove 导致上半身突转
+            // Skip SpineIK while chatting so a leaked mousemove after unlocking the pointer cannot snap the upper body
             if (gunEngaged && !isChatting) {
                 localPlayer.applyHipsCorrection();
                 localPlayer.getIsFirstPerson()
@@ -962,7 +962,7 @@ function animate() {
             const now = performance.now();
             if (now - lastSendTime > SEND_INTERVAL) { lastSendTime = now; sendState(); }
         } else {
-            // 死亡时只推进 mixer，不运行状态机
+            // While dead, only tick the mixer; do not run the state machine
             localPlayer._player?.animation?.mixer?.update(delta);
             if (localPlayer._upperMixer) localPlayer._upperMixer.update(delta);
         }
@@ -983,8 +983,8 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-// ==================== 初始化 ====================
-// 初始化场景、本地玩家、武器系统、Firebase 同步
+// ==================== Init ====================
+// Init scene, local player, weapons, and Firebase sync
 async function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -1000,7 +1000,7 @@ async function init() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
 
-    // 环境光
+    // Environment lighting
     new HDRLoader().load(
         "./img/2.hdr",
         (texture) => {
@@ -1009,10 +1009,10 @@ async function init() {
         },
         undefined,
         (err) => {
-            console.warn("环境光HDR 加载失败：", err);
+            console.warn("Environment HDR load failed:", err);
         }
     );
-    // 背景
+    // Background
     new HDRLoader().load(
         "./img/3.hdr",
         (texture) => {
@@ -1021,11 +1021,11 @@ async function init() {
         },
         undefined,
         (err) => {
-            console.warn("背景HDR 加载失败：", err);
+            console.warn("Background HDR load failed:", err);
         }
     );
 
-    // GLTF 加载器（用于碰撞体）
+    // GLTF loader (for colliders)
     const draco = new DRACOLoader();
     draco.setDecoderPath("https://unpkg.com/three@0.180.0/examples/jsm/libs/draco/");
     gltfLoader.setDRACOLoader(draco);
@@ -1034,7 +1034,7 @@ async function init() {
     ktx2.detectSupport(renderer);
     gltfLoader.setKTX2Loader(ktx2);
 
-    // 3DGS 场景
+    // 3DGS scene
     const spark = new SparkRenderer({ renderer });
     scene.add(spark);
     const splatMesh = new SplatMesh({
@@ -1044,20 +1044,20 @@ async function init() {
     });
     scene.add(splatMesh);
 
-    // 白色地面平面
+    // White ground plane
     const groundMesh = new THREE.Mesh(
         new THREE.PlaneGeometry(100, 100)
     );
     groundMesh.rotation.x = -Math.PI / 2;
     groundMesh.position.y = -0.05;
 
-    // 不可见碰撞体
+    // Invisible colliders
     const colliderGltf = await gltfLoader.loadAsync(COLLIDER_URL);
     const sceneModel = colliderGltf.scene;
     sceneModel.visible = false;
     scene.add(sceneModel);
 
-    // 房间人数检查，并按当前人数分配出生点
+    // Check room occupancy and assign a spawn from the current count
     const snap = await get(ref(db, `rooms/${roomId}/players`));
     const existingCount = snap.exists() ? Object.keys(snap.val()).length : 0;
     if (existingCount >= MAX_PLAYERS) { showRoomFull(); return; }
@@ -1066,7 +1066,7 @@ async function init() {
     camera.position.copy(spawnPos);
     controls.target.copy(spawnPos);
 
-    // 本地玩家 (LocalPlayer 包装)
+    // Local player (LocalPlayer wrapper)
     localPlayer = new LocalPlayer({ scene, camera, controls });
     await localPlayer.init({
         playerModelConfig: PLAYER_MODEL,
@@ -1077,7 +1077,7 @@ async function init() {
         staticCollider: [sceneModel, groundMesh],
     });
 
-    // 设置本地玩家材质
+    // Set local player materials
     localPlayer.getPlayerModel()?.traverse((child) => {
         if (child.isMesh) {
             child.material.metalness = 0.0;
@@ -1088,20 +1088,20 @@ async function init() {
     localPlayer.onViewChange = (isFirstPerson) => {
         if (!localPlayer._player.playerModelHead) {
             if (isFirstPerson) {
-                // 隐藏人物模型
+                // Hide the character model
                 localPlayer._player.getPlayerModel().visible = false;
             } else {
-                // 显示人物模型
+                // Show the character model
                 localPlayer._player.getPlayerModel().visible = true;
             }
         }
     };
 
-    // 打印骨骼名，用于排查 SpineIK 骨骼名不匹配问题（排查完可删除）
+    // Print bone names to debug SpineIK mismatches (safe to remove later)
     const boneNames = [];
     localPlayer.getPlayerModel()?.traverse(b => { if (b.isBone) boneNames.push(b.name); });
 
-    // 追踪上半身动画 key（monkey-patch，不改 LocalPlayer 源码）
+    // Track upper-body anim key (monkey-patch; do not edit LocalPlayer)
     const origPlayUpper = localPlayer.playUpperBody.bind(localPlayer);
     const origStopUpper = localPlayer.stopUpperBody.bind(localPlayer);
     localPlayer.playUpperBody = (key, opts) => { currentUpperKey = key; return origPlayUpper(key, opts); };
@@ -1114,11 +1114,11 @@ async function init() {
     ]);
     hud.build();
 
-    // 音频
+    // Audio
     audioListener = new THREE.AudioListener();
     camera.add(audioListener);
 
-    // 特效
+    // VFX
     const effects = new ShootingEffects(scene, { listener: audioListener, flashScale: 0.015, smokeSize: 0.08 });
     await effects.load(
         BASE + "img/muzzle_flash.png",
@@ -1128,7 +1128,7 @@ async function init() {
     );
     gunShotBuffer = effects._fireSound?.buffer ?? null;
 
-    // 弹孔
+    // Bullet holes
     decalSystem = new DecalSystem(scene, 60, 0.025);
     await decalSystem.loadMaterials(["img/bullet_hole2.png"], BASE);
     decalSystem.onSpawn = (p, n) => {
@@ -1139,7 +1139,7 @@ async function init() {
         });
     };
 
-    // 武器控制器（noGun 角色无需武器系统）
+    // Weapon controller (noGun characters skip the weapon system)
     if (!PLAYER_MODEL.noGun) {
         weapon = new WeaponController({ scene, camera, localPlayer, decalSystem, effects, hud, zombieManager: null });
         await weapon.load(gltfLoader, BASE);
@@ -1150,7 +1150,7 @@ async function init() {
         weapon._fireOnce = function () { localShotSeq++; _origFireOnce(); };
     }
 
-    // 注册死亡动画：LoopOnce + 锁末帧，播完后显示死亡遮罩（noGun 角色无死亡动画，跳过）
+    // Register death clip: LoopOnce + clamp last frame; show death overlay when finished (skip for noGun)
     if (!PLAYER_MODEL.noGun) {
         localPlayer.registerAnimation("death", "death", {
             loop: false,
@@ -1160,10 +1160,10 @@ async function init() {
         });
     }
 
-    // 死亡遮罩按钮
+    // Death overlay button
     document.getElementById("btn-respawn").addEventListener("click", triggerRespawn);
 
-    // 注入多人命中回调（noGun 角色无武器，跳过）
+    // Inject the multiplayer hit callback (skip if noGun / no weapon)
     if (weapon) {
         weapon.onHitPlayer = onHitPlayer;
         localPlayer.setGunEngagedGetter(() => weapon.isGunEngaged());
@@ -1172,11 +1172,11 @@ async function init() {
 
     document.addEventListener("contextmenu", e => e.preventDefault());
 
-    // // 点击获取射线与碰撞体的交点坐标
+    // // Click to log ray/collider hit points
     // const _clickRaycaster = new THREE.Raycaster();
     // const _clickMouse = new THREE.Vector2();
     // renderer.domElement.addEventListener("click", e => {
-    //     if (document.pointerLockElement) return; // 指针锁定时（游戏操作中）跳过
+    //     if (document.pointerLockElement) return; // skip while pointer-locked (in gameplay)
     //     const rect = renderer.domElement.getBoundingClientRect();
     //     _clickMouse.set(
     //         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -1186,11 +1186,11 @@ async function init() {
     //     const hits = _clickRaycaster.intersectObject(sceneModel, true);
     //     if (hits.length > 0) {
     //         const { x, y, z } = hits[0].point;
-    //         console.log(`[射线交点] x=${x.toFixed(4)}, y=${y.toFixed(4)}, z=${z.toFixed(4)}`);
+    //         console.log(`[ray hit] x=${x.toFixed(4)}, y=${y.toFixed(4)}, z=${z.toFixed(4)}`);
     //     }
     // });
 
-    // Enter 键打开/发送聊天，Esc 取消
+    // Enter opens/sends chat; Esc cancels
     document.addEventListener("keydown", e => {
         if (e.key === "Enter") {
             e.preventDefault();
@@ -1202,7 +1202,7 @@ async function init() {
         }
     });
 
-    // Tab 键显示/隐藏计分板（聊天时跳过）
+    // Tab shows/hides the scoreboard (ignored while chatting)
     const scoreboardEl = document.getElementById("scoreboard");
     document.addEventListener("keydown", e => {
         if (isChatting) return;
@@ -1212,7 +1212,7 @@ async function init() {
         if (e.key === "Tab") scoreboardEl.style.display = "none";
     });
 
-    // Z 键：AntMan 蚁人缩放技能（仅 AntMan 角色可用）
+    // Z: AntMan shrink skill (AntMan only)
     document.addEventListener("keydown", e => {
         if (e.code !== "KeyZ" || PLAYER_MODEL.name !== "AntMan") return;
         if (antManIsScaling || isDead || isChatting) return;
@@ -1221,7 +1221,7 @@ async function init() {
         antManAnimateToScale(antManIsSmall ? normalScale / 9 : normalScale, 1);
     });
 
-    // Firebase 同步
+    // Firebase sync
     initFirebaseSync();
 
     // UI
@@ -1236,7 +1236,7 @@ async function init() {
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // 等待高斯泼溅模型加载完毕再隐藏 loader
+    // Wait until the Gaussian splat mesh is loaded, then hide the loader
     await splatMesh.initialized.catch(() => { });
     window.hideLoader?.();
 }

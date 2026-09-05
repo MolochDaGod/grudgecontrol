@@ -28,10 +28,10 @@ async function init() {
 
     let tiles, localPlayer, weapon, zombieManager;
 
-    // ==================== 1. 场景基础 ====================
+    // ==================== 1. Scene basics ====================
     const { scene, renderer, camera, controls, bakeProbes } = createSceneSetup({ container });
 
-    // 添加音频监听器
+    // Attach audio listener
     const listener = new THREE.AudioListener();
     camera.add(listener);
 
@@ -61,34 +61,34 @@ async function init() {
             const spineIK = localPlayer.spineIK;
             const gunEngaged = weapon.isGunEngaged();
 
-            // 开火/瞄准时切 mouseMode 5（锁定朝向跟相机），其余情况用 1
+            // Switch to mouseMode 5 while firing/aiming (lock facing to camera); otherwise use 1
             if (gunEngaged !== _prevGunEngaged) {
                 localPlayer.setThirdMouseMode(gunEngaged ? 5 : 1);
                 _prevGunEngaged = gunEngaged;
             }
 
-            // 恢复脊椎骨骼到上一帧的干净动画姿态
+            // Restore spine bones to last frame's clean animation pose
             if (gunEngaged) spineIK.restoreBones();
 
-            // 驱动动画与物理（传入 dt，使上半身 mixer 与主 mixer 同步）
+            // Drive animation and physics (pass dt so the upper-body mixer stays in sync with the main mixer)
             localPlayer ? localPlayer.update(dt) : controls.update();
 
-            // 应用脊椎 IK 与朝向（在 player.update() 后、weapon.update() 前）
+            // Apply spine IK and facing (after player.update(), before weapon.update())
             if (gunEngaged) {
                 if (localPlayer.getIsFirstPerson()) {
                     localPlayer.applyHipsCorrection();
                     spineIK.applyAim1P(camera, localPlayer.pitchTarget1P);
                 } else {
-                    // console.log('应用 3P IK');
+                    // console.log('apply 3P IK');
                     localPlayer.applyHipsCorrection();
                     spineIK.applyAim3P(camera, true);
                 }
             }
 
-            // 更新武器状态（特效、射线命中、连射节拍）——骨骼此时已含 IK
+            // Update weapon state (FX, ray hits, fire cadence) — bones already include IK
             weapon.update(elapsed, dt);
 
-            // 丧尸 AI
+            // Zombie AI
             zombieManager.update(dt, localPlayer.getPosition());
 
         } else {
@@ -100,7 +100,7 @@ async function init() {
     });
 
 
-    // ==================== 2. 资源加载器 ====================
+    // ==================== 2. Asset loaders ====================
     const gltfLoader = new GLTFLoader();
 
     const draco = new DRACOLoader();
@@ -112,7 +112,7 @@ async function init() {
     ktx2.detectSupport(renderer);
     gltfLoader.setKTX2Loader(ktx2);
 
-    // ==================== 3. 场景模型 ====================
+    // ==================== 3. Scene model ====================
     const { scene: mapScene } = await gltfLoader.loadAsync(
         base + "./glb/horror_corridor.glb"
     );
@@ -124,7 +124,7 @@ async function init() {
 
     document.addEventListener("contextmenu", (e) => e.preventDefault());
 
-    // ==================== 4. 本地玩家 ====================
+    // ==================== 4. Local player ====================
     localPlayer = new LocalPlayer({ scene, camera, controls });
     await localPlayer.init({
         playerModelConfig: {
@@ -167,7 +167,7 @@ async function init() {
     const hud = new HUD(weaponSlots);
     hud.build();
 
-    // ==================== 6. 特效 ====================
+    // ==================== 6. Effects ====================
     let effects = new ShootingEffects(scene, {
         listener,
         flashScale: 0.15,
@@ -180,11 +180,11 @@ async function init() {
         base + "./audio/reload.mp3",
     );
 
-    // ==================== 7. 弹痕系统 ====================
+    // ==================== 7. Decal system ====================
     const decalSystem = new DecalSystem(scene, 60, 0.25);
     await decalSystem.loadMaterials(["img/bullet_hole2.png"], base);
 
-    // ==================== 8. 丧尸管理器 ====================
+    // ==================== 8. Zombie manager ====================
     zombieManager = new ZombieManager(scene, {
         loader: gltfLoader,
         collider: localPlayer.getCollider(),
@@ -198,7 +198,7 @@ async function init() {
         speed: 120,
     });
 
-    // ==================== 9. 武器控制器 ====================
+    // ==================== 9. Weapon controller ====================
     weapon = new WeaponController({
         scene,
         camera,
@@ -214,24 +214,24 @@ async function init() {
     weapon.bindInput();
     weapon.switchMode(MODE.PRIMARY);
 
-    // 让 LocalPlayer 的 1P 俯仰驱动能感知武器状态
+    // Let LocalPlayer's 1P pitch driver know the weapon state
     localPlayer.setGunEngagedGetter(() => weapon.isGunEngaged());
 
-    // 初始刷新武器槽高亮
+    // Initial weapon-slot highlight
     hud.update(weapon.getMode());
 
-    // ==================== 10. 鼠标拾取 ====================
+    // ==================== 10. Mouse picking ====================
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
     const getMousePickingPoint = (event) => {
         const rect = container.getBoundingClientRect();
-        // 将鼠标位置归一化为设备坐标 (NDC)
+        // Normalize mouse position to NDC
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, camera);
-        // 检测场景中所有的物体（包含 3D Tiles 和玩家模型）
+        // Test all scene objects (including 3D Tiles and the player model)
         const intersects = raycaster.intersectObjects(scene.children, true);
 
         if (intersects.length > 0) {
@@ -241,18 +241,18 @@ async function init() {
     };
 
     container.addEventListener("mousedown", (e) => {
-        // 只有当鼠标没有被锁定（非第一人称控制状态）时才执行点击拾取
+        // Only pick on click when the pointer is not locked (not in first-person control)
         if (document.pointerLockElement !== renderer.domElement) {
             const point = getMousePickingPoint(e);
             if (point) {
-                console.log("鼠标点击的 3D 坐标:", point);
-                // 你可以在这里添加逻辑，比如在点击位置生成丧尸：
+                console.log("Mouse click 3D point:", point);
+                // You can add logic here, e.g. spawn a zombie at the click:
                 // zombieManager.spawnZombie(point);
             }
         }
     });
 
-    // ==================== 丧尸波次 ====================
+    // ==================== Zombie waves ====================
     await Promise.all([
         zombieManager.startWave({ origin: new THREE.Vector3(2.012, 4.6, -0.78), count: 5, radius: 1 }),
         zombieManager.startWave({ origin: new THREE.Vector3(-3.731, 4.6, -1.824), count: 2, radius: 1 }),
@@ -277,7 +277,7 @@ async function init() {
         }, { once: true });
     });
 
-    // ==================== 窗口缩放 ====================
+    // ==================== Window resize ====================
     window.addEventListener("resize", () => {
         const cont = document.querySelector("#container");
         if (!cont) return;

@@ -2,36 +2,36 @@ import * as THREE from "three";
 import type { playerController } from "../playerController";
 
 export class AnimationSystem {
-    private ctrl: playerController; // 主控制器引用
+    private ctrl: playerController; // main controller
 
-    mixer?: THREE.AnimationMixer; // 动画混合器
-    mixerCb?: (ev: any) => void; // 完成事件回调
-    actions?: Map<string, THREE.AnimationAction>; // 动作映射表
-    state!: THREE.AnimationAction; // 当前播放状态
-    sets = new Map<string, Map<string, THREE.AnimationAction>>(); // 动作集合组
-    currentLocomotionSet: string | null = null; // 当前激活的动作集合名
-    recheckTimer: any = null; // 延迟重检定时器
-    clips: THREE.AnimationClip[] = []; // 原始动画片段
-    hasThreePartJump = false; // 是否使用三段跳跃动画
-    isOverrideAnimationPlaying = false; // 动画锁，用于防止覆盖型动画被移动动画打断
-    private overrideInputSnapshot: Record<string, any> | null = null; // 覆盖动画播放时的输入快照，用于检测打断
+    mixer?: THREE.AnimationMixer; // animation mixer
+    mixerCb?: (ev: any) => void; // finished-event callback
+    actions?: Map<string, THREE.AnimationAction>; // action map
+    state!: THREE.AnimationAction; // currently playing action
+    sets = new Map<string, Map<string, THREE.AnimationAction>>(); // locomotion action sets
+    currentLocomotionSet: string | null = null; // name of the active locomotion set
+    recheckTimer: any = null; // delayed recheck timer
+    clips: THREE.AnimationClip[] = []; // source animation clips
+    hasThreePartJump = false; // whether three-part jump clips are used
+    isOverrideAnimationPlaying = false; // lock so overlay clips are not interrupted by locomotion
+    private overrideInputSnapshot: Record<string, any> | null = null; // input snapshot while an overlay clip plays (interrupt detect)
 
     constructor(ctrl: playerController) {
         this.ctrl = ctrl;
     }
 
-    // 按名切换动画
+    // Play an action by name
     playByName(name: string, fade = 0.18) {
         if (!this.actions) return;
         const next = this.actions.get(name);
-        // 如果动画不存在，或已在播放，则忽略
+        // Ignore if missing or already playing
         if (!next || this.state === next) return;
 
         const prev = this.state;
         next.reset();
         next.setEffectiveWeight(1);
 
-        // 上下车动画特殊处理：根据配置的上下车时间调整动画速度
+        // Enter/exit vehicle: scale clip speed from configured board time
         if (name === "enterCar" || name === "exitCar") {
             const duration = next.getClip().duration;
             const enterTime = this.ctrl.vehicle.active?.enterVehicleTime ?? 1.5;
@@ -41,7 +41,7 @@ export class AnimationSystem {
         }
 
         next.play();
-        // 平滑过渡动画
+        // Crossfade
         if (prev && prev !== next) { prev.fadeOut(fade); next.fadeIn(fade); }
         else next.fadeIn(fade);
 
@@ -49,7 +49,7 @@ export class AnimationSystem {
         this.ctrl.onAnimationChange?.(name, next);
     }
 
-    // 注册自定义动画
+    // Register a named custom animation
     register(key: string, clipName: string, opts?: {
         loop?: boolean;
         timeScale?: number;
@@ -59,10 +59,10 @@ export class AnimationSystem {
     }) {
         if (!this.mixer || !this.actions) return;
         const clip = this.clips.find(c => c.name === clipName);
-        if (!clip) { console.warn(`找不到 "${clipName}" 动画`); return; }
+        if (!clip) { console.warn(`Clip "${clipName}" not found`); return; }
 
         const action = this.mixer.clipAction(clip);
-        // duration 优先于 timeScale，如果指定了 duration，则据此计算 timeScale
+        // duration wins over timeScale; if duration is set, derive timeScale from it
         const timeScale = opts?.duration ? clip.duration / opts.duration : (opts?.timeScale ?? 1);
         action.setLoop(opts?.loop === false ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
         action.clampWhenFinished = opts?.clampWhenFinished ?? false;
@@ -71,7 +71,7 @@ export class AnimationSystem {
         action.setEffectiveWeight(0);
         this.actions.set(key, action);
 
-        // 如果有 onFinished 回调，则监听动画完成事件
+        // Listen for finished if onFinished is provided
         if (opts?.onFinished) {
             this.mixer.addEventListener("finished", (ev: any) => {
                 if (ev.action === action) opts.onFinished!();
@@ -79,15 +79,15 @@ export class AnimationSystem {
         }
     }
 
-    // 注册移动动作组
+    // Register a locomotion action set
     registerLocomotionSet(setName: string, map: Partial<Record<"idle" | "walking" | "walking_backward" | "running" | "jumping" | "flyidle" | "flying", string>>) {
         if (!this.mixer) return;
         const set = new Map<string, THREE.AnimationAction>();
         for (const [key, clipName] of Object.entries(map) as [string, string][]) {
             const clip = this.clips.find(c => c.name === clipName);
-            if (!clip) { console.warn(`registerLocomotionSet: 找不到 "${clipName}"`); continue; }
+            if (!clip) { console.warn(`registerLocomotionSet: clip "${clipName}" not found`); continue; }
             const action = this.mixer.clipAction(clip);
-            // 跳跃动画特殊处理：只播放一次
+            // Jump clips play once
             if (key === "jumping") {
                 action.setLoop(THREE.LoopOnce, 1);
                 action.clampWhenFinished = true;
@@ -103,20 +103,20 @@ export class AnimationSystem {
         this.sets.set(setName, set);
     }
 
-    // 切换移动动作组
+    // Switch the active locomotion set
     switchLocomotionSet(setName: string, fade = 0.18) {
         if (!this.actions) return;
         const set = this.sets.get(setName);
-        if (!set) { console.warn(`switchLocomotionSet: 未找到集合 "${setName}"`); return; }
+        if (!set) { console.warn(`switchLocomotionSet: set "${setName}" not found`); return; }
         this.currentLocomotionSet = setName;
         for (const [key, newAction] of set.entries()) {
             const oldAction = this.actions.get(key);
             if (oldAction === newAction) continue;
-            // 将旧动作淡出
+            // Fade out the old action
             if (oldAction) oldAction.fadeOut(fade);
-            // 替换当前动作表中的动作为新集合中的动作
+            // Replace the slot in the current action map
             this.actions.set(key, newAction);
-            // 如果正在播放的动画被替换，则立即切换到新动画
+            // If the playing action was replaced, switch immediately
             if (this.state === oldAction) {
                 newAction.reset();
                 newAction.setEffectiveWeight(1);
@@ -128,24 +128,24 @@ export class AnimationSystem {
         }
     }
 
-    // 播放已注册动画
+    // Play a registered animation
     play(key: string, opts?: { fade?: number; force?: boolean; returnToPrev?: boolean }) {
         if (!this.actions) return;
         const action = this.actions.get(key);
-        if (!action) { console.warn(`playAnimation: "${key}" 未注册`); return; }
+        if (!action) { console.warn(`playAnimation: "${key}" is not registered`); return; }
 
-        // 如果是播放一次的动画，则设置动画锁
+        // One-shot clips take the overlay lock
         if (action.loop === THREE.LoopOnce) {
-            // 设置动画锁
+            // Set overlay lock
             this.isOverrideAnimationPlaying = true;
 
-            // 记录当前完整输入状态快照
+            // Snapshot full input state
             this.overrideInputSnapshot = { ...this.ctrl.input };
 
-            // 设置动画播放完毕后的自动解锁
+            // Unlock when the clip finishes
             const onFinish = (e: any) => {
                 if (e.action === action) {
-                    // 仅当锁仍然激活时才解锁
+                    // Unlock only if the lock is still held
                     if (this.isOverrideAnimationPlaying && this.overrideInputSnapshot) {
                         this.isOverrideAnimationPlaying = false;
                         this.overrideInputSnapshot = null;
@@ -158,41 +158,41 @@ export class AnimationSystem {
 
         if (opts?.force) action.reset();
 
-        // 记录初始动画状态以便返回
+        // Remember previous action if we need to return
         const prevState = opts?.returnToPrev ? this.state : null;
-        // 播放目标动画
+        // Play the target action
         this.playByName(key, opts?.fade ?? 0.18);
 
-        // 如果设置 returnToPrev，则在动画播放完毕后返回之前的动画状态
+        // If returnToPrev, restore the previous action when this clip finishes
         if (opts?.returnToPrev && prevState && this.mixer) {
-            // 存储当前动画状态
+            // Store the current action
             const action = this.actions.get(key)!;
             const fade = opts?.fade ?? 0.18;
-            // 定义一个一次性的事件处理器
+            // One-shot finished handler
             const handler = (ev: any) => {
                 if (ev.action === action && this.state === action) {
                     this.mixer!.removeEventListener("finished", handler);
                     const cur = this.state;
-                    // 停止当前动画
+                    // Stop current
                     cur.stop();
-                    // 重置前一个状态
+                    // Reset previous
                     prevState.reset();
-                    // 将权重设置为1并播放前一个状态动画
+                    // Weight 1 and play previous
                     prevState.setEffectiveWeight(1);
                     prevState.play();
-                    // 更新状态
+                    // Update state
                     this.state = prevState;
                     this.ctrl.onAnimationChange?.(prevState.getClip().name, prevState);
                 }
             };
-            // 监听动画完成事件
+            // Listen for finished
             this.mixer.addEventListener("finished", handler);
         }
     }
 
-    // 触发跳跃动画（统一入口）
+    // Start jump animation (single entry)
     startJump(inAir = false) {
-        // 根据是否配置了三段跳跃，播放不同动画
+        // Three-part jump vs single jumping clip
         if (this.hasThreePartJump) {
             this.playByName(inAir ? "jumpLoop" : "jumpStart");
         } else {
@@ -200,28 +200,28 @@ export class AnimationSystem {
         }
     }
 
-    // 离地时触发 jumpLoop（三段模式专用）
+    // Play jumpLoop once airborne (three-part jump only)
     onBecomeAirborne() {
         if (!this.hasThreePartJump) return;
         const s = this.state;
         const a = this.actions;
-        // 如果当前已经在跳跃动画中，则不打断
+        // Do not interrupt an in-progress jump clip
         if (s === a?.get("jumpStart") || s === a?.get("jumpLoop") || s === a?.get("jumpEnd")) return;
         this.playByName("jumpLoop");
     }
 
-    // 落地时触发 jumpEnd（三段模式专用）
+    // Play jumpEnd on land (three-part jump only)
     onLand() {
         if (!this.hasThreePartJump) return;
         const s = this.state;
         const a = this.actions;
-        // 只有在起跳或跳跃循环中才触发落地
+        // Land only from jump start or loop
         if (s === a?.get("jumpStart") || s === a?.get("jumpLoop")) {
             this.playByName("jumpEnd");
         }
     }
 
-    // 是否处于任意跳跃动画中（用于防止在跳跃动画播放时重复起跳）
+    // True while any jump clip is playing (blocks a second takeoff)
     isJumping(): boolean {
         const s = this.state;
         const a = this.actions;
@@ -230,58 +230,58 @@ export class AnimationSystem {
             s === a.get("jumpLoop") || s === a.get("jumpEnd");
     }
 
-    // 获取当前动画名
+    // Current clip name
     getCurrentName(): string | null {
         return this.state?.getClip()?.name ?? null;
     }
 
-    // 更新所有混合器
+    // Step all mixers
     updateMixers(delta: number) {
         this.mixer?.update(delta);
         for (const v of this.ctrl.vehicle.list) v.vehicleMixer?.update(delta);
     }
 
-    // 按键状态触发动画
+    // Drive locomotion clips from pressed keys
     setAnimationByPressed() {
-        // 战斗出招 / 闪避期间由对应系统接管动画
+        // Combat / dodge own the mixer while active
         if (this.ctrl.combat?.isAttacking || this.ctrl.isDodging) return;
-        // 检查并处理覆盖动画中断逻辑
+        // Overlay interrupt: compare input to snapshot
         if (this.isOverrideAnimationPlaying) {
             const currentInput = this.ctrl.input as Record<string, any>;
             const snapshot = this.overrideInputSnapshot;
             let inputChanged = false;
 
             if (snapshot) {
-                // 遍历快照中的所有键，与当前输入状态进行比较
+                // Compare every snapshot key to current input
                 for (const key in snapshot) {
                     if (snapshot[key] !== currentInput[key]) {
                         inputChanged = true;
-                        break; // 不匹配，中断
+                        break; // mismatch — interrupt
                     }
                 }
             }
 
-            // 如果输入状态发生变化，则解除动画锁，并继续执行后续的移动动画逻辑
+            // Input changed: drop the overlay lock and continue into locomotion
             if (inputChanged) {
                 this.isOverrideAnimationPlaying = false;
                 this.overrideInputSnapshot = null;
             } else {
-                // 如果输入状态未变，则保持覆盖动画，不执行移动动画
+                // Input unchanged: keep overlay, skip locomotion
                 return;
             }
         }
 
-        // 恢复相机距离
+        // Restore camera distance
         this.ctrl.cam.maxDist = this.ctrl.cam.originMaxDist;
 
         const v = this.ctrl.vehicle;
-        // 上下车流程中：有移动键输入才允许打断，否则不干预
+        // During board/exit: only interrupt if a move key is held
         if (v.isMovingToBoarding || v.isBoardingAnim || v.isExitAnim) {
             const { fwd, bkd, lft, rgt } = this.ctrl.input;
             if (!fwd && !bkd && !lft && !rgt) return;
         }
 
-        // 取消上下车过程
+        // Cancel board/exit
         v.cancelBoarding();
         if (v.isExitAnim) { v.isExitAnim = false; v.exitDoorClosed = false; }
         if (v.isBoardingAnim) { v.isBoardingAnim = false; v.doorClosed = false; }
@@ -289,12 +289,12 @@ export class AnimationSystem {
 
         const { fwd, bkd, lft, rgt, shift, space } = this.ctrl.input;
 
-        // 飞行状态下的动画逻辑
+        // Flight clips
         if (this.ctrl.isFlying) {
             if (fwd) {
                 if (shift) {
                     this.playByName("flying");
-                    // 加速飞行时，拉远相机
+                    // Sprint-fly: pull camera back
                     if (!this.ctrl.cam.enableSpringCamera) this.ctrl.cam.maxDist = this.ctrl.cam.originMaxDist * 2;
                 } else {
                     this.playByName("flyHoverForward");
@@ -305,24 +305,24 @@ export class AnimationSystem {
             if (lft) { this.playByName("flyHoverLeft"); return; }
             if (rgt) { this.playByName("flyHoverRight"); return; }
             if (space) { this.playByName("flyHoverUp"); return; }
-            // 无任何操作时，播放悬停动画
+            // No input: hover idle
             this.playByName("flyidle");
             return;
         }
 
-        // 地面状态下的动画逻辑
+        // Ground clips
         if (this.ctrl.playerIsOnGround) {
-            // 如果是三段跳的落地动画，则等待其播放完毕
+            // Wait out three-part jump land
             if (this.hasThreePartJump && this.state === this.actions?.get("jumpEnd")) return;
-            // 无方向键输入，播放站立动画
+            // No WASD: idle
             if (!fwd && !bkd && !lft && !rgt) { this.playByName("idle"); return; }
-            // 向前走或跑
+            // Forward walk/run
             if (fwd) { this.playByName(shift ? "running" : "walking"); return; }
-            // 第三人称下，左、右、后退也播放走/跑动画（模型会自动转向）
+            // Third person: strafe/back also use walk/run (model yaws)
             if (!this.ctrl.isFirstPerson && (lft || rgt || bkd)) {
                 this.playByName(shift ? "running" : "walking"); return;
             }
-            // 第一人称下的平移和后退
+            // First person: strafe and back clips
             if (lft) { this.playByName("left_walking"); return; }
             if (rgt) { this.playByName("right_walking"); return; }
             if (bkd) { this.playByName("walking_backward"); return; }

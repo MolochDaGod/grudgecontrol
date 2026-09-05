@@ -1,7 +1,7 @@
 {
     "name": "grudge-control",
     "version": "1.0.0",
-    "description": "Grudge Studio character controller for Three.js — grudge6 races, CDN assets, and showcase demos",
+    "description": "Grudge Studio Three.js character-controller lab — grudge6 CDN kits, BVH capsule collision, vehicles, combat, and format showcases",
     "author": "Grudge Studio",
     "license": "MIT",
     "main": "./dist/index.js",
@@ -50,5 +50,13 @@
         "type": "git",
         "url": "https://github.com/MolochDaGod/grudgecontrol.git"
     },
-    "homepage": "https://grudgecontrol.vercel.app"
+    "homepage": "https://grudgecontrol.vercel.app",
+    "keywords": [
+        "three.js",
+        "character-controller",
+        "grudge-studio",
+        "grudge6",
+        "three-mesh-bvh",
+        "rapier"
+    ]
 }

@@ -51,37 +51,6 @@
                 height: 28px;
             }
             
-            .version-switch {
-                position: fixed;
-                top: 1.2rem;
-                left: 1.4rem;
-                z-index: 10;
-                display: inline-flex;
-                border-radius: 20px;
-                overflow: hidden;
-                border: 1px solid rgba(0, 0, 0, 0.08);
-                background: #fff;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
-                font-size: 0.82rem;
-                font-weight: 700;
-                letter-spacing: 0.02em;
-            }
-            .version-switch-active {
-                padding: 6px 14px;
-                background: var(--accent);
-                color: #fff;
-            }
-            .version-switch-link {
-                padding: 6px 14px;
-                color: var(--text);
-                text-decoration: none;
-                transition: background 0.15s, color 0.15s;
-            }
-            .version-switch-link:hover {
-                background: rgba(0, 0, 0, 0.05);
-                color: #000;
-            }
-
             h1 {
                 font-family: "Cinzel", serif;
                 font-size: clamp(1.4rem, 3.5vw, 2.2rem);
@@ -203,6 +172,18 @@
                 font-size: 1rem;
                 font-weight: 700;
             }
+            .badge {
+                font-size: 0.65rem;
+                font-style: normal;
+                font-weight: 700;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                background: var(--accent);
+                color: #1a1200;
+                border-radius: 4px;
+                padding: 2px 6px;
+                margin-left: 0.45rem;
+            }
             .play-btn {
                 width: 2rem;
                 height: 2rem;
@@ -298,20 +279,15 @@
             </svg>
         </a>
 
-        <div class="version-switch">
-             <span class="version-switch-active">Three.js</span>
-            <a href="https://hh-hang.github.io/cesium-player-controller/" class="version-switch-link">CesiumJS</a>
-        </div>
-
         <h1>Grudge Control</h1>
-        <p class="desc">Grudge Studio's Three.js character controller — play as all six grudge6 races and extended roster characters, streamed from the Grudge asset CDN with BVH collision and retargeted locomotion.</p>
-        <p class="subtitle">Powered by three-mesh-bvh · assets.grudge-studio.com</p>
+        <p class="desc">Grudge Studio's Three.js character-controller lab — grudge6 races from the asset CDN, BVH capsule collision, vehicles, combat, and format showcases. Not the production Open / Warlords play controller.</p>
+        <p class="subtitle">three-mesh-bvh · assets.grudge-studio.com · lab only</p>
 
         <div class="sections">
             <section class="section">
                 <div class="section-head">
                     <div class="section-title">Grudge Studio <span style="font-size:0.55rem;font-weight:700;letter-spacing:0.08em;background:#e8a020;color:#1a1200;border:1px solid #c98a10;border-radius:4px;padding:2px 6px;vertical-align:middle;margin-left:6px;">FEATURED</span></div>
-                    <div class="section-desc">Play as grudge6 races — Human, Barbarian, Elf, Dwarf, Orc, Undead — plus werewolf and more.</div>
+                    <div class="section-desc">Play as grudge6 races — Human, Barbarian, Elf, Dwarf, Orc, Undead — plus combat targeting on the same controller.</div>
                 </div>
                 <div class="grid">
                     <a class="card" href="./grudge6.html" style="border-color:rgba(232,160,32,0.35);box-shadow:0 8px 28px rgba(232,160,32,0.12);">
@@ -320,6 +296,15 @@
                         </div>
                         <div class="card-info">
                             <span class="card-name">Grudge6 Character Showcase</span>
+                            <span class="play-btn"><svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" /></svg></span>
+                        </div>
+                    </a>
+                    <a class="card" href="./combat/combat.html" style="border-color:rgba(232,160,32,0.35);box-shadow:0 8px 28px rgba(232,160,32,0.12);">
+                        <div class="card-thumb" style="background:linear-gradient(135deg,#201018 0%,#0d0f14 50%,#1a2030 100%);display:flex;align-items:center;justify-content:center;">
+                            <span style="font-family:Cinzel,serif;font-size:1.4rem;font-weight:900;color:#e8a020;letter-spacing:0.12em;">COMBAT</span>
+                        </div>
+                        <div class="card-info">
+                            <span class="card-name">Combat Showcase</span>
                             <span class="play-btn"><svg viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" /></svg></span>
                         </div>
                     </a>
@@ -401,7 +386,7 @@
             <section class="section">
                 <div class="section-head">
                     <div class="section-title">Multiplayer Online <span style="font-size:0.55rem;font-weight:700;letter-spacing:0.08em;background:#f5b535;color:#1a1200;border:1px solid #d49a00;border-radius:4px;padding:2px 6px;vertical-align:middle;margin-left:6px;">BETA</span></div>
-                    <div class="section-desc">Real-time multiplayer examples powered by Firebase.</div>
+                    <div class="section-desc">Firebase RTDB rooms — lab only. Fleet play uses Railway rooms + GRUDOX WebSocket, not Firebase.</div>
                 </div>
                 <div class="grid">
                     <a class="card" href="./multiplayer-gltf.html">

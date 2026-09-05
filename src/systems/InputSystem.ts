@@ -1,7 +1,7 @@
 import type { playerController } from "../playerController";
 import type { KeyAction, KeyMap } from "../types";
 
-// 默认键位表（动作 -> KeyboardEvent.code 列表）
+// Default keymap (action -> KeyboardEvent.code list)
 const defaultKeyMap: Record<KeyAction, string[]> = {
     forward: ["KeyW", "ArrowUp"],
     backward: ["KeyS", "ArrowDown"],
@@ -22,53 +22,53 @@ const defaultKeyMap: Record<KeyAction, string[]> = {
 };
 
 export class InputSystem {
-    private ctrl: playerController; // 主控制器引用
+    private ctrl: playerController; // main controller
 
-    fwd = false; // 前进键
-    bkd = false; // 后退键
-    lft = false; // 左移键
-    rgt = false; // 右移键
-    space = false; // 跳跃键
-    shift = false; // 加速键
+    fwd = false; // forward
+    bkd = false; // backward
+    lft = false; // strafe left
+    rgt = false; // strafe right
+    space = false; // jump
+    shift = false; // sprint
 
-    combatMouse = true; // 指针锁定时 LMB/RMB/MMB 用于战斗
-    private lastTapTime: Partial<Record<KeyAction, number>> = {}; // 方向键上次按下时间（双击检测）
+    combatMouse = true; // under pointer lock, LMB/RMB/MMB drive combat
+    private lastTapTime: Partial<Record<KeyAction, number>> = {}; // last press time per move key (double-tap)
 
-    private boundKeydown = async (e: KeyboardEvent) => this.onKeydown(e); // 键盘按下绑定
-    private boundKeyup = (e: KeyboardEvent) => this.onKeyup(e); // 键盘抬起绑定
-    private boundMouseMove = (e: MouseEvent) => this.onMouseMove(e); // 鼠标移动绑定
+    private boundKeydown = async (e: KeyboardEvent) => this.onKeydown(e); // keydown
+    private boundKeyup = (e: KeyboardEvent) => this.onKeyup(e); // keyup
+    private boundMouseMove = (e: MouseEvent) => this.onMouseMove(e); // mousemove
     private boundMouseClick = (e: MouseEvent) => {
-        if (e.target === this.ctrl.controls.domElement) this.ctrl.cam.setPointerLock(); // 鼠标点击绑定
+        if (e.target === this.ctrl.controls.domElement) this.ctrl.cam.setPointerLock(); // click -> pointer lock
     };
-    private boundMouseDown = (e: MouseEvent) => this.onMouseDown(e); // 鼠标按下（战斗）
-    private boundMouseUp = (e: MouseEvent) => this.onMouseUp(e); // 鼠标抬起（战斗）
-    private boundContextMenu = (e: MouseEvent) => { if (this.combatMouse && document.pointerLockElement) e.preventDefault(); }; // 战斗下禁用右键菜单
-    private boundBlur = () => this.resetKeys(); // 页面失焦时重置按键状态
+    private boundMouseDown = (e: MouseEvent) => this.onMouseDown(e); // mousedown (combat)
+    private boundMouseUp = (e: MouseEvent) => this.onMouseUp(e); // mouseup (combat)
+    private boundContextMenu = (e: MouseEvent) => { if (this.combatMouse && document.pointerLockElement) e.preventDefault(); }; // block context menu in combat
+    private boundBlur = () => this.resetKeys(); // reset keys on window blur
 
-    private codeToAction = new Map<string, KeyAction>(); // 键码 -> 动作 反查表
+    private codeToAction = new Map<string, KeyAction>(); // code -> action lookup
 
     constructor(ctrl: playerController) {
         this.ctrl = ctrl;
         this.buildKeyMap();
     }
 
-    // 构建键码：动作 反查表：未传的动作用默认键，传 string/数组则覆盖，传 null 则禁用
+    // Build code->action table: omitted actions use defaults; string/array overrides; null disables
     buildKeyMap(userMap?: KeyMap) {
-        this.codeToAction.clear();  // 清空旧表
+        this.codeToAction.clear();  // clear previous
         for (const action of Object.keys(defaultKeyMap) as KeyAction[]) {
             let codes: string[];
             if (userMap && action in userMap) {
                 const v = userMap[action];
-                if (v == null) continue; // null：禁用该动作
-                codes = Array.isArray(v) ? v : [v]; // 覆盖默认键
+                if (v == null) continue; // null: disable this action
+                codes = Array.isArray(v) ? v : [v]; // override defaults
             } else {
-                codes = defaultKeyMap[action];  // 未传：用默认键
+                codes = defaultKeyMap[action];  // omitted: use default
             }
             for (const code of codes) this.codeToAction.set(code, action);
         }
     }
 
-    // 程序化输入接口
+    // Programmatic input API
     setInput(input: Partial<{
         moveX: 1 | 0 | -1; moveY: 1 | 0 | -1;
         lookDeltaX: number; lookDeltaY: number;
@@ -78,32 +78,32 @@ export class InputSystem {
     }>) {
         const c = this.ctrl;
 
-        // 移动方向
+        // Move
         if (typeof input.moveX === "number") { this.applyAction("left", input.moveX === -1); this.applyAction("right", input.moveX === 1); }
         if (typeof input.moveY === "number") { this.applyAction("forward", input.moveY === 1); this.applyAction("backward", input.moveY === -1); }
 
-        // 视角朝向
+        // Look
         if (typeof input.lookDeltaX === "number" && typeof input.lookDeltaY === "number") {
             c.cam.setToward(input.lookDeltaX, input.lookDeltaY, 0.002);
         }
 
-        // 持续状态
+        // Held state
         if (typeof input.jump === "boolean") this.applyAction("jump", input.jump);
         if (typeof input.shift === "boolean") this.applyAction("sprint", input.shift);
 
-        // 触发式切换
+        // Edge-triggered toggles
         if (input.toggleView) this.applyAction("toggleView", true);
         if (input.toggleFly) this.applyAction("toggleFly", true);
         if (input.toggleVehicle) this.applyAction("toggleVehicle", true);
 
-        // 战斗
+        // Combat
         if (input.attack) this.applyAction("attack", true);
         if (typeof input.aim === "boolean") this.applyAction("aim", input.aim);
         if (input.knock) this.applyAction("knock", true);
         if (input.targetNext) this.applyAction("targetNext", true);
     }
 
-    // 绑定输入事件
+    // Bind input listeners
     bindEvents() {
         this.ctrl.isupdate = true;
         this.ctrl.cam.setPointerLock();
@@ -117,7 +117,7 @@ export class InputSystem {
         window.addEventListener("blur", this.boundBlur);
     }
 
-    // 解绑输入事件
+    // Unbind input listeners
     unbindEvents() {
         this.ctrl.isupdate = false;
         document.exitPointerLock();
@@ -131,7 +131,7 @@ export class InputSystem {
         window.removeEventListener("blur", this.boundBlur);
     }
 
-    // 重置所有按键状态
+    // Reset all key flags
     private resetKeys() {
         const c = this.ctrl;
         this.fwd = false;
@@ -144,45 +144,45 @@ export class InputSystem {
         c.animation.setAnimationByPressed();
     }
 
-    // 统一动作派发
+    // Dispatch one action
     private applyAction(action: KeyAction, pressed: boolean) {
         const c = this.ctrl;
         switch (action) {
-            // 前进
+            // Forward
             case "forward": this.fwd = pressed; c.animation.setAnimationByPressed(); break;
-            // 后退
+            // Backward
             case "backward": this.bkd = pressed; c.animation.setAnimationByPressed(); break;
-            // 左移
+            // Strafe left
             case "left": this.lft = pressed; c.animation.setAnimationByPressed(); break;
-            // 右移
+            // Strafe right
             case "right": this.rgt = pressed; c.animation.setAnimationByPressed(); break;
-            // 冲刺
+            // Sprint
             case "sprint":
                 this.shift = pressed;
                 c.animation.setAnimationByPressed();
-                // 切换轨道拖拽键位
+                // Swap orbit drag buttons while sprinting
                 c.controls.mouseButtons = pressed
                     ? { LEFT: 2, MIDDLE: 1, RIGHT: 0 }
                     : { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
                 break;
-            // 跳跃
+            // Jump
             case "jump":
                 if (pressed) {
-                    c.vehicle.cancelBoarding(); // 取消载具模式下的下车
+                    c.vehicle.cancelBoarding(); // cancel vehicle boarding/exit
                     this.space = true;
-                    if (c.controllerMode === 1) return; // 载具模式不跳跃
-                    if (c.isFlying) { c.animation.setAnimationByPressed(); return; } // 飞行中仅切动画
-                    c.requestJump(); // 地面跳 + 二段跳（含后跳射击）
+                    if (c.controllerMode === 1) return; // no jump in vehicle
+                    if (c.isFlying) { c.animation.setAnimationByPressed(); return; } // fly: animation only
+                    c.requestJump(); // ground jump + double jump (incl. back-jump fire)
                 } else {
                     this.space = false;
                     if (c.isFlying) c.animation.setAnimationByPressed();
                 }
                 break;
-            // 切换第一 / 第三人称视角
+            // Toggle first / third person
             case "toggleView":
                 if (pressed) c.cam.changeView();
                 break;
-            // 切换飞行模式
+            // Toggle fly
             case "toggleFly":
                 if (pressed && c.controllerMode === 0) {
                     c.isFlying = !c.isFlying;
@@ -191,37 +191,37 @@ export class InputSystem {
                     if (!c.isFlying && !c.playerIsOnGround) c.animation.startJump(true); 
                 }
                 break;
-            // 上 / 下车
+            // Enter / exit vehicle
             case "toggleVehicle":
                 if (pressed) {
                     if (c.isFlying) return;
                     if (c.controllerMode === 0) c.vehicle.enter(); else c.vehicle.exit();
                 }
                 break;
-            // 近战攻击（LMB / 键位）
+            // Melee (LMB / key)
             case "attack": if (pressed) c.combat.attackPrimary(); break;
-            // 重击
+            // Heavy attack
             case "attackHeavy": if (pressed) c.combat.attackHeavy(); break;
-            // 矄准/射击（RMB / 键位）：按下矄准并开火，松开取消矄准
+            // Aim/fire (RMB / key): press aims and fires, release cancels aim
             case "aim":
                 c.combat.setAiming(pressed);
                 if (pressed) c.combat.fire();
                 break;
-            // 击退（MMB / 键位）
+            // Knockback (MMB / key)
             case "knock": if (pressed) c.combat.knock(); break;
-            // 目标循环
+            // Cycle target
             case "targetNext": if (pressed) c.target.cycle(1); break;
             case "targetPrev": if (pressed) c.target.cycle(-1); break;
         }
     }
 
-    // 键盘按下处理
+    // Keydown
     private onKeydown(e: KeyboardEvent) {
-        if (e.repeat) return; // 忽略按住自动重复（防止误触发二段跳/双击）
+        if (e.repeat) return; // ignore key-repeat (blocks false double-jump / double-tap)
         const action = this.codeToAction.get(e.code);
         if (!action) return;
-        if (action === "targetNext" || action === "targetPrev") e.preventDefault(); // Tab 不切焦点
-        // 双击方向键 → 闪避/冲刺
+        if (action === "targetNext" || action === "targetPrev") e.preventDefault(); // Tab must not move focus
+        // Double-tap WASD -> dodge/sprint
         if (action === "forward" || action === "backward" || action === "left" || action === "right") {
             const now = performance.now();
             const last = this.lastTapTime[action] ?? 0;
@@ -231,7 +231,7 @@ export class InputSystem {
         this.applyAction(action, true);
     }
 
-    // 双击方向键触发闪避
+    // Double-tap WASD dodge
     private triggerDodge(action: KeyAction) {
         const map: Record<string, [number, number]> = {
             forward: [0, -1], backward: [0, 1], left: [-1, 0], right: [1, 0],
@@ -242,28 +242,28 @@ export class InputSystem {
         this.ctrl.startDodge(dir);
     }
 
-    // 鼠标按下（指针锁定下的战斗输入）
+    // Mousedown (combat while pointer-locked)
     private onMouseDown(e: MouseEvent) {
         const c = this.ctrl;
         if (!this.combatMouse || !document.pointerLockElement) return;
-        if (e.button === 0) c.combat.attackPrimary();                              // LMB 近战
-        else if (e.button === 2) { c.combat.setAiming(true); c.combat.fire(); }    // RMB 矄准/射击
-        else if (e.button === 1) { e.preventDefault(); c.combat.knock(); }         // MMB 击退
+        if (e.button === 0) c.combat.attackPrimary();                              // LMB melee
+        else if (e.button === 2) { c.combat.setAiming(true); c.combat.fire(); }    // RMB aim/fire
+        else if (e.button === 1) { e.preventDefault(); c.combat.knock(); }         // MMB knockback
     }
 
-    // 鼠标抬起
+    // Mouseup
     private onMouseUp(e: MouseEvent) {
         if (!this.combatMouse) return;
-        if (e.button === 2) this.ctrl.combat.setAiming(false); // 松开 RMB 取消矄准
+        if (e.button === 2) this.ctrl.combat.setAiming(false); // release RMB cancels aim
     }
 
-    // 键盘抬起处理
+    // Keyup
     private onKeyup(e: KeyboardEvent) {
         const action = this.codeToAction.get(e.code);
         if (action) this.applyAction(action, false);
     }
 
-    // 鼠标移动处理
+    // Mousemove
     private onMouseMove(e: MouseEvent) {
         if (document.pointerLockElement === document.body) {
             this.ctrl.cam.setToward(e.movementX, e.movementY, 0.0001);

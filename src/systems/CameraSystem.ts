@@ -2,19 +2,19 @@ import * as THREE from "three";
 import type { playerController } from "../playerController";
 
 export class CameraSystem {
-    private ctrl: playerController; // 主控制器引用
+    private ctrl: playerController; // main controller
 
-    collisionLerp = 0.18; // 碰撞插值速度
-    epsilon = 35; // 安全距离偏移
-    minDist = 100; // 最小相机距离
-    maxDist = 440; // 最大相机距离
-    originMaxDist = 440; // 初始最大距离
-    sensitivity = 5; // 鼠标灵敏度
-    mouseMode: 0 | 1 | 2 | 3 | 4 | 5 = 1; // 鼠标控制模式
-    zoomEnabled = false; // 是否允许缩放
-    lookAtHeightRatio = 0.8; // 第三人称看向点高度比例（0=底部，1=顶部）
+    collisionLerp = 0.18; // collision lerp speed
+    epsilon = 35; // keep-out offset from walls
+    minDist = 100; // min camera distance
+    maxDist = 440; // max camera distance
+    originMaxDist = 440; // initial max distance
+    sensitivity = 5; // mouse sensitivity
+    mouseMode: 0 | 1 | 2 | 3 | 4 | 5 = 1; // mouse control mode
+    zoomEnabled = false; // whether zoom is allowed
+    lookAtHeightRatio = 0.8; // third-person look-at height (0=feet, 1=head)
 
-    private lookAtPoint = new THREE.Vector3(); // 预分配的看向点向量
+    private lookAtPoint = new THREE.Vector3(); // preallocated look-at
 
     enableSpringCamera = false;
     springCameraTime = 0.05;
@@ -22,17 +22,17 @@ export class CameraSystem {
     private _springVelocity = new THREE.Vector3();
     private _springResult = new THREE.Vector3();
 
-    raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3()); // 相机碰撞射线
-    centerRay = new THREE.Raycaster(); // 屏幕中心射线
-    centerMouse = new THREE.Vector2(); // 屏幕中心坐标
-    playerToCam = new THREE.Vector3(); // 玩家到相机向量
+    raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3()); // camera collision ray
+    centerRay = new THREE.Raycaster(); // screen-center ray
+    centerMouse = new THREE.Vector2(); // screen-center coords
+    playerToCam = new THREE.Vector3(); // player-to-camera vector
 
     constructor(ctrl: playerController) {
         this.ctrl = ctrl;
         (this.raycaster as any).firstHitOnly = true;
     }
 
-    // 通用弹簧阻尼：把 controls.target 朝 dest 平滑跟随，返回本帧的目标点
+    // Spring-damp controls.target toward dest; returns this frame's target
     springTarget(dest: THREE.Vector3, delta: number): THREE.Vector3 {
         if (!this.enableSpringCamera) return dest;
         const cur = this.ctrl.controls.target;
@@ -57,7 +57,7 @@ export class CameraSystem {
         return out;
     }
 
-    // 第三人称相机看向点
+    // Third-person look-at point
     getLookAtPoint(): THREE.Vector3 {
         const capsuleInfo = this.ctrl.playerCapsule.capsuleInfo;
         const r = capsuleInfo.radius;
@@ -66,7 +66,7 @@ export class CameraSystem {
         return this.lookAtPoint.copy(this.ctrl.playerCapsule.position).setY(y);
     }
 
-    // 设置越肩视角
+    // Over-the-shoulder view offset
     setOverShoulder(enable: boolean) {
         if (!enable || this.ctrl.controllerMode === 1) { this.ctrl.camera.clearViewOffset(); return; }
         const w = window.innerWidth;
@@ -74,12 +74,12 @@ export class CameraSystem {
         this.ctrl.camera.setViewOffset(w, h, w * 0.2, 0, w, h);
     }
 
-    // 切换视角模式
+    // Toggle first / third person
     changeView() {
         this.ctrl.onBeforeViewChange?.(this.ctrl.isFirstPerson);
         this.ctrl.isFirstPerson = !this.ctrl.isFirstPerson;
         if (this.ctrl.isFirstPerson) {
-            // 切到第一人称，先对齐胶囊体朝向
+            // First person: align capsule yaw first
             const playerFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.ctrl.playerCapsule.quaternion);
             const flatDir = new THREE.Vector3(playerFwd.x, 0, playerFwd.z).normalize();
             if (flatDir.lengthSq() > 0.001) {
@@ -89,7 +89,7 @@ export class CameraSystem {
             this.setFirstPerson();
             this.setOverShoulder(false);
         } else {
-            // 切到第三人称，放置相机到玩家背后
+            // Third person: place camera behind the player
             this.ctrl.controls.enabled = true;
             this.ctrl.scene.attach(this.ctrl.camera);
             const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.ctrl.playerCapsule.quaternion);
@@ -105,12 +105,12 @@ export class CameraSystem {
         this.ctrl.onViewChange?.(this.ctrl.isFirstPerson);
     }
 
-    // 进入第一人称
+    // Enter first person
     setFirstPerson(vertAngle = 0) {
         this.ctrl.controls.enabled = false;
         const s = this.ctrl.playerModelConfig.scale;
         const sharedOffset = this.ctrl.playerModelConfig.firstPersonCameraOffset;
-        // 有头骨节点挂到头骨，否则挂到胶囊体
+        // Attach to head bone if present, else capsule
         if (this.ctrl.playerModelHead) {
             const [x, y, z] = sharedOffset ?? [0, 10, 20];
             this.ctrl.playerModelHead.attach(this.ctrl.camera);
@@ -128,7 +128,7 @@ export class CameraSystem {
         this.ctrl.controls.enableZoom = false;
     }
 
-    // 指针锁定控制
+    // Pointer lock
     setPointerLock() {
         if (!document.body.requestPointerLock) return;
         if (((this.mouseMode === 0 || this.mouseMode === 1 || this.mouseMode === 5) && !this.ctrl.isFirstPerson) || this.ctrl.isFirstPerson) {
@@ -138,7 +138,7 @@ export class CameraSystem {
         }
     }
 
-    // 初始相机位置
+    // Initial camera pose
     setCamPos() {
         requestAnimationFrame(() => {
             if (!this.ctrl.isFirstPerson) {
@@ -156,17 +156,17 @@ export class CameraSystem {
         });
     }
 
-    // 初始化轨道控制
+    // Init orbit controls
     initControls() {
         this.ctrl.controls.enableZoom = this.zoomEnabled;
         this.ctrl.controls.rotateSpeed = this.sensitivity * 0.05;
         this.ctrl.controls.maxPolarAngle = Math.PI;
         this.ctrl.controls.mouseButtons = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
-        // 防止相机轨道半径归零穿越目标点
+        // Keep orbit radius from collapsing through the target
         this.ctrl.controls.minDistance = this.minDist;
     }
 
-    // 重置轨道控制
+    // Reset orbit controls
     resetControls() {
         if (!this.ctrl.controls) return;
         this.ctrl.controls.enabled = true;
@@ -177,13 +177,13 @@ export class CameraSystem {
         this.ctrl.controls.mouseButtons = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
     }
 
-    // 处理鼠标朝向
+    // Apply mouse look
     setToward(dx: number, dy: number, speed: number) {
         this.ctrl.onTowardChange?.(dx, dy, speed);
         if (!this.ctrl.enableToward || (this.ctrl.controllerMode === 0 && this.ctrl.isFirstPerson && this.ctrl.vehicle.isMovingToBoarding)) return;
         const sens = this.sensitivity;
         if (this.ctrl.controllerMode === 0) {
-            // 步行第一人称
+            // On-foot first person
             if (this.ctrl.isFirstPerson) {
                 this.ctrl.playerCapsule.rotateY(-dx * speed * sens);
                 this.ctrl.camera.rotation.x = THREE.MathUtils.clamp(
@@ -191,30 +191,30 @@ export class CameraSystem {
                     -Math.PI * (60 / 180), Math.PI * (80 / 180),
                 );
             } else {
-                // 步行第三人称
+                // On-foot third person
                 this.orbit(this.getLookAtPoint(), -dx * speed * sens, -dy * speed * sens);
             }
         } else {
             const v = this.ctrl.vehicle.active;
             if (!v) return;
-            // 载具第一人称
+            // Vehicle first person
             if (this.ctrl.isFirstPerson) {
                 this.ctrl.camera.rotation.y = THREE.MathUtils.clamp(this.ctrl.camera.rotation.y + (-dx * speed * sens), Math.PI * (3 / 4), Math.PI * (5 / 4));
                 this.ctrl.camera.rotation.x = THREE.MathUtils.clamp(this.ctrl.camera.rotation.x + (-dy * speed * sens), 0, Math.PI * (1 / 3));
             } else {
-                // 载具第三人称
+                // Vehicle third person
                 this.orbit(v.vehicleGroup.position, -dx * speed * sens, -dy * speed * sens);
             }
         }
     }
 
-    // 手动轨道旋转
+    // Manual orbit
     private orbit(target: THREE.Vector3, deltaX: number, deltaY: number) {
         const distance = this.ctrl.camera.position.distanceTo(target);
         const cur = this.ctrl.camera.position.clone().sub(target);
         let theta = Math.atan2(cur.x, cur.z) + deltaX;
         let phi = Math.acos(THREE.MathUtils.clamp(cur.y / distance, -1, 1)) + deltaY;
-        // 限制仰角避免万向节死锁
+        // Clamp pitch to avoid gimbal lock
         phi = Math.max(0.1, Math.min(Math.PI - 0.1, phi));
         this.ctrl.camera.position.set(
             target.x + distance * Math.sin(phi) * Math.sin(theta),
@@ -224,7 +224,7 @@ export class CameraSystem {
         this.ctrl.camera.lookAt(target);
     }
 
-    // 射线防穿墙
+    // Raycast keep-out from walls
     updateWithRaycast(origin: THREE.Vector3, maxDist: number = this.maxDist, minDist = this.minDist) {
         this.playerToCam.subVectors(this.ctrl.camera.position, origin);
         const direction = this.playerToCam.clone().normalize();
@@ -232,12 +232,12 @@ export class CameraSystem {
         this.raycaster.far = maxDist;
 
         const hits = this.raycaster.intersectObject(this.ctrl.collider!, false);
-        // 有遮挡：贴近安全距离
+        // Occluded: pull in to a safe distance
         if (hits.length > 0) {
             const safeDist = Math.max(hits[0].distance - this.epsilon, minDist);
             this.ctrl.camera.position.lerp(origin.clone().add(direction.multiplyScalar(safeDist)), this.collisionLerp);
         } else {
-            // 无遮挡：尝试拉到最大距离
+            // Clear: try to restore max distance
             this.raycaster.far = maxDist;
             const maxHits = this.raycaster.intersectObject(this.ctrl.collider!, false);
             const safeDist = maxHits.length > 0 ? Math.min(maxDist, maxHits[0].distance - this.epsilon) : maxDist;
@@ -245,7 +245,7 @@ export class CameraSystem {
         }
     }
 
-    // 屏幕中心检测
+    // Screen-center pick
     getCenterHit(): THREE.Intersection | undefined {
         this.ctrl.camera.updateMatrixWorld();
         this.centerRay.setFromCamera(this.centerMouse, this.ctrl.camera);
@@ -257,7 +257,7 @@ export class CameraSystem {
         hits.sort((a, b) => a.distance - b.distance);
         if (hits[0]) return hits[0];
 
-        // 无命中返回1000距离的虚拟点
+        // No hit: virtual point 1000 units along the ray
         const fallbackPoint = this.centerRay.ray.at(1000, new THREE.Vector3());
         return {
             distance: 1000, point: fallbackPoint, object: this.ctrl.camera,

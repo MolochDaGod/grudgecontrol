@@ -42,7 +42,7 @@ const floorUrls = [
     "bim/10F/tileset.json",
 ];
 
-//  楼层 Mesh 材质配置
+// Floor mesh material config
 const floorMeshConfig = [
     // 0: 1F
     {
@@ -86,7 +86,7 @@ const floorMeshConfig = [
     },
 ];
 
-//  材质处理函数 
+// Material handlers
 const materialHandlers = {
     glass(c) {
         const orig = c.material;
@@ -205,7 +205,7 @@ init();
 async function init() {
     const cont = document.querySelector("#container");
 
-    // 渲染器
+    // Renderer
     renderer = new WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -215,7 +215,7 @@ async function init() {
     renderer.shadowMap.type = VSMShadowMap;
     cont.appendChild(renderer.domElement);
 
-    // 帧率
+    // FPS
     Object.assign(stats.dom.style, {
         position: "fixed",
         bottom: "0",
@@ -225,11 +225,11 @@ async function init() {
     });
     document.body.appendChild(stats.dom);
 
-    // 相机
+    // Camera
     camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.rotation.order = "YXZ";
 
-    // 控制器
+    // Controls
     controls = new OrbitControls(camera, renderer.domElement);
     controls.maxDistance = 2000;
     controls.maxPolarAngle = Math.PI / 2;
@@ -238,7 +238,7 @@ async function init() {
     controls.target.set(0, 0, 0);
     controls.update();
 
-    // 平行光
+    // Directional light
     dirLight = new DirectionalLight(0xfff2dc, params.lightIntensity);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.setScalar(2048);
@@ -253,7 +253,7 @@ async function init() {
     scene.add(dirLight);
     scene.add(dirLight.target);
 
-    // 天空
+    // Sky
     sky = new Sky();
     sky.scale.setScalar(450000);
     scene.add(sky);
@@ -266,7 +266,7 @@ async function init() {
     pmremGenerator.compileCubemapShader();
     updateLightPosition();
 
-    // 模型加载器
+    // Model loaders
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath("https://unpkg.com/three@0.180.0/examples/jsm/libs/draco/");
     gltfLoader.setDRACOLoader(dracoLoader);
@@ -275,12 +275,12 @@ async function init() {
     ktx2Loader.detectSupport(renderer);
     gltfLoader.setKTX2Loader(ktx2Loader);
 
-    // 渲染循环
+    // Render loop
     renderer.setAnimationLoop(animate);
 
     window.hideLoader();
 
-    // 加载 3D Tiles
+    // Load 3D Tiles
     await initTiles(floorUrls);
     tilesUpdateEnabled = false;
 
@@ -289,12 +289,12 @@ async function init() {
 
     scene.environment = pmremGenerator.fromScene(sky).texture;
 
-    // 初始烘焙
+    // Initial bake
     await bakeWithSettings();
 
     scene.environment = params.skyEnvMap ? pmremGenerator.fromScene(sky).texture : null;
 
-    // 进入角色控制按钮
+    // Enter character-control button
     const btn = document.getElementById("start-btn");
     btn.addEventListener("click", async () => {
         btn.style.display = "none";
@@ -306,7 +306,7 @@ async function init() {
     initClickPick();
 }
 
-// 动画循环
+// Animation loop
 function animate() {
     if (isUpdatePlayer && player) {
         player.update();
@@ -320,7 +320,7 @@ function animate() {
     stats.update();
 }
 
-// 初始化玩家
+// Init player
 async function initPlayer() {
     renderer.render(scene, camera);
     isUpdatePlayer = true;
@@ -366,7 +366,7 @@ async function initPlayer() {
     };
 }
 
-// 更新灯光位置
+// Update light position
 function updateLightPosition() {
     const azimuth = MathUtils.degToRad(params.lightAzimuth);
     const elevation = MathUtils.degToRad(params.lightElevation);
@@ -386,7 +386,7 @@ function updateLightPosition() {
 }
 
 let rebakeTimer = null;
-// 安排重新烘焙
+// Schedule a rebake
 function scheduleRebake() {
     if (rebakeTimer !== null) clearTimeout(rebakeTimer);
     rebakeTimer = setTimeout(() => {
@@ -397,7 +397,7 @@ function scheduleRebake() {
 
 let isBaking = false;
 let bakeQueued = false;
-// 烘焙场景
+// Bake the scene
 async function bakeWithSettings() {
     if (isBaking) {
         bakeQueued = true;
@@ -405,7 +405,7 @@ async function bakeWithSettings() {
     }
     isBaking = true;
     document.getElementById("bake-overlay").classList.add("visible");
-    // 双帧等待，确保浏览器先渲染出进度条再开始烘焙
+    // Wait two frames so the browser paints the progress bar before baking
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     do {
         bakeQueued = false;
@@ -441,7 +441,7 @@ async function bakeWithSettings() {
     document.getElementById("bake-overlay").classList.remove("visible");
 }
 
-// 初始化 GUI
+// Init GUI
 function initGUI() {
     gui = new GUI();
 
@@ -494,7 +494,7 @@ function initGUI() {
     lightFolder.open();
 }
 
-// 创建楼层 Tile
+// Create a floor tileset
 function createTiles(url, floorIndex) {
     const t = new TilesRenderer(url);
     t.manager.addHandler(/\.(gltf|glb)$/g, gltfLoader);
@@ -526,9 +526,9 @@ function createTiles(url, floorIndex) {
     return t;
 }
 
-// 初始化楼层 Tile
+// Init floor tilesets
 async function initTiles(urls) {
-    // 首层解算坐标变换矩阵，其余楼层复用
+    // Solve the transform on the first floor, reuse it for the rest
     const primary = createTiles(urls[0], 0);
 
     const finalMatrix = await new Promise((resolve) => {
@@ -571,7 +571,7 @@ async function initTiles(urls) {
         primary.addEventListener("load-tileset", onLoad);
     });
 
-    // 其余楼层直接套用首层矩阵
+    // Remaining floors reuse the first-floor matrix
     for (let i = 1; i < urls.length; i++) {
         const t = createTiles(urls[i], i);
         t.group.matrix.copy(finalMatrix);
@@ -579,11 +579,11 @@ async function initTiles(urls) {
         t.group.updateMatrixWorld(true);
     }
 
-    // 等待所有楼层瓦片几何体完全加载
+    // Wait until all floor tile geometry has fully loaded
     await waitForAllTilesLoaded();
 }
 
-// 等待所有楼层瓦片几何体完全加载
+// Wait until all floor tile geometry has fully loaded
 function waitForAllTilesLoaded() {
     return new Promise((resolve) => {
         let stableFrames = 0;
@@ -617,7 +617,7 @@ function waitForAllTilesLoaded() {
 
 const _raycaster = new Raycaster();
 const _pointer = new Vector2();
-// 初始化点击选择
+// Init click picking
 function initClickPick() {
     renderer.domElement.addEventListener("click", (e) => {
         const rect = renderer.domElement.getBoundingClientRect();

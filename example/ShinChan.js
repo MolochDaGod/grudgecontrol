@@ -26,7 +26,7 @@ let gltfLoader;
 let stats = null;
 let csm = null;
 
-// CSM 基准参数
+// CSM baseline params
 const CSM_BASE = { maxFar: 30, lightNear: 0.1, lightFar: 50, lightMargin: 30, lightIntensity: 10 };
 
 const modelUrl = "./glb/crayon_shin-chan_nohara_house.glb";
@@ -67,7 +67,7 @@ function createCSM(shadowMapSize, scale) {
 async function init() {
     const cont = document.querySelector("#container");
 
-    // 渲染器
+    // Renderer
     renderer = new WebGLRenderer({ antialias: true });
     renderer.setSize(cont.clientWidth, cont.clientHeight);
     renderer.shadowMap.enabled = true;
@@ -76,12 +76,12 @@ async function init() {
     renderer.setAnimationLoop(animate);
     cont.appendChild(renderer.domElement);
 
-    // 相机
+    // Camera
     camera = new PerspectiveCamera(60, cont.clientWidth / cont.clientHeight, 0.01, 1000);
     camera.position.copy(pos);
     camera.lookAt(pos.x, pos.y, pos.z + 1);
 
-    // 控制器
+    // Controls
     controls = new MapControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.maxDistance = 2000;
@@ -92,7 +92,7 @@ async function init() {
 
     const maxTextureSize = renderer.capabilities.maxTextureSize;
     const shadowMapSize = Math.min(2048, maxTextureSize);
-    // 级联阴影
+    // Cascaded shadows
     csm = createCSM(shadowMapSize, 1);
     csm.lights.forEach((light, index) => {
         const biasMult = Math.pow(2, index);
@@ -100,11 +100,11 @@ async function init() {
         light.shadow.normalBias = 0.002 * biasMult;
     });
 
-    // 环境光
+    // Ambient light
     const ambient = new AmbientLight(0xffffff, 3);
     scene.add(ambient);
 
-    // 背景
+    // Background
     new HDRLoader().load(
         "./img/1.hdr",
         (texture) => {
@@ -112,10 +112,10 @@ async function init() {
             scene.background = texture;
         },
         undefined,
-        (err) => console.warn("HDR 加载失败：", err)
+        (err) => console.warn("HDR load failed:", err)
     );
 
-    // 帧率显示
+    // FPS display
     stats = new Stats();
     Object.assign(stats.dom.style, {
         position: "fixed",
@@ -126,12 +126,12 @@ async function init() {
     });
     document.body.appendChild(stats.dom);
 
-    // 加载场景
+    // Load scene
     initGltfLoader();
     await initGLBScene(modelUrl);
     renderer.render(scene, camera);
 
-    // 人物控制器
+    // Player controller
     player = new playerController();
     await player.init({
         scene,
@@ -160,7 +160,7 @@ async function init() {
 
     });
 
-    // 阴影
+    // Shadows
     player.getPlayerModel()?.traverse((child) => {
         if (child.isMesh) {
             child.castShadow = true;
@@ -171,18 +171,18 @@ async function init() {
 
     window.addEventListener("resize", onWindowResize, false);
 
-    // 计算掉落重置阈值
+    // Compute fall-reset threshold
     const collider = player.getCollider();
     if (collider?.geometry?.boundingBox) {
         const s = player.playerModelConfig.scale;
         fallResetThreshold = collider.geometry.boundingBox.min.y - player.playerCapsuleHeight * s * 3;
     }
 
-    // 关闭加载页面
+    // Hide loading overlay
     window.hideLoader();
 }
 
-// 初始化glb加载器
+// Init GLB loader
 function initGltfLoader() {
     gltfLoader = new GLTFLoader();
     const dracoLoader = new DRACOLoader();
@@ -190,7 +190,7 @@ function initGltfLoader() {
     gltfLoader.setDRACOLoader(dracoLoader);
 }
 
-// 加载场景
+// Load scene
 async function initGLBScene(url, modelScale = [1, 1, 1]) {
     try {
         const gltf = await gltfLoader.loadAsync(url);
@@ -206,11 +206,11 @@ async function initGLBScene(url, modelScale = [1, 1, 1]) {
         });
         scene.add(model);
     } catch (e) {
-        console.error("GLB 加载失败：", e);
+        console.error("GLB load failed:", e);
     }
 }
 
-// 每帧调用
+// Per-frame update
 function animate() {
     if (player) {
         player.update();

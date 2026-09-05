@@ -15,17 +15,17 @@ import {
     Vector3,
 } from "three";
 
-// 复用的临时量（避免每帧 GC）
+// Reused temps (avoid per-frame GC)
 const _rollQ = new Quaternion();
 const _rollAxis = new Vector3(0, 0, 1);
 const _camWorldQ = new Quaternion();
 
-const flashDuration = 0.06;  // 枪口火焰持续时间（秒）
-const smokeCount = 14;       // 每次命中的粒子数
-const smokeLifetime = 0.7;   // 硝烟存活时间（秒）
-const smokePoolSize = 8;     // 硝烟对象池大小
+const flashDuration = 0.06;  // Muzzle-flash duration (seconds)
+const smokeCount = 14;       // Particles per hit
+const smokeLifetime = 0.7;   // Smoke lifetime (seconds)
+const smokePoolSize = 8;     // Smoke pool size
 
-// ==================== 枪口火焰 ====================
+// ==================== Muzzle flash ====================
 
 class MuzzleFlash {
     constructor(scene, texture, scale = 0.01) {
@@ -46,13 +46,13 @@ class MuzzleFlash {
         scene.add(this._mesh);
     }
 
-    // 在枪口位置触发火焰
+    // Trigger flash at the muzzle
     trigger(worldPos, camera) {
         this._mesh.position.copy(worldPos);
         this._mesh.scale.setScalar(this._scale);
         camera.getWorldQuaternion(_camWorldQ);
         this._mesh.quaternion.copy(_camWorldQ);
-        _rollQ.setFromAxisAngle(_rollAxis, Math.random() * Math.PI * 2); // 随机滚转，避免重复感
+        _rollQ.setFromAxisAngle(_rollAxis, Math.random() * Math.PI * 2); // Random roll so flashes don't look identical
         this._mesh.quaternion.multiply(_rollQ);
         this._mesh.material.opacity = 1;
         this._mesh.visible = true;
@@ -67,20 +67,20 @@ class MuzzleFlash {
             this._mesh.visible = false;
             return;
         }
-        // billboard：每帧对齐相机朝向
+        // Billboard: align to camera each frame
         if (this._cam) { this._cam.getWorldQuaternion(_camWorldQ); this._mesh.quaternion.copy(_camWorldQ); }
-        this._mesh.material.opacity = this._timer / flashDuration; // 线性淡出
+        this._mesh.material.opacity = this._timer / flashDuration; // Linear fade-out
     }
 }
 
-// ==================== 命中硝烟 ====================
+// ==================== Hit smoke ====================
 
 class SmokeEffect {
     constructor(scene, texture, size = 0.06) {
         this._active = false;
         this._timer = 0;
-        this._pos = new Float32Array(smokeCount * 3); // 粒子位置缓冲
-        this._vels = Array.from({ length: smokeCount }, () => new Vector3()); // 粒子速度
+        this._pos = new Float32Array(smokeCount * 3); // Particle position buffer
+        this._vels = Array.from({ length: smokeCount }, () => new Vector3()); // Particle velocities
 
         const geo = new BufferGeometry();
         geo.setAttribute("position", new BufferAttribute(this._pos, 3));
@@ -98,7 +98,7 @@ class SmokeEffect {
         scene.add(this._points);
     }
 
-    // 在命中点触发硝烟，沿法线方向散射
+    // Trigger smoke at the hit point, scatter along the normal
     trigger(worldPos, worldNormal) {
         this._active = true;
         this._timer = smokeLifetime;
@@ -134,33 +134,33 @@ class SmokeEffect {
             this._pos[i3] += this._vels[i].x * dt;
             this._pos[i3 + 1] += this._vels[i].y * dt;
             this._pos[i3 + 2] += this._vels[i].z * dt;
-            this._vels[i].multiplyScalar(0.92); // 阻力衰减
+            this._vels[i].multiplyScalar(0.92); // Drag
         }
         this._points.geometry.attributes.position.needsUpdate = true;
     }
 }
 
-// ==================== 对外接口 ====================
+// ==================== Public API ====================
 
 export class ShootingEffects {
     constructor(scene, { listener = null, flashScale = 0.01, smokeSize = 0.06 } = {}) {
-        // ==================== 场景引用 ====================
+        // ==================== Scene refs ====================
         this._scene = scene;
         this._listener = listener; // THREE.AudioListener
 
-        // ==================== 特效配置 ====================
-        this._flashScale = flashScale; // 枪口火焰缩放
-        this._smokeSize = smokeSize;   // 硝烟粒子大小
+        // ==================== Effect config ====================
+        this._flashScale = flashScale; // Muzzle-flash scale
+        this._smokeSize = smokeSize;   // Smoke particle size
 
-        // ==================== 特效对象 ====================
-        this._flash = null;      // MuzzleFlash 实例
-        this._smokePool = [];    // SmokeEffect 对象池
-        this._smokeIdx = 0;      // 轮转索引
-        this._fireSound = null;   // 开火音效
-        this._reloadSound = null; // 换弹音效
+        // ==================== Effect objects ====================
+        this._flash = null;      // MuzzleFlash instance
+        this._smokePool = [];    // SmokeEffect pool
+        this._smokeIdx = 0;      // Round-robin index
+        this._fireSound = null;   // Fire SFX
+        this._reloadSound = null; // Reload SFX
     }
 
-    // 加载贴图与音效，创建特效实例
+    // Load textures and audio, create effect instances
     async load(flashTexPath, smokeTexPath, fireSoundPath = null, reloadSoundPath = null) {
         const loader = new TextureLoader();
         const audioLoader = new AudioLoader();
@@ -186,15 +186,15 @@ export class ShootingEffects {
             this._reloadSound.setVolume(0.6);
         }
 
-        // 预创建硝烟对象池
+        // Pre-create smoke pool
         for (let i = 0; i < smokePoolSize; i++) {
             this._smokePool.push(new SmokeEffect(this._scene, smokeTex, this._smokeSize));
         }
     }
 
-    // ==================== 触发接口 ====================
+    // ==================== Trigger API ====================
 
-    // 枪口火焰 + 开火音效
+    // Muzzle flash + fire SFX
     triggerMuzzleFlash(worldPos, camera) {
         this._flash?.trigger(worldPos, camera);
         if (this._fireSound) {
@@ -203,7 +203,7 @@ export class ShootingEffects {
         }
     }
 
-    // 换弹音效
+    // Reload SFX
     triggerReloadSound() {
         if (!this._reloadSound) return;
         if (this._reloadSound.isPlaying) this._reloadSound.stop();
@@ -214,14 +214,14 @@ export class ShootingEffects {
         if (this._reloadSound?.isPlaying) this._reloadSound.stop();
     }
 
-    // 命中硝烟（轮转对象池）
+    // Hit smoke (round-robin pool)
     triggerHitSmoke(worldPos, worldNormal) {
         const e = this._smokePool[this._smokeIdx % this._smokePool.length];
         this._smokeIdx++;
         e.trigger(worldPos, worldNormal);
     }
 
-    // 每帧更新所有特效
+    // Update all effects each frame
     update(dt) {
         this._flash?.update(dt);
         for (const e of this._smokePool) e.update(dt);

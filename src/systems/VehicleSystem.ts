@@ -5,51 +5,51 @@ import { loadVehicleModel as loadVehicleModelUtil } from "../utils/vehicleLoader
 import type { VehicleInstance, VehicleOptions } from "../types";
 
 export class VehicleSystem {
-    private ctrl: playerController; // 主控制器引用
+    private ctrl: playerController; // main controller
 
-    list: VehicleInstance[] = []; // 车辆实例列表
-    active: VehicleInstance | null = null; // 当前乘坐车辆
-    maxCount = 6; // 最大车辆数量
-    RAPIER: any = null; // 物理引擎模块
-    world: World | null = null; // 物理世界实例
+    list: VehicleInstance[] = []; // vehicle instances
+    active: VehicleInstance | null = null; // currently boarded vehicle
+    maxCount = 6; // max vehicle count
+    RAPIER: any = null; // physics module
+    world: World | null = null; // physics world
     params = {
-        debug: { showPhysicsBox: false }, // 调试显示
-        chassis: { linearDamping: 0.5, angularDamping: 0.5 }, // 车身阻尼
-        model: { rotation: -Math.PI / 2 }, // 模型旋转
-        power: { accelerateForce: 50, brakeForce: 200, maxSpeed: 10000 }, // 动力参数
-        steering: { maxSteerAngle: Math.PI / 4, steerSpeed: 0.5, steerReturnSpeed: 1 }, // 转向参数
-        followVehicleDirection: true, // 相机跟随方向
+        debug: { showPhysicsBox: false }, // debug draw
+        chassis: { linearDamping: 0.5, angularDamping: 0.5 }, // chassis damping
+        model: { rotation: -Math.PI / 2 }, // model yaw
+        power: { accelerateForce: 50, brakeForce: 200, maxSpeed: 10000 }, // power
+        steering: { maxSteerAngle: Math.PI / 4, steerSpeed: 0.5, steerReturnSpeed: 1 }, // steering
+        followVehicleDirection: true, // camera follows travel direction
     };
 
-    steerQuat = new THREE.Quaternion(); // 转向四元数
-    rotQuat = new THREE.Quaternion(); // 旋转四元数
+    steerQuat = new THREE.Quaternion(); // steer quaternion
+    rotQuat = new THREE.Quaternion(); // rotation quaternion
 
-    // ==================== 防卡死自动脱困 ====================
-    stuckTimer = 0; // 卡住计时器
-    stuckSpeedThreshold = 0.5; // 视为"几乎不动"的水平速度阈值
-    stuckTimeThreshold = 1; // 持续多久判定卡住（秒）
-    stuckHopRatio = 0.5; // 脱困向上冲量对应的抬升高度 = 车高 × 此值
+    // ==================== Unstick hop ====================
+    stuckTimer = 0; // time spent stuck
+    stuckSpeedThreshold = 0.5; // horizontal speed treated as "almost stopped"
+    stuckTimeThreshold = 1; // seconds of stall before unstick
+    stuckHopRatio = 0.5; // hop height = vehicle height * this
 
-    // ==================== 上车流程状态 ====================
-    isMovingToBoarding = false; // 正在走向上车点
-    waypoints: THREE.Vector3[] = []; // 路径节点列表
-    waypointIdx = 0; // 当前路径节点
-    targetDir: THREE.Vector3 | null = null; // 目标朝向
-    moveSpeed = 300; // 自动移动速度
-    rotSpeed = 10; // 自动旋转速度
-    boardingPoint: THREE.Vector3 | null = null; // 上车位置
-    isBoardingAnim = false; // 上车动画中
-    doorClosed = false; // 上车门已关
-    isExitAnim = false; // 下车动画中
-    exitDoorClosed = false; // 下车门已关
-    doorTimer: any = null; // 开关门定时器
-    flip180 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI); // 180度翻转
+    // ==================== Boarding state ====================
+    isMovingToBoarding = false; // walking to board point
+    waypoints: THREE.Vector3[] = []; // path waypoints
+    waypointIdx = 0; // current waypoint
+    targetDir: THREE.Vector3 | null = null; // facing target
+    moveSpeed = 300; // auto-move speed
+    rotSpeed = 10; // auto-rotate speed
+    boardingPoint: THREE.Vector3 | null = null; // board position
+    isBoardingAnim = false; // enter-car clip playing
+    doorClosed = false; // enter door closed
+    isExitAnim = false; // exit-car clip playing
+    exitDoorClosed = false; // exit door closed
+    doorTimer: any = null; // door open/close timer
+    flip180 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI); // 180 deg yaw
 
     constructor(ctrl: playerController) {
         this.ctrl = ctrl;
     }
 
-    // 初始化物理引擎
+    // Init Rapier
     async initRapier() {
         if (this.RAPIER) return;
         this.RAPIER = await import("@dimforge/rapier3d-compat");
@@ -58,7 +58,7 @@ export class VehicleSystem {
         this.world = new this.RAPIER.World(new this.RAPIER.Vector3(0, -9.81, 0)) as World;
         (this.world as any).maxCcdSubsteps = 2;
 
-        // 构建三角网格碰撞体
+        // Build trimesh colliders
         const addTrimesh = (RAPIER: any, world: any, geom: THREE.BufferGeometry) => {
             let g = geom.index ? geom.clone().toNonIndexed() : geom.clone();
             const pos = g.attributes.position;
@@ -81,17 +81,17 @@ export class VehicleSystem {
 
         for (const g of this.ctrl.collected) addTrimesh(this.RAPIER, this.world, g);
 
-        // 添加地面刚体
+        // Ground rigid body
         const groundBody = this.world.createRigidBody(this.RAPIER.RigidBodyDesc.fixed());
         groundBody.userData = { outOfBounds: true };
 
     }
 
-    // 加载车辆模型
+    // Load a vehicle model
     async load(opts: VehicleOptions) {
         try {
             if (!this.ctrl.playerModelConfig.enterCarAnim) {
-                return console.warn("未配置上车动画，不执行车辆相关逻辑");
+                return console.warn("enterCarAnim is not configured; skipping vehicle logic");
             }
             await this.initRapier();
             if (!this.world) return;
@@ -110,11 +110,11 @@ export class VehicleSystem {
             this.ctrl.addDynamicCollider(instance.vehicleGroup);
             this.setTransition();
         } catch (e) {
-            console.error("加载车辆模型失败:", e);
+            console.error("Failed to load vehicle model:", e);
         }
     }
 
-    // 控制车门开关
+    // Open or close the door clip
     openDoor(isOpen = true) {
         const v = this.active;
         if (!v?.vehicleActions) return;
@@ -125,7 +125,7 @@ export class VehicleSystem {
         next.reset();
         next.setEffectiveWeight(1);
 
-        // 正向播放开门，反向播放关门
+        // Forward = open, reverse = close
         if (isOpen) {
             next.setEffectiveTimeScale(duration * 2);
             next.time = 0;
@@ -141,11 +141,11 @@ export class VehicleSystem {
         next.play();
     }
 
-    // 触发上车流程
+    // Start boarding
     enter() {
         if (!this.list.length || this.isMovingToBoarding) return;
 
-        // 查找最近可上车的车辆
+        // Nearest boardable vehicle
         let nearest: VehicleInstance | null = null;
         let nearestDist = Infinity;
         let nearBoardingPoint: THREE.Vector3 | null = null;
@@ -165,11 +165,11 @@ export class VehicleSystem {
         this.active = nearest;
         const v = nearest;
 
-        // 车辆移动中不允许上车
+        // Cannot board while the vehicle is moving
         const vel = v.chassisBody.linvel();
         if (Math.sqrt(vel.x ** 2 + vel.z ** 2) > 0.1) return;
 
-        // 规划路径并开始移动
+        // Plan path and start walking
         this.boardingPoint = nearBoardingPoint;
         this.waypoints = v.pathPlanner.findPath(this.ctrl.playerCapsule.position.clone(), nearBoardingPoint);
         this.waypointIdx = 0;
@@ -178,12 +178,12 @@ export class VehicleSystem {
         this.ctrl.animation.playByName("walking");
     }
 
-    // 自动走向上车点
+    // Walk along waypoints to the board point
     updateMoveTo(delta: number) {
         const c = this.ctrl;
         if (!this.isMovingToBoarding || !this.targetDir || !this.waypoints.length) return;
 
-        // 所有路径点已走完，进入对齐阶段
+        // Waypoints done: align
         if (this.waypointIdx >= this.waypoints.length) {
             this.finalizeBoarding(delta);
             return;
@@ -195,7 +195,7 @@ export class VehicleSystem {
         const threshold = isLast ? 0 : 10 * c.playerModelConfig.scale;
         const horizDist = new THREE.Vector2(waypoint.x - currentPos.x, waypoint.z - currentPos.z).length();
 
-        // 移动并旋转朝向路径点
+        // Move and yaw toward the waypoint
         if (horizDist > threshold) {
             const moveDir = new THREE.Vector3(waypoint.x - currentPos.x, 0, waypoint.z - currentPos.z).normalize();
             c.playerCapsule.position.add(moveDir.clone().multiplyScalar(Math.min(this.moveSpeed * c.playerModelConfig.scale * delta, horizDist)));
@@ -207,13 +207,13 @@ export class VehicleSystem {
         }
     }
 
-    // 完成上车对齐
+    // Finish facing alignment, then play enter-car
     finalizeBoarding(delta: number) {
         const c = this.ctrl;
         const v = this.active;
         if (!this.targetDir || !v || !this.isMovingToBoarding) return;
 
-        // 旋转至与车辆同向
+        // Rotate to match vehicle facing
         const currentDir = new THREE.Vector3(0, 0, -1).applyQuaternion(c.playerCapsule.quaternion).normalize();
         if (currentDir.angleTo(this.targetDir) > 0.01) {
             const lookTarget = c.playerCapsule.position.clone().add(this.targetDir);
@@ -221,7 +221,7 @@ export class VehicleSystem {
             c.targetQuat.setFromRotationMatrix(c.targetMat);
             c.playerCapsule.quaternion.slerp(c.targetQuat, Math.min(1, this.rotSpeed * delta));
         } else {
-            // 对齐完成，触发上车动画
+            // Aligned: play enter-car
             this.waypoints = [];
             this.waypointIdx = 0;
             this.targetDir = null;
@@ -236,7 +236,7 @@ export class VehicleSystem {
         }
     }
 
-    // 上车动画结束
+    // Enter-car clip finished
     onEnterAnimFinished() {
         const c = this.ctrl;
         const v = this.active;
@@ -244,7 +244,7 @@ export class VehicleSystem {
         c.playerCapsule.updateMatrixWorld(true);
         const offsetY = this.boardingPoint!.y - c.playerCapsule.position.y;
 
-        // 挂载到车辆并设置座位偏移
+        // Attach to vehicle and apply seat offset
         c.controllerMode = 1;
         c.mobileControls?.syncControllerModeBtn(1);
         c.cam.setOverShoulder(false);
@@ -255,7 +255,7 @@ export class VehicleSystem {
         c.onVehicleEnter?.(v);
     }
 
-    // 触发下车流程
+    // Start exit
     exit() {
         const c = this.ctrl;
         const v = this.active;
@@ -266,7 +266,7 @@ export class VehicleSystem {
         this.waypointIdx = 0;
         this.targetDir = null;
 
-        // 静止才播放下车动画
+        // Exit clip only when stopped
         const vel = v.chassisBody.linvel();
         if (Math.sqrt(vel.x ** 2 + vel.z ** 2) < 0.1) {
             c.animation.playByName("exitCar");
@@ -286,7 +286,7 @@ export class VehicleSystem {
         this.setTransition();
     }
 
-    // 取消上车流程
+    // Cancel boarding walk
     cancelBoarding() {
         this.isMovingToBoarding = false;
         this.waypoints = [];
@@ -294,30 +294,30 @@ export class VehicleSystem {
         this.targetDir = null;
     }
 
-    // 更新车辆驾驶
+    // Drive update
     updateVehicle(delta: number) {
         const c = this.ctrl;
         const v = this.active;
         if (!v || !this.world) return;
         const { vehicleController, chassisBody, vehicleGroup } = v;
 
-        // 坡度补偿
+        // Slope compensation
         const rotation = chassisBody.rotation();
         const quat = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
         const forward = new THREE.Vector3(1, 0, 0).applyQuaternion(quat);
         const slopeAngle = Math.asin(forward.y);
         const factor = (slopeAngle < -0.05 && c.input.fwd) ? -Math.sin(slopeAngle) * 10 : 1;
 
-        // 驱动力
+        // Engine force
         const accelerateForce = this.params.power.accelerateForce * v.speedMultiplier;
         const engineForce = (Number(c.input.fwd) - Number(c.input.bkd)) * accelerateForce * factor;
         for (let i = 0; i < 4; i++) vehicleController.setWheelEngineForce(i, engineForce);
 
-        // 制动
+        // Brake
         const wheelBrake = Number(c.input.space) * this.params.power.brakeForce * delta;
         for (let i = 0; i < 4; i++) vehicleController.setWheelBrake(i, wheelBrake);
 
-        // 转向
+        // Steering
         const currentSteering = vehicleController.wheelSteering(0) || 0;
         const steerDir = Number(c.input.lft) - Number(c.input.rgt);
         const steerSpeed = steerDir === 0 ? this.params.steering.steerReturnSpeed : this.params.steering.steerSpeed;
@@ -325,12 +325,12 @@ export class VehicleSystem {
         vehicleController.setWheelSteering(0, steering);
         vehicleController.setWheelSteering(1, steering);
 
-        // 漂移摩擦
+        // Drift friction
         const driftFriction = ((c.input.rgt || c.input.lft) && c.input.shift) ? 0.5 : 2;
         vehicleController.setWheelSideFrictionStiffness(2, driftFriction);
         vehicleController.setWheelSideFrictionStiffness(3, driftFriction);
 
-        // 防卡死自动脱困：有油门却长时间几乎不动，沿行进方向施加向上+前向冲量顶离
+        // Unstick: throttle held but almost stopped for too long — hop up + forward along travel
         const linv = chassisBody.linvel();
         if ((c.input.fwd || c.input.bkd) && Math.hypot(linv.x, linv.z) < this.stuckSpeedThreshold) {
             this.stuckTimer += delta;
@@ -339,10 +339,10 @@ export class VehicleSystem {
         }
         if (this.stuckTimer > this.stuckTimeThreshold) {
             const g = 9.81;
-            const vUp = Math.sqrt(2 * g * v.size.h * this.stuckHopRatio); // 抬升到约车高×ratio 所需的起跳速度
+            const vUp = Math.sqrt(2 * g * v.size.h * this.stuckHopRatio); // takeoff speed to reach ~height*ratio
             const mass = chassisBody.mass();
             const dir = c.input.bkd ? -1 : 1;
-            // 车身水平前向（局部 +X，与坡度补偿一致）
+            // Chassis horizontal forward (local +X, same as slope compensation)
             const fl = Math.hypot(forward.x, forward.z);
             const fx = fl > 0.001 ? forward.x / fl : 0;
             const fz = fl > 0.001 ? forward.z / fl : 0;
@@ -355,7 +355,7 @@ export class VehicleSystem {
 
         this.updateInertia(delta);
 
-        // 相机跟随
+        // Camera follow
         if (!c.isFirstPerson) {
             const lookTarget = c.cam.springTarget(vehicleGroup.position, delta).clone();
             c.camera.position.sub(c.controls.target);
@@ -368,21 +368,21 @@ export class VehicleSystem {
 
             c.cam.updateWithRaycast(c.controls.target, desiredDist);
 
-            // 相机跟随车辆速度方向：绕 Y 轴把相机转到行进（速度）方向的正后方，高度不变
+            // Follow velocity: yaw camera to sit behind travel direction, keep height
             if ((c.input.fwd || c.input.bkd) && this.params.followVehicleDirection) {
                 const vel = chassisBody.linvel();
                 if (Math.hypot(vel.x, vel.z) > 0.3) {
-                    // 目标方位角：相机应位于速度方向的正后方
+                    // Target azimuth: camera behind velocity
                     const targetAngle = Math.atan2(-vel.x, -vel.z);
-                    // 当前相机相对看向点的水平方位角与半径
+                    // Current camera azimuth and horizontal radius about look-at
                     const offX = c.camera.position.x - c.controls.target.x;
                     const offZ = c.camera.position.z - c.controls.target.z;
                     const radius = Math.hypot(offX, offZ);
                     const curAngle = Math.atan2(offX, offZ);
-                    // 沿最短弧插值
+                    // Shortest-arc lerp
                     const diff = Math.atan2(Math.sin(targetAngle - curAngle), Math.cos(targetAngle - curAngle));
                     const newAngle = curAngle + diff * c.cam.vehicleTurnLerp;
-                    // 修改改XZ，保持水平半径与 Y 高度不变
+                    // Rewrite XZ; keep horizontal radius and Y
                     c.camera.position.x = c.controls.target.x + Math.sin(newAngle) * radius;
                     c.camera.position.z = c.controls.target.z + Math.cos(newAngle) * radius;
                     c.controls.update();
@@ -390,7 +390,7 @@ export class VehicleSystem {
             }
         }
 
-        // 翻车自动复位
+        // Auto-reset if flipped
         const vehicleUp = c.upVector.clone().applyQuaternion(vehicleGroup.quaternion);
         if (vehicleUp.angleTo(c.upVector) > Math.PI / 2) {
             const size = new THREE.Vector3();
@@ -403,7 +403,7 @@ export class VehicleSystem {
         }
     }
 
-    // 步进物理世界
+    // Step physics world
     updateInertia(delta: number) {
         if (!this.world) return;
         this.world.timestep = delta;
@@ -414,7 +414,7 @@ export class VehicleSystem {
             vehicleController.updateVehicle(delta);
             if (chassisBody.isSleeping()) continue;
 
-            // 限制最大速度
+            // Clamp max speed
             const vel = chassisBody.linvel();
             const speed = new THREE.Vector3(vel.x, vel.y, vel.z).length();
             const max = this.params.power.maxSpeed * v.speedMultiplier;
@@ -423,7 +423,7 @@ export class VehicleSystem {
                 chassisBody.setLinvel(new this.RAPIER.Vector3(vel.x * s, vel.y * s, vel.z * s), true);
             }
 
-            // 同步视觉位置
+            // Sync visual pose
             const t = chassisBody.translation();
             const r = chassisBody.rotation();
             vehicleGroup.position.set(t.x, t.y, t.z);
@@ -432,7 +432,7 @@ export class VehicleSystem {
         }
     }
 
-    // 等待车辆停稳后清除速度
+    // After a delay, zero velocities once the vehicle has settled
     setTransition() {
         if (this.ctrl.isChangeControllerTransitionTimer) {
             clearTimeout(this.ctrl.isChangeControllerTransitionTimer);
@@ -444,7 +444,7 @@ export class VehicleSystem {
         }, 3000);
     }
 
-    // 清除车辆速度
+    // Zero vehicle velocity
     private clearVelocity(v: VehicleInstance) {
         if (!v || !this.world || !this.RAPIER) return;
         const { chassisBody, vehicleController } = v;

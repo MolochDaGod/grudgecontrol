@@ -13,7 +13,7 @@ import { LightProbeGridHelper } from "three/addons/helpers/LightProbeGridHelper.
 
 
 export function createSceneSetup({ container }) {
-    // ==================== 渲染器 ====================
+    // ==================== Renderer ====================
     const renderer = new WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -23,7 +23,7 @@ export function createSceneSetup({ container }) {
     renderer.shadowMap.type = VSMShadowMap;
     container.appendChild(renderer.domElement);
 
-    // ==================== 场景 & 相机 ====================
+    // ==================== Scene & camera ====================
     const scene = new Scene();
     const camera = new PerspectiveCamera(
         60,
@@ -32,13 +32,13 @@ export function createSceneSetup({ container }) {
         2000
     );
 
-    // ==================== 控制器 ====================
+    // ==================== Controls ====================
     const controls = new MapControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
     controls.maxDistance = 2000;
 
-    // ==================== 参数 ====================
+    // ==================== Params ====================
     const params = {
         showLightHelper: true,
         lightAzimuth: 45,
@@ -53,7 +53,7 @@ export function createSceneSetup({ container }) {
         countX: 20, countY: 4, countZ: 10,
     };
 
-    // ==================== 平行光 ====================
+    // ==================== Directional light ====================
     const dirLight = new DirectionalLight(0xfff2dc, params.lightIntensity);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.setScalar(2048);
@@ -80,7 +80,7 @@ export function createSceneSetup({ container }) {
 
     updateLightPosition();
 
-    // ==================== 光探针 ====================
+    // ==================== Light probes ====================
     let probes = null;
     let probesHelper = null;
     let isBaking = false;
@@ -98,7 +98,7 @@ export function createSceneSetup({ container }) {
                 params.countX, params.countY, params.countZ
             );
             probes.position.set(params.boundsX, params.boundsY, params.boundsZ);
-            probes.updateMatrixWorld(true); // 强制更新世界矩阵，否则 bake() 读到旧位置
+            probes.updateMatrixWorld(true); // Force world-matrix update, otherwise bake() reads a stale position
             if (probesHelper) probesHelper.visible = false;
 
             const far = Math.max(params.sizeX, params.sizeY, params.sizeZ) * 2;

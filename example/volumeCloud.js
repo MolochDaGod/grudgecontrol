@@ -1,4 +1,4 @@
-// 来源：https://threejs.org/examples/?q=cloud#webgl_volume_cloud
+// Source: https://threejs.org/examples/?q=cloud#webgl_volume_cloud
 import {
     BackSide,
     BoxGeometry,
@@ -135,9 +135,9 @@ const fragmentShader = `
     }
 `;
 
-// 生成云纹理
+// Generate cloud texture
 function createCloudTexture(size, noiseScale) {
-    // 体素密度
+    // Voxel density
     const data = new Uint8Array(size * size * size);
     const perlin = new ImprovedNoise();
     const vector = new Vector3();
@@ -153,7 +153,7 @@ function createCloudTexture(size, noiseScale) {
         }
     }
 
-    // 上传纹理
+    // Upload texture
     const texture = new Data3DTexture(data, size, size, size);
     texture.format = RedFormat;
     texture.minFilter = LinearFilter;
@@ -163,9 +163,9 @@ function createCloudTexture(size, noiseScale) {
     return texture;
 }
 
-// 创建体积云
+// Create volume cloud
 export function createVolumeCloud(options = {}) {
-    // 默认参数
+    // Defaults
     const {
         size = 96,
         noiseScale = 0.05,
@@ -177,7 +177,7 @@ export function createVolumeCloud(options = {}) {
         scale = [3, 1.5, 2.2],
     } = options;
 
-    // 构造材质
+    // Build material
     const texture = createCloudTexture(size, noiseScale);
     const material = new RawShaderMaterial({
         glslVersion: GLSL3,
@@ -198,7 +198,7 @@ export function createVolumeCloud(options = {}) {
         depthWrite: true,
     });
 
-    // 返回网格
+    // Return mesh
     const cloud = new Mesh(new BoxGeometry(1, 1, 1), material);
     cloud.name = "volumeCloud";
     cloud.scale.set(...scale);
@@ -206,24 +206,24 @@ export function createVolumeCloud(options = {}) {
     return cloud;
 }
 
-// 更新体积云
+// Update volume cloud
 export function updateVolumeCloud(cloud, camera, rotationSpeed = 0) {
     if (!cloud?.material?.uniforms || !camera) return;
     if (!cloud.material.visible) return;
 
-    // 同步相机
+    // Sync camera
     const uniforms = cloud.material.uniforms;
     camera.getWorldPosition(uniforms.cameraPos.value);
     uniforms.frame.value += 1;
-    // 可选旋转
+    // Optional rotation
     if (rotationSpeed !== 0) cloud.rotation.y += rotationSpeed / 60;
 }
 
-// 释放体积云
+// Dispose volume cloud
 export function disposeVolumeCloud(cloud) {
     if (!cloud) return;
 
-    // 释放显存
+    // Free GPU memory
     cloud.geometry?.dispose();
     cloud.material?.uniforms?.map?.value?.dispose();
     cloud.material?.dispose();

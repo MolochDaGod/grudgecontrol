@@ -38,7 +38,7 @@ init();
 async function init() {
     const cont = document.querySelector("#container");
 
-    // 渲染器
+    // Renderer
     renderer = new WebGLRenderer({ antialias: true });
     renderer.setSize(cont.clientWidth, cont.clientHeight);
     renderer.shadowMap.enabled = true;
@@ -47,12 +47,12 @@ async function init() {
     renderer.setAnimationLoop(animate);
     cont.appendChild(renderer.domElement);
 
-    // 相机
+    // Camera
     camera = new PerspectiveCamera(60, cont.clientWidth / cont.clientHeight, 0.01, 1000);
     camera.position.copy(pos);
     camera.lookAt(pos.x, pos.y, pos.z + 1);
 
-    // 控制器
+    // Controls
     controls = new MapControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.maxDistance = 2000;
@@ -61,11 +61,11 @@ async function init() {
     controls.maxPolarAngle = Math.PI / 2;
     controls.target.set(pos.x, pos.y, pos.z + 1);
 
-    // 环境光
+    // Ambient light
     const ambient = new AmbientLight(0xffffff, 10);
     scene.add(ambient);
 
-    // 背景
+    // Background
     new HDRLoader().load(
         "./img/1.hdr",
         (texture) => {
@@ -73,10 +73,10 @@ async function init() {
             scene.background = texture;
         },
         undefined,
-        (err) => console.warn("HDR 加载失败：", err)
+        (err) => console.warn("HDR load failed:", err)
     );
 
-    // 帧率
+    // FPS
     stats = new Stats();
     Object.assign(stats.dom.style, {
         position: "fixed",
@@ -88,7 +88,7 @@ async function init() {
     });
     document.body.appendChild(stats.dom);
 
-    // 加载3DGS场景
+    // Load 3DGS scene
     initGltfLoader();
     const spark = new SparkRenderer({ renderer });
     scene.add(spark);
@@ -100,10 +100,10 @@ async function init() {
     });
     scene.add(splat);
 
-    // 加载碰撞体
+    // Load collider
     const colliderGltf = await gltfLoader.loadAsync("./glb/3dgsCollider.glb");
 
-    // 人物控制器
+    // Player controller
     player = new playerController();
     await player.init({
         scene,
@@ -131,24 +131,24 @@ async function init() {
         enableOverShoulderView: true,
     });
 
-    // 设置材质
+    // Set materials
     player.getPlayerModel()?.traverse((child) => {
         if (child.isMesh) {
-            // 设置金属材质
+            // Apply metallic material
             child.material.metalness = 0.8;
             child.material.roughness = 0.0;
         }
     });
 
     window.addEventListener("resize", onWindowResize, false);
-    // 监听按键
+    // Key listener
     window.addEventListener("keydown", (e) => {
         if (e.code !== "KeyZ") return;
-        if (isScaling) return; // 缩放中不运行
+        if (isScaling) return; // Skip while a scale animation is running
         isSmallScale = !isSmallScale;
         animateToScale(isSmallScale ? scaleSmall : scaleNormal, 1);
     });
-    // 等待高斯泼溅模型加载完毕再隐藏 loader
+    // Hide loader after the Gaussian splat model has loaded
     await splat.initialized.catch(() => { });
     window.hideLoader();
 }
@@ -179,7 +179,7 @@ function animateToScale(targetScale, duration = 0.5) {
     scaleAnimFrame = requestAnimationFrame(tick);
 }
 
-// 初始化glb加载器
+// Init GLB loader
 function initGltfLoader() {
     gltfLoader = new GLTFLoader();
     const dracoLoader = new DRACOLoader();
@@ -192,7 +192,7 @@ function initGltfLoader() {
 }
 
 
-// 每帧调用
+// Per-frame update
 function animate() {
     if (player) {
         player.update();

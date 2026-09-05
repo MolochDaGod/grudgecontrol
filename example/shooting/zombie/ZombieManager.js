@@ -3,30 +3,30 @@ import { ZombieEntity } from "./ZombieEntity.js";
 
 export class ZombieManager {
     constructor(scene, options = {}) {
-        // ==================== 场景引用 ====================
+        // ==================== Scene refs ====================
         this._scene = scene;
 
-        // ==================== 丧尸配置 ====================
-        this._loader = options.loader ?? null; // GLTF 加载器
-        this._collider = options.collider ?? null; // 静态碰撞体
-        this._modelUrl = options.modelUrl ?? ""; // 模型路径
-        this._scale = options.scale ?? 0.01; // 模型缩放
-        this._rotateY = options.rotateY ?? Math.PI; // 模型初始朝向
-        this._speed = options.speed ?? 120; // 移速基准值
-        this._walkAnim = options.walkAnim ?? "walking"; // 行走动画名
-        this._runAnim = options.runAnim ?? "running"; // 奔跑动画名
-        this._idleAnim = options.idleAnim ?? "Idle"; // 待机动画名
-        this._punchAnim = options.punchAnim ?? "punching"; // 攻击动画名
-        this._deathAnim = options.deathAnim ?? "dying"; // 死亡动画名
-        // ==================== 运行状态 ====================
+        // ==================== Zombie config ====================
+        this._loader = options.loader ?? null; // GLTF loader
+        this._collider = options.collider ?? null; // Static collider
+        this._modelUrl = options.modelUrl ?? ""; // Model path
+        this._scale = options.scale ?? 0.01; // Model scale
+        this._rotateY = options.rotateY ?? Math.PI; // Initial model yaw
+        this._speed = options.speed ?? 120; // Move-speed baseline
+        this._walkAnim = options.walkAnim ?? "walking"; // Walk clip name
+        this._runAnim = options.runAnim ?? "running"; // Run clip name
+        this._idleAnim = options.idleAnim ?? "Idle"; // Idle clip name
+        this._punchAnim = options.punchAnim ?? "punching"; // Attack clip name
+        this._deathAnim = options.deathAnim ?? "dying"; // Death clip name
+        // ==================== Runtime ====================
         this._zombies = new Map(); // id → ZombieEntity
-        this._wave = 0; // 当前波次
-        this._nextId = 0; // 自增 id 计数器
+        this._wave = 0; // Current wave
+        this._nextId = 0; // Auto-increment id
     }
 
-    // ==================== 波次 / 生成 ====================
+    // ==================== Waves / spawn ====================
 
-    // 按波次配置批量生成丧尸
+    // Spawn zombies in bulk from a wave config
     async startWave(waveConfig = {}) {
         if (!this._loader || !this._collider || !this._modelUrl) {
             console.warn("[ZombieManager] Missing loader, collider or modelUrl");
@@ -37,17 +37,17 @@ export class ZombieManager {
 
         const origin = waveConfig.origin?.clone?.() ?? waveConfig.origin ?? new Vector3();
         const count = waveConfig.count ?? 5;
-        const radius = waveConfig.radius ?? 10; // 默认半径 10
-        const spawnHeight = waveConfig.spawnHeight ?? 0.5; // 对应参数 y
+        const radius = waveConfig.radius ?? 10; // Default radius 10
+        const spawnHeight = waveConfig.spawnHeight ?? 0.5; // Maps to y
 
         let spawnPoints = waveConfig.spawnPoints;
 
-        // 如果没有预设点，则根据半径和高度生成随机点
+        // If no preset points, scatter random points in a disk of the given radius/height
         if (!spawnPoints) {
             spawnPoints = [];
             for (let i = 0; i < count; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const r = Math.sqrt(Math.random()) * radius; // 使用开方确保在圆盘内分布均匀
+                const r = Math.sqrt(Math.random()) * radius; // Sqrt so points are uniform in the disk
                 const x = Math.cos(angle) * r;
                 const z = Math.sin(angle) * r;
                 spawnPoints.push(new Vector3(origin.x + x, origin.y + spawnHeight, origin.z + z));
@@ -57,7 +57,7 @@ export class ZombieManager {
         await Promise.all(spawnPoints.map((point) => this.spawnZombie(point)));
     }
 
-    // 在指定位置生成单个丧尸，返回其 id
+    // Spawn one zombie at a position; returns its id
     async spawnZombie(position) {
         const id = `zombie_${this._nextId++}`;
         const entity = new ZombieEntity(this._scene, id);
@@ -78,16 +78,16 @@ export class ZombieManager {
         return id;
     }
 
-    // ==================== 命中 ====================
+    // ==================== Hits ====================
 
-    // 武器命中回调，转发伤害给对应实体
+    // Weapon hit callback — forward damage to the matching entity
     onHit(id, damage) {
         const entity = this._zombies.get(id);
         if (!entity || entity.isDead) return;
         entity.takeDamage(damage);
     }
 
-    // ==================== 主循环 ====================
+    // ==================== Main loop ====================
 
     update(dt, playerPos) {
         if (!playerPos) return;
@@ -95,7 +95,7 @@ export class ZombieManager {
         for (const [id, entity] of this._zombies.entries()) {
             entity.update(dt, playerPos);
 
-            // 如果丧尸已死亡且超过10秒，则彻底移除
+            // Remove the zombie entirely once it has been dead for 10s
             if (entity.isDead && entity.getDeathTime() >= 10) {
                 entity.destroy();
                 this._zombies.delete(id);
@@ -105,7 +105,7 @@ export class ZombieManager {
         this._resolveZombieOverlaps();
     }
 
-    // 解决丧尸之间的胶囊重叠（两两推开，仅处理水平方向）
+    // Separate overlapping zombie capsules (pairwise push, horizontal only)
     _resolveZombieOverlaps() {
         const entities = Array.from(this._zombies.values()).filter(e => !e.isDead);
         for (let i = 0; i < entities.length; i++) {
@@ -128,7 +128,7 @@ export class ZombieManager {
                 if (distSq >= minDist * minDist || distSq <= 1e-10) continue;
 
                 const dist = Math.sqrt(distSq);
-                const half = (minDist - dist) * 0.5; // 各推开一半
+                const half = (minDist - dist) * 0.5; // Push each half the overlap
                 const nx = dx / dist;
                 const nz = dz / dist;
                 aCapsule.position.x -= nx * half;
@@ -139,7 +139,7 @@ export class ZombieManager {
         }
     }
 
-    // ==================== 销毁 ====================
+    // ==================== Destroy ====================
 
     destroy() {
         for (const entity of this._zombies.values()) {

@@ -4,7 +4,7 @@ import { SpineIK } from "./spineIK.js";
 
 const spineBoneNames = ["mixamorigSpine", "mixamorigSpine1", "mixamorigSpine2"];
 
-// 运动状态集合（用于判断 isMoving）
+// Locomotion states used to decide isMoving
 const locomotionStates = new Set([
     "idle",
     "walking",
@@ -17,52 +17,52 @@ const locomotionStates = new Set([
     "flying",
 ]);
 
-// 允许执行战斗逻辑的运动状态（上半身分离后，奔跑时也可开火/换弹）
+// Locomotion states that allow combat (after upper-body split, run can still fire/reload)
 const combatAllowedLocomotion = new Set([
     "idle", "walking", "walking_backward", "left_walking", "right_walking", "running",
 ]);
 
-const minPitchAngle = -Math.PI * (60 / 180); // 俯仰最小角（向下）
-const maxPitchAngle = Math.PI * (40 / 180);  // 俯仰最大角（向上）
+const minPitchAngle = -Math.PI * (60 / 180); // Min pitch (look down)
+const maxPitchAngle = Math.PI * (40 / 180);  // Max pitch (look up)
 
 export class LocalPlayer {
     constructor({ scene, camera, controls }) {
-        // ==================== 场景引用 ====================
+        // ==================== Scene refs ====================
         this._scene = scene;
         this._camera = camera;
         this._controls = controls;
 
-        // ==================== 核心对象 ====================
-        this._player = null; // playerController 实例
-        this.spineIK = null; // 脊椎 IK 实例
+        // ==================== Core objects ====================
+        this._player = null; // playerController instance
+        this.spineIK = null; // Spine IK instance
 
-        // ==================== 运动状态 ====================
-        this.pitchTarget1P = 0; // 第一人称俯仰累积值
-        this.isMoving = false; // 当前帧是否处于移动状态（由 onAnimationChange 更新）
-        this._locomotionState = "idle"; // 当前运动动画状态名
+        // ==================== Motion state ====================
+        this.pitchTarget1P = 0; // First-person pitch accumulator
+        this.isMoving = false; // Whether this frame is a moving state (updated by onAnimationChange)
+        this._locomotionState = "idle"; // Current locomotion clip state name
 
-        // ==================== 配置 ====================
+        // ==================== Config ====================
         this._mouseSensitivity = 5;
-        this._firstPersonPitchOffset = 0; // 第一人称相机俯仰初始偏移
+        this._firstPersonPitchOffset = 0; // First-person camera pitch offset
 
-        // ==================== 外部注入 ====================
-        this._isGunEngagedFn = null; // 由 WeaponController 注入，判断是否持枪
+        // ==================== External inject ====================
+        this._isGunEngagedFn = null; // Injected by WeaponController — whether a gun is held
 
-        // ==================== 上半身动画层 ====================
-        this._upperMixer = null;          // 上半身专用 AnimationMixer（root = 模型根节点）
-        this._upperBodyBoneNames = null;  // 脊椎以上所有骨骼名称集合，用于过滤 partial clip
-        this._upperBodyBones = null;      // 脊椎以上骨骼引用数组（缓存，避免每帧 getObjectByName）
-        this._upperBoneSnapshots = null;  // 主 mixer 骨骼值快照
+        // ==================== Upper-body animation layer ====================
+        this._upperMixer = null;          // Upper-body AnimationMixer (root = model root)
+        this._upperBodyBoneNames = null;  // Names of bones at/above the spine, used to filter partial clips
+        this._upperBodyBones = null;      // Spine-and-above bone refs (cached to avoid getObjectByName each frame)
+        this._upperBoneSnapshots = null;  // Snapshot of main-mixer bone values
         this._upperActions = new Map();   // key → AnimationAction
-        this._upperState = null;          // 当前上半身动作
+        this._upperState = null;          // Current upper-body action
 
-        // ==================== 走路瞄准修正 ====================
-        this._idleHipsQ = null; // 静止时保存的 hips 本地四元数，用于走路时抵消 hips 走路偏移
+        // ==================== Walk-aim correction ====================
+        this._idleHipsQ = null; // Idle hips local quaternion; used while walking to cancel hips walk offset
     }
 
-    // ==================== 初始化 ====================
+    // ==================== Init ====================
 
-    // 初始化 playerController、骨骼 IK、事件回调
+    // Init playerController, bone IK, and event callbacks
     async init(config) {
         const { mouseSensitivity = 5, ...rest } = config;
         this._mouseSensitivity = mouseSensitivity;
@@ -78,7 +78,7 @@ export class LocalPlayer {
             ...rest,
         });
 
-        // 绑定脊椎 & 头部骨骼
+        // Bind spine & head bones
         const model = this._player.getPlayerModel();
         const spineBones = spineBoneNames
             .map((n) => model?.getObjectByName(n))
@@ -87,9 +87,10 @@ export class LocalPlayer {
         const headBone = model?.getObjectByName(headBoneName) ?? null;
         this.spineIK = new SpineIK(spineBones, headBone);
 
-        // 上半身 mixer：root = 模型根节点（与主 mixer 一致，路径解析最可靠）
-        // 通过 partial clip（只含脊椎以上骨骼的 track）来限制写入范围，
-        // 主 mixer 更新后再更新 upper mixer，后者覆写脊椎以上骨骼，下半身保持 locomotion 值。
+        // Upper-body mixer: root = model root (same as main mixer — most reliable path resolution)
+        // Partial clips (tracks for spine-and-above bones only) limit the write range.
+        // After the main mixer updates, the upper mixer overwrites spine-and-above bones;
+        // the lower body keeps locomotion values.
         if (spineBones.length > 0) {
             this._upperBodyBoneNames = new Set();
             this._upperBodyBones = [];
@@ -97,12 +98,12 @@ export class LocalPlayer {
                 this._upperBodyBoneNames.add(b.name);
                 this._upperBodyBones.push(b);
             });
-            // 预分配快照数组，避免每帧 GC
+            // Preallocate snapshot array to avoid per-frame GC
             this._upperBoneSnapshots = this._upperBodyBones.map(() => new Quaternion());
             this._upperMixer = new AnimationMixer(model);
         }
 
-        // 监听动画切换，更新 isMoving
+        // Listen for animation switches and update isMoving
         this._player.onAnimationChange = (name) => {
             if (locomotionStates.has(name)) this._locomotionState = name;
             this.isMoving =
@@ -113,23 +114,23 @@ export class LocalPlayer {
                 name === "running";
         };
 
-        // 接管第一人称鼠标移动
+        // Take over first-person mouse look
         this._player.onTowardChange = (dx, dy, speed) => {
             if (!this._player.getIsFirstPerson()) return;
 
-            // 水平朝向
+            // Yaw
             this._player.getPlayerCapsule().rotateY(
                 -dx * speed * this._mouseSensitivity
             );
 
-            // 俯仰角累积
+            // Pitch accumulator
             this.pitchTarget1P = MathUtils.clamp(
                 this.pitchTarget1P + (-dy * speed * this._mouseSensitivity),
                 minPitchAngle,
                 maxPitchAngle
             );
 
-            // 未持枪时直接驱动相机
+            // Drive the camera directly when unarmed
             if (!this._isGunEngagedFn?.()) {
                 this._camera.rotation.x = MathUtils.clamp(
                     this._camera.rotation.x + (-dy * speed * this._mouseSensitivity),
@@ -139,7 +140,7 @@ export class LocalPlayer {
             }
         };
 
-        // 视角切换
+        // View toggle
         this._player.onViewChange = (isFirstPerson) => {
             if (isFirstPerson) {
                 if (headBoneName) {
@@ -152,25 +153,25 @@ export class LocalPlayer {
                 }
                 this._camera.rotation.x = this._firstPersonPitchOffset;
                 this._player.setEnableToward(false);
-                // 同步控制器俯仰角
+                // Sync controller pitch
                 const targetPolar = this._controls.getPolarAngle() - Math.PI / 2 + Math.PI * (7.5 / 180);
                 this.pitchTarget1P = targetPolar;
-                // 航向角偏移
+                // Yaw offset
                 this._player.getPlayerCapsule().rotateY(-Math.PI * (17 / 180));
             } else {
                 this._player.setEnableToward(true);
-                // 持枪瞄准状态下刷新一次动画，保证骨骼复原
+                // Refresh animation once while aiming so bones snap back
                 if (this._player.getCurrentPlayerAnimationName().includes("rifle_idle_aim")) {
                     this._player.playAnimation("idle");
                 }
-                // 同步第一人称俯仰角
+                // Sync first-person pitch
                 const targetPolar = Math.PI / 2 + this.pitchTarget1P - Math.PI * (7.5 / 180);
                 this._controls.minPolarAngle = targetPolar;
                 this._controls.maxPolarAngle = targetPolar;
                 this._controls.update();
                 this._controls.minPolarAngle = minPitchAngle + Math.PI / 2;
                 this._controls.maxPolarAngle = maxPitchAngle + Math.PI / 2;
-                // 航向角偏移
+                // Yaw offset
                 const delta = Math.PI * (17 / 180);
                 const offset = this._camera.position.clone().sub(this._controls.target);
                 offset.applyAxisAngle(new Vector3(0, 1, 0), delta);
@@ -179,22 +180,22 @@ export class LocalPlayer {
             }
         };
 
-        // 限制第三人称俯仰角
+        // Clamp third-person pitch
         this._controls.minPolarAngle = minPitchAngle + Math.PI / 2;
         this._controls.maxPolarAngle = maxPitchAngle + Math.PI / 2;
     }
 
-    // ==================== 外部注入 ====================
+    // ==================== External inject ====================
 
-    // 由 WeaponController 注入，让 1P 俯仰驱动能感知持枪状态
+    // Injected by WeaponController so 1P pitch drive knows whether a gun is held
     setGunEngagedGetter(fn) {
         this._isGunEngagedFn = fn;
     }
 
-    // ==================== 主循环 ====================
+    // ==================== Main loop ====================
 
-    // 每帧驱动动画与物理
-    // dt 须由主循环传入，上半身 mixer 在主 mixer 之后更新才能正确覆写骨骼
+    // Drive animation and physics each frame
+    // dt must come from the main loop; the upper mixer updates after the main mixer so it can overwrite bones
     update(dt) {
         this._player?.update(dt);
 
@@ -202,11 +203,12 @@ export class LocalPlayer {
             const ua = this._upperState;
             if (!ua) return;
 
-            // Three.js PropertyMixer.apply() 有变更检测优化：仅当 accu0 ≠ accu1 时
-            // 才调用 setValue() 写入骨骼。对于完全相同帧的动画（两帧值一致），
-            // 两个 accu buffer 永远相等，导致 setValue() 被跳过，主 mixer 的
-            // locomotion 动画透过来。修复：每帧更新前把两个 accu buffer 填为 NaN，
-            // 使比较永远不相等，强制 setValue() 每帧执行，确保上半身覆盖生效。
+            // Three.js PropertyMixer.apply() has a change-detection optimization: setValue()
+            // is only called when accu0 ≠ accu1. For clips with identical consecutive frames,
+            // the two accu buffers stay equal, so setValue() is skipped and the main mixer's
+            // locomotion pose leaks through. Fix: fill both accu buffers with NaN before
+            // each update so the comparison always fails and setValue() runs every frame,
+            // ensuring the upper-body override takes effect.
             if (ua._propertyBindings) {
                 for (const pm of ua._propertyBindings) {
                     if (pm?.buffer) {
@@ -219,26 +221,26 @@ export class LocalPlayer {
         }
     }
 
-    // ==================== 上半身动画层 ====================
+    // ==================== Upper-body animation layer ====================
 
-    // 从指定 clip 的 t=0 帧直接读取 hips 四元数
+    // Read the hips quaternion from frame t=0 of the named clip
     initIdleHipsQ(clipName) {
         const clip = this._player?.animation?.clips?.find(c => c.name === clipName);
-        if (!clip) { console.warn(`initIdleHipsQ: 找不到 "${clipName}"`); return; }
+        if (!clip) { console.warn(`initIdleHipsQ: clip not found "${clipName}"`); return; }
         const track = clip.tracks.find(t => t.name === 'mixamorigHips.quaternion');
         if (!track || track.values.length < 4) return;
         this._idleHipsQ = new Quaternion(track.values[0], track.values[1], track.values[2], track.values[3]);
     }
 
-    // 在上半身 mixer 上注册一个动画
+    // Register a clip on the upper-body mixer
     registerUpperAnimation(key, clipName, opts = {}) {
         if (!this._upperMixer || !this._upperBodyBoneNames) return;
         const clips = this._player?.animation?.clips;
         if (!clips) return;
         const clip = clips.find(c => c.name === clipName);
-        if (!clip) { console.warn(`registerUpperAnimation: 找不到 "${clipName}"`); return; }
+        if (!clip) { console.warn(`registerUpperAnimation: clip not found "${clipName}"`); return; }
 
-        // 只保留脊椎以上骨骼的 track，其余 track（hips、腿部等）丢弃
+        // Keep only tracks for bones at/above the spine; drop the rest (hips, legs, etc.)
         const upperTracks = clip.tracks.filter(t => {
             const boneName = t.name.split('.')[0];
             return this._upperBodyBoneNames.has(boneName);
@@ -261,18 +263,18 @@ export class LocalPlayer {
         }
     }
 
-    // 播放上半身动画（仅覆写脊椎以上骨骼）
+    // Play an upper-body clip (overwrites spine-and-above bones only)
     playUpperBody(key, opts = {}) {
         if (!this._upperMixer) return;
         const next = this._upperActions.get(key);
-        if (!next) { console.warn(`playUpperBody: "${key}" 未注册`); return; }
+        if (!next) { console.warn(`playUpperBody: "${key}" is not registered`); return; }
 
         const fade = opts.fade ?? 0.18;
         const prev = this._upperState;
 
         if (!opts.force && prev === next) return;
 
-        // 直接设为 1，从第一帧起就以满权重覆盖主 mixer。
+        // Weight 1 immediately so the override covers the main mixer from frame 0
         if (prev && prev !== next) prev.fadeOut(fade);
 
         next.reset();
@@ -282,8 +284,8 @@ export class LocalPlayer {
         this._upperState = next;
     }
 
-    // 走路/奔跑时修正 spine[0] 四元数，抵消 hips 走路旋转偏移
-    // 使 spine0 的世界朝向等效于静止时（idle hips × spine_local），
+    // While walking/running, correct spine[0] quaternion to cancel hips walk-rotation offset
+    // so spine0 world facing matches idle (idle hips × spine_local)
     applyHipsCorrection() {
         if (!this._idleHipsQ || !this.spineIK?.spineBones?.length) return;
         const hipsBone = this._player?.getPlayerModel()?.getObjectByName("mixamorigHips");
@@ -296,18 +298,18 @@ export class LocalPlayer {
         spine0.updateWorldMatrix(false, false);
     }
 
-    // 停止上半身动画，让下半身（全身）动画完全接管
+    // Stop upper-body animation so full-body (lower-body) animation takes over completely
     stopUpperBody(fade = 0.18) {
         if (!this._upperState) return;
         this._upperState.fadeOut(fade);
         this._upperState = null;
     }
 
-    // ==================== 工具方法 ====================
+    // ==================== Helpers ====================
 
     isCombatLocomotionAllowed() { return combatAllowedLocomotion.has(this._locomotionState); }
 
-    // ==================== playerController 代理 ====================
+    // ==================== playerController proxy ====================
 
     getIsFirstPerson() { return this._player?.getIsFirstPerson() ?? false; }
     getIsFlying() { return this._player?.getIsFlying() ?? false; }

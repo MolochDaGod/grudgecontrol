@@ -3,60 +3,60 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 
 export class ZombieEntity {
     constructor(scene, id) {
-        // ==================== 场景引用 ====================
+        // ==================== Scene refs ====================
         this._scene = scene;
-        this.id = id; // 唯一标识
+        this.id = id; // Unique id
 
-        // ==================== 场景对象 ====================
-        this._collider = null; // 静态碰撞体
-        this._model = null; // 模型根节点
-        this._capsule = null; // 碰撞胶囊体
-        this._capsuleInfo = null; // 胶囊描述（radius + segment）
-        this._mixer = null; // 动画混合器
+        // ==================== Scene objects ====================
+        this._collider = null; // Static collider
+        this._model = null; // Model root
+        this._capsule = null; // Collision capsule
+        this._capsuleInfo = null; // Capsule desc (radius + segment)
+        this._mixer = null; // Animation mixer
 
-        // ==================== 动画动作 ====================
-        this._walkAction = null; // 行走
-        this._runAction = null; // 奔跑
-        this._idleAction = null; // 待机
-        this._punchAction = null; // 攻击
-        this._deathAction = null; // 死亡
-        this._currentAction = null; // 当前播放动作
-        this._punchLoopCb = null; // 攻击循环回调（用于 removeEventListener）
+        // ==================== Animation actions ====================
+        this._walkAction = null; // Walk
+        this._runAction = null; // Run
+        this._idleAction = null; // Idle
+        this._punchAction = null; // Attack
+        this._deathAction = null; // Death
+        this._currentAction = null; // Currently playing action
+        this._punchLoopCb = null; // Attack-loop callback (for removeEventListener)
 
-        // ==================== 生命状态 ====================
-        this.hp = 100; // 血量
-        this.isDead = false; // 是否已死亡
-        this._deathTime = 0; // 死亡后累计时间（用于定时清除）
-        this._isRunning = Math.random() > 0.5; // 随机决定是否为跑者
-        this._state = "idle"; // 当前行为状态
-        this._isPunching = false; // 是否正在攻击
-        this._inAttackRange = false; // 是否在攻击范围内
+        // ==================== Life state ====================
+        this.hp = 100; // Health
+        this.isDead = false; // Dead?
+        this._deathTime = 0; // Time since death (for timed cleanup)
+        this._isRunning = Math.random() > 0.5; // Randomly a runner
+        this._state = "idle"; // Current behavior state
+        this._isPunching = false; // Currently attacking?
+        this._inAttackRange = false; // In attack range?
 
-        // ==================== 物理参数 ====================
-        this._gravity = -2.4; // 重力加速度（load 时按 scale 重算）
-        this._speed = 0.12; // 移速（load 时按 scale 重算）
-        this._modelScale = 0.001; // 模型缩放
-        this._capsuleHeight = 180; // 胶囊高度（模型空间，load 时重算）
-        this._capsuleRadius = 45; // 胶囊半径（模型空间，load 时重算）
-        this._velocity = new THREE.Vector3(); // 当前速度（主要用于重力累积）
-        this._onGround = false; // 是否落地
+        // ==================== Physics ====================
+        this._gravity = -2.4; // Gravity (recomputed from scale on load)
+        this._speed = 0.12; // Move speed (recomputed from scale on load)
+        this._modelScale = 0.001; // Model scale
+        this._capsuleHeight = 180; // Capsule height (model space, recomputed on load)
+        this._capsuleRadius = 45; // Capsule radius (model space, recomputed on load)
+        this._velocity = new THREE.Vector3(); // Current velocity (mainly gravity accumulation)
+        this._onGround = false; // Grounded?
 
-        // ==================== 复用向量 ====================
+        // ==================== Reused vectors ====================
         this._tempBox = new THREE.Box3();
         this._tempMat = new THREE.Matrix4();
         this._tempSeg = new THREE.Line3();
         this._tempV1 = new THREE.Vector3();
         this._tempV2 = new THREE.Vector3();
-        this._moveDir = new THREE.Vector3(); // 水平移动方向（单位向量）
-        this._lookTarget = new THREE.Vector3(); // 朝向目标（lookAt 复用）
+        this._moveDir = new THREE.Vector3(); // Horizontal move dir (unit)
+        this._lookTarget = new THREE.Vector3(); // Look-at target (reused)
         this._raycaster = new THREE.Raycaster(
             new THREE.Vector3(),
             new THREE.Vector3(0, -1, 0),
         );
-        this._raycaster.firstHitOnly = true; // 只取最近地面交点
+        this._raycaster.firstHitOnly = true; // Nearest ground hit only
     }
 
-    // 加载模型、绑定动画、构建胶囊体，挂入场景
+    // Load model, bind clips, build capsule, add to scene
     async load(gltfLoader, {
         modelUrl,
         collider,
@@ -73,7 +73,7 @@ export class ZombieEntity {
         this._collider = collider;
         this._modelScale = scale;
         this._gravity = -2400 * scale;
-        // 基础移速增加随机扰动 (±15%)，使丧尸步频与步幅产生差异
+        // ±15% speed jitter so zombies differ in stride and cadence
         this._speed = speed * scale * (0.85 + Math.random() * 0.3);
 
         const gltf = await gltfLoader.loadAsync(modelUrl);
@@ -82,7 +82,7 @@ export class ZombieEntity {
         this._mixer = new THREE.AnimationMixer(this._model);
         const clips = gltf.animations ?? [];
 
-        // 按名称或模糊匹配查找动画片段
+        // Find a clip by exact name or fuzzy match
         const findClip = (hint) => {
             if (!hint) return null;
             return (
@@ -98,7 +98,7 @@ export class ZombieEntity {
         const punchClip = findClip(punchAnim) ?? findClip("punch") ?? null;
         const deathClip = findClip(deathAnim) ?? findClip("dying") ?? findClip("death") ?? findClip("die") ?? null;
 
-        // 创建循环动作并初始权重为 0（由 _playAnim 按需激活）
+        // Looping actions start at weight 0 (activated by _playAnim as needed)
         const makeAction = (clip) => {
             if (!clip) return null;
             const action = this._mixer.clipAction(clip);
@@ -110,7 +110,7 @@ export class ZombieEntity {
 
         this._walkAction = makeAction(walkClip);
         if (this._walkAction) {
-            // 随机播放速度 (±10%) 和 随机起始进度 (0-100%)
+            // Random playback speed (±10%) and random start offset (0-100%)
             this._walkAction.setEffectiveTimeScale(1.5 * (0.9 + Math.random() * 0.2));
             this._walkAction.time = Math.random() * walkClip.duration;
         }
@@ -123,7 +123,7 @@ export class ZombieEntity {
 
         this._idleAction = idleClip !== walkClip ? makeAction(idleClip) : this._walkAction;
         if (this._idleAction) {
-            // 即使是待机动作也打乱起始时间
+            // Scramble start time even on idle
             this._idleAction.time = Math.random() * (idleClip?.duration ?? 1);
         }
 
@@ -134,7 +134,7 @@ export class ZombieEntity {
             this._punchAction.setEffectiveWeight(0);
             this._punchAction.enabled = true;
 
-            // 每次攻击循环结束时检查是否已离开攻击范围，若已离开则切回移动动画
+            // At the end of each attack loop, switch back to move if already out of range
             this._punchLoopCb = (event) => {
                 if (event.action !== this._punchAction || !this._isPunching) return;
                 if (!this._inAttackRange) {
@@ -148,10 +148,10 @@ export class ZombieEntity {
         this._deathAction = makeAction(deathClip);
         if (this._deathAction) {
             this._deathAction.setLoop(THREE.LoopOnce, 1);
-            this._deathAction.clampWhenFinished = true; // 停在最后一帧
+            this._deathAction.clampWhenFinished = true; // Hold last frame
         }
 
-        // 驱动一帧使骨骼到位，再计算包围盒以得到准确尺寸
+        // Drive one frame so bones settle, then measure the bounding box
         this._mixer.update(0);
         this._model.updateMatrixWorld(true);
 
@@ -159,7 +159,7 @@ export class ZombieEntity {
         const size = new THREE.Vector3();
         bbox.getSize(size);
 
-        // 将模型归一化到参考高度 180，再乘以 scale 得到世界尺寸
+        // Normalize the model to reference height 180, then multiply by scale for world size
         const refHeight = 180;
         const modelScaleFactor = refHeight / size.y;
         this._capsuleHeight = size.y * modelScaleFactor;
@@ -168,7 +168,7 @@ export class ZombieEntity {
         const radius = this._capsuleRadius * scale;
         const height = this._capsuleHeight * scale;
 
-        // 胶囊体：透明网格，仅用于碰撞，不渲染
+        // Capsule: transparent mesh used only for collision, not rendered
         this._capsule = new THREE.Mesh(
             new RoundedBoxGeometry(radius * 2, height, radius * 2, 1, 0.75),
             new THREE.MeshStandardMaterial({
@@ -187,7 +187,7 @@ export class ZombieEntity {
         };
         this._capsule.name = "zombie_capsule";
         this._capsule.userData.zombieId = this.id;
-        this._capsule.layers.enable(2);           // layer 2：可被武器射线检测到
+        this._capsule.layers.enable(2);           // Layer 2: detectable by weapon rays
         this._scene.add(this._capsule);
         this._capsule.position.copy(position);
 
@@ -204,12 +204,12 @@ export class ZombieEntity {
         this._playAnim(this._idleAction ?? this._walkAction);
     }
 
-    // ==================== 主循环 ====================
+    // ==================== Main loop ====================
 
     update(delta, playerPos) {
         if (!this._capsule || !this._collider) return;
 
-        delta = Math.min(delta, 1 / 40); // 防止帧间隔过大导致穿透
+        delta = Math.min(delta, 1 / 40); // Cap dt so large frame gaps don't tunnel
 
         if (this.isDead) {
             this._deathTime += delta;
@@ -217,13 +217,13 @@ export class ZombieEntity {
             return;
         }
 
-        // 重力累积
+        // Gravity accumulation
         if (!this._onGround) {
             this._velocity.y += delta * this._gravity;
         }
         this._capsule.position.addScaledVector(this._velocity, delta);
 
-        // 计算与玩家的水平距离，判断是否进入攻击范围
+        // Horizontal distance to player — in attack range?
         const pos = this._capsule.position;
         const dx = playerPos.x - pos.x;
         const dz = playerPos.z - pos.z;
@@ -231,7 +231,7 @@ export class ZombieEntity {
         const stopRadius = this._capsuleInfo.radius * 2;
         this._inAttackRange = horizDist <= stopRadius;
 
-        // 朝向玩家（lookAt 反向，使模型正面对着玩家）
+        // Face the player (lookAt inverted so the model front faces the player)
         this._lookTarget.set(
             2 * pos.x - playerPos.x,
             pos.y,
@@ -247,7 +247,7 @@ export class ZombieEntity {
                 this._playAnim(this._punchAction ?? this._idleAction ?? this._walkAction);
             }
         } else {
-            // 只要不在攻击范围内，立即重置攻击标记以允许移动逻辑执行
+            // Out of range: clear the attack flag immediately so move logic can run
             this._isPunching = false;
 
             if (horizDist > 1e-5) {
@@ -268,14 +268,14 @@ export class ZombieEntity {
         this._mixer?.update(delta);
     }
 
-    // ==================== 伤害 / 死亡 ====================
+    // ==================== Damage / death ====================
 
     takeDamage(damage) {
         if (this.isDead) return false;
         this.hp -= damage;
         if (this.hp <= 0) {
             this.die();
-            return true; // 本次命中导致死亡
+            return true; // This hit caused death
         }
         return false;
     }
@@ -292,7 +292,7 @@ export class ZombieEntity {
             this._playAnim(this._deathAction, 0.1);
         }
 
-        // 禁用图层以便射线检测和自动瞄准忽略尸体
+        // Disable the layer so raycasts and auto-aim ignore corpses
         this._capsule.layers.disable(2);
         this._model.traverse((child) => {
             if (child.isMesh) {
@@ -308,9 +308,9 @@ export class ZombieEntity {
     getCapsuleInfo() { return this._capsuleInfo; }
     getDeathTime() { return this._deathTime; }
 
-    // ==================== 私有方法 ====================
+    // ==================== Private ====================
 
-    // 切换动画，带淡入淡出
+    // Switch clip with fade in/out
     _playAnim(action, fade = 0.2) {
         if (!action || this._currentAction === action) return;
         const prev = this._currentAction;
@@ -324,11 +324,11 @@ export class ZombieEntity {
         this._currentAction = action;
     }
 
-    // 分步移动 + BVH 环境碰撞（只处理竖直面，水平面由 _applyGrounding 负责）
+    // Stepped move + BVH environment collision (vertical faces only; horizontals go to _applyGrounding)
     _applyEnvironmentCollision(delta, speed) {
         const ci = this._capsuleInfo;
         const totalDist = speed * delta;
-        const maxStep = ci.radius * 0.8;                          // 每步最大移动量，防止高速穿透
+        const maxStep = ci.radius * 0.8;                          // Max move per step — avoid high-speed tunneling
         const steps = Math.ceil(totalDist / maxStep) || 1;
         const stepDist = totalDist / steps;
 
@@ -358,7 +358,7 @@ export class ZombieEntity {
                     );
                     if (dist >= ci.radius) return;
                     const normal = tri.getNormal(new THREE.Vector3());
-                    if (Math.abs(normal.y) > 0.5) return; // 水平面交给 _applyGrounding 处理
+                    if (Math.abs(normal.y) > 0.5) return; // Horizontal faces handled by _applyGrounding
                     const dir = this._tempV2.sub(this._tempV1).normalize();
                     const depth = ci.radius - dist;
                     this._tempSeg.start.addScaledVector(dir, depth);
@@ -377,7 +377,7 @@ export class ZombieEntity {
         }
     }
 
-    // 射线向下检测地面，吸附胶囊体到地面高度
+    // Ray down to find ground and snap the capsule to ground height
     _applyGrounding(delta) {
         this._raycaster.ray.origin.copy(this._capsule.position);
         const hits = this._raycaster.intersectObject(this._collider, false);
@@ -389,8 +389,8 @@ export class ZombieEntity {
 
         const groundY = hits[0].point.y;
         const scale = this._modelScale;
-        const snapHeight = this._capsuleHeight * scale * 0.75; // 胶囊悬停高度
-        const maxHeight = this._capsuleHeight * scale * 0.9;   // 超过此距离视为腾空
+        const snapHeight = this._capsuleHeight * scale * 0.75; // Capsule hover height
+        const maxHeight = this._capsuleHeight * scale * 0.9;   // Farther than this = airborne
         const dist = this._capsule.position.y - groundY;
 
         if (dist >= maxHeight) {
@@ -402,7 +402,7 @@ export class ZombieEntity {
         this._onGround = true;
 
         if (dist >= snapHeight) {
-            // 平滑吸附（走上斜坡时避免抖动）
+            // Smooth snap (avoids jitter on slopes)
             this._capsule.position.y = THREE.MathUtils.lerp(
                 this._capsule.position.y,
                 groundY + snapHeight,
@@ -413,7 +413,7 @@ export class ZombieEntity {
         }
     }
 
-    // ==================== 销毁 ====================
+    // ==================== Destroy ====================
 
     destroy() {
         if (this._mixer) {

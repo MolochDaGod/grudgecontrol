@@ -2,229 +2,229 @@ import * as THREE from "three";
 import type { RigidBody } from "@dimforge/rapier3d-compat";
 import type { PathPlanner } from "../utils/pathPlanner";
 
-// ==================== 玩家配置 ====================
+// ==================== Player config ====================
 
 export type PlayerModelOptions = {
-    url: string; // 模型路径（GLB/GLTF）
-    scale: number; // 模型缩放
-    idleAnim: string; // 静止动画名
-    walkAnim: string; // 行走动画名
-    runAnim: string; // 跑步动画名
-    jumpAnim: string | [startAnim: string, loopAnim: string, endAnim: string]; // 跳跃动画名；或 [起跳, 循环, 落地] 三段
-    leftWalkAnim?: string; // 左移动画，默认复用 walkAnim
-    rightWalkAnim?: string; // 右移动画，默认复用 walkAnim
-    backwardAnim?: string; // 后退动画，默认复用 walkAnim
-    flyAnim?: string; // 飞行动画，默认复用 idleAnim
-    flyIdleAnim?: string; // 飞行待机动画，默认复用 idleAnim
-    flyHoverForwardAnim?: string; // 飞行前进悬停动画，默认复用 flyAnim
-    flyHoverBackAnim?: string; // 飞行后退悬停动画，默认复用 flyIdleAnim
-    flyHoverLeftAnim?: string; // 飞行左移悬停动画，默认复用 flyIdleAnim
-    flyHoverRightAnim?: string; // 飞行右移悬停动画，默认复用 flyIdleAnim
-    flyHoverUpAnim?: string; // 飞行上升悬停动画，默认复用 flyIdleAnim
-    flyHoverDownAnim?: string; // 飞行下降悬停动画，默认复用 flyIdleAnim
-    enterCarAnim?: string; // 上车动画
-    exitCarAnim?: string; // 下车动画
-    gravity?: number; // 重力基准值（按 scale 缩放），默认 -2400
-    jumpHeight?: number; // 跳跃高度基准值（按 scale 缩放），默认 600
-    speed?: number; // 移动速度基准值（按 scale 缩放），默认 300
-    flySpeed?: number; // 飞行速度基准值（按 scale 缩放），默认 2100
-    rotateY?: number; // 人物初始朝向（弧度），默认 0
-    headBoneName?: string; // 头部骨骼名，用于第一人称相机挂载
-    firstPersonCameraOffset?: [number, number, number]; // 第一人称相机局部偏移
-    capsuleRadiusRatio?: number; // 胶囊体半径倍率，默认 1
-    acceleration?: number; // XZ 加速响应速度，默认 30
-    deceleration?: number; // XZ 减速响应速度，默认 30
+    url: string; // Model path (GLB/GLTF)
+    scale: number; // Model scale
+    idleAnim: string; // Idle animation name
+    walkAnim: string; // Walk animation name
+    runAnim: string; // Run animation name
+    jumpAnim: string | [startAnim: string, loopAnim: string, endAnim: string]; // Jump clip name; or [start, loop, land] three-part
+    leftWalkAnim?: string; // Strafe-left animation, defaults to walkAnim
+    rightWalkAnim?: string; // Strafe-right animation, defaults to walkAnim
+    backwardAnim?: string; // Walk-back animation, defaults to walkAnim
+    flyAnim?: string; // Fly animation, defaults to idleAnim
+    flyIdleAnim?: string; // Fly-idle animation, defaults to idleAnim
+    flyHoverForwardAnim?: string; // Fly hover-forward animation, defaults to flyAnim
+    flyHoverBackAnim?: string; // Fly hover-back animation, defaults to flyIdleAnim
+    flyHoverLeftAnim?: string; // Fly hover-left animation, defaults to flyIdleAnim
+    flyHoverRightAnim?: string; // Fly hover-right animation, defaults to flyIdleAnim
+    flyHoverUpAnim?: string; // Fly hover-up animation, defaults to flyIdleAnim
+    flyHoverDownAnim?: string; // Fly hover-down animation, defaults to flyIdleAnim
+    enterCarAnim?: string; // Enter-vehicle animation
+    exitCarAnim?: string; // Exit-vehicle animation
+    gravity?: number; // Gravity base (scaled by scale), default -2400
+    jumpHeight?: number; // Jump-height base (scaled by scale), default 600
+    speed?: number; // Move-speed base (scaled by scale), default 300
+    flySpeed?: number; // Fly-speed base (scaled by scale), default 2100
+    rotateY?: number; // Initial facing yaw (radians), default 0
+    headBoneName?: string; // Head bone name for first-person camera attach
+    firstPersonCameraOffset?: [number, number, number]; // First-person camera local offset
+    capsuleRadiusRatio?: number; // Capsule radius multiplier, default 1
+    acceleration?: number; // XZ acceleration response, default 30
+    deceleration?: number; // XZ deceleration response, default 30
     /** External animation GLB/FBX URLs keyed by clip name (idle, walk, run, jump, …) */
     animationUrls?: Record<string, string>;
 };
 
 export type MobileControlsOptions = {
-    joystick?: boolean; // 是否显示摇杆，默认 true
-    jump?: boolean; // 是否显示跳跃按钮，默认 true
-    fly?: boolean; // 是否显示飞行按钮，默认 true
-    view?: boolean; // 是否显示视角切换按钮，默认 true
-    vehicle?: boolean; // 是否显示上下车按钮，默认 true
+    joystick?: boolean; // Show joystick, default true
+    jump?: boolean; // Show jump button, default true
+    fly?: boolean; // Show fly button, default true
+    view?: boolean; // Show view-toggle button, default true
+    vehicle?: boolean; // Show enter/exit vehicle button, default true
 };
 
-// 可重映射的输入动作
+// Remappable input actions
 export type KeyAction =
     | "forward" | "backward" | "left" | "right"
     | "sprint" | "jump" | "toggleView" | "toggleFly" | "toggleVehicle"
     | "attack" | "attackHeavy" | "aim" | "knock" | "targetNext" | "targetPrev";
 
-// 自定义键位映射：未填用默认键，传 code/数组覆盖，传 null 禁用
+// Custom key map: omit to keep defaults, pass code/array to override, pass null to disable
 export type KeyMap = Partial<Record<KeyAction, string | string[] | null>>;
 
 export type PlayerControllerOptions = {
-    scene: THREE.Scene; // three.js 场景实例
-    camera: THREE.PerspectiveCamera; // three.js 相机实例
-    controls: any; // 外部相机控制器，通常为 OrbitControls
-    playerModelConfig: PlayerModelOptions; // 角色模型与参数配置
-    initPos?: THREE.Vector3; // 初始出生点，默认 (0,0,0)
-    mouseSensitivity?: number; // 鼠标灵敏度，默认 5
-    minCamDistance?: number; // 第三人称最小镜头距离，默认 100
-    maxCamDistance?: number; // 第三人称最大镜头距离，默认 440
-    camLookAtHeightRatio?: number; // 相机看向点高度比例（0=底部 1=顶部），默认 0.8
-    staticCollider?: THREE.Object3D | THREE.Object3D[]; // 静态碰撞体来源，不传则遍历整个场景
-    dynamicCollider?: THREE.Object3D | THREE.Object3D[]; // 初始化时注册的动态碰撞体
-    isShowMobileControls?: boolean; // 移动端是否显示虚拟控制 UI，默认 true
-    mobileControls?: MobileControlsOptions; // 移动端按钮显隐配置
-    thirdMouseMode?: 0 | 1 | 2 | 3 | 4 | 5; // 第三人称鼠标控制模式，默认 1
-    enableZoom?: boolean; // 是否允许滚轮缩放，默认 false
-    enableOverShoulderView?: boolean; // 是否启用过肩视角，默认 false
-    isFirstPerson?: boolean; // 初始是否进入第一人称，默认 false
-    enableSpringCamera?: boolean; // 是否启用弹簧相机，默认 false
-    springCameraTime?: number; // 弹簧相机平滑时间（秒），默认 0.05
-    timeScale?: number; // 时间缩放系数，<1 慢动作 >1 快进，默认 1
-    keyMap?: KeyMap; // 自定义键位映射
+    scene: THREE.Scene; // three.js scene instance
+    camera: THREE.PerspectiveCamera; // three.js camera instance
+    controls: any; // External camera controls, usually OrbitControls
+    playerModelConfig: PlayerModelOptions; // Character model and parameter config
+    initPos?: THREE.Vector3; // Spawn position, default (0,0,0)
+    mouseSensitivity?: number; // Mouse sensitivity, default 5
+    minCamDistance?: number; // Third-person min camera distance, default 100
+    maxCamDistance?: number; // Third-person max camera distance, default 440
+    camLookAtHeightRatio?: number; // Look-at height ratio (0=feet 1=head), default 0.8
+    staticCollider?: THREE.Object3D | THREE.Object3D[]; // Static collider sources; omit to traverse the whole scene
+    dynamicCollider?: THREE.Object3D | THREE.Object3D[]; // Dynamic colliders registered at init
+    isShowMobileControls?: boolean; // Show virtual mobile UI, default true
+    mobileControls?: MobileControlsOptions; // Mobile button visibility
+    thirdMouseMode?: 0 | 1 | 2 | 3 | 4 | 5; // Third-person mouse mode, default 1
+    enableZoom?: boolean; // Allow wheel zoom, default false
+    enableOverShoulderView?: boolean; // Enable over-shoulder view, default false
+    isFirstPerson?: boolean; // Start in first-person, default false
+    enableSpringCamera?: boolean; // Enable spring camera, default false
+    springCameraTime?: number; // Spring camera smoothing time (seconds), default 0.05
+    timeScale?: number; // Time scale, <1 slow-mo >1 fast-forward, default 1
+    keyMap?: KeyMap; // Custom key map
 };
 
-// ==================== 战斗配置 (Combat) ====================
+// ==================== Combat config ====================
 
-// 单个攻击招式定义
+// Single attack move definition
 export type AttackDef = {
-    clip: string; // 模型中的攻击动画片段名
-    timeScale?: number; // 播放速度倍率，默认 1
-    durationMs?: number; // 指定动画时长（毫秒），优先于 timeScale 推导速度
-    damage?: number; // 伤害数值，透传给 onHit 消费方
-    cooldownMs?: number; // 该招式再次触发的最小间隔（毫秒），默认 0
-    comboWindowMs?: number; // 招式结束后允许衔接下一段连击的时间窗（毫秒），默认 350
-    hitFraction?: number; // 命中判定发生在动画的进度点（0~1），默认 0.5
-    range?: number; // 近战触及距离（世界单位，按 scale 缩放），默认 120
-    arcDeg?: number; // 近战命中锥形半角（度），默认 60
-    lockMovement?: boolean; // 出招期间是否锁定 XZ 位移，默认 false
-    element?: string; // 自定义伤害类型标签
-    next?: string; // 快速衔接的默认下一段招式 key
+    clip: string; // Attack animation clip name on the model
+    timeScale?: number; // Playback speed multiplier, default 1
+    durationMs?: number; // Explicit clip duration (ms); takes priority over timeScale-derived speed
+    damage?: number; // Damage value, passed through to onHit consumers
+    cooldownMs?: number; // Minimum interval before this move can fire again (ms), default 0
+    comboWindowMs?: number; // Window after the move ends to chain the next combo hit (ms), default 350
+    hitFraction?: number; // Hit check at this fraction of the clip (0~1), default 0.5
+    range?: number; // Melee reach (world units, scaled by scale), default 120
+    arcDeg?: number; // Melee hit cone half-angle (degrees), default 60
+    lockMovement?: boolean; // Lock XZ movement while attacking, default false
+    element?: string; // Custom damage-type tag
+    next?: string; // Default next-move key for a fast chain
 };
 
-// 近战命中结果
+// Melee hit result
 export type MeleeHit = {
-    target: THREE.Object3D; // 命中的目标对象
-    point: THREE.Vector3; // 命中点（目标世界坐标）
-    distance: number; // 与攻击者的距离
+    target: THREE.Object3D; // Hit target object
+    point: THREE.Vector3; // Hit point (target world position)
+    distance: number; // Distance from attacker
 };
 
-// 攻击事件载荷
+// Attack event payload
 export type AttackEvent = {
-    key: string; // 招式 key
-    index: number; // 连击序号（从 0 开始）
-    combo: string | null; // 当前连击名（无则为 null）
-    def: AttackDef; // 招式定义
+    key: string; // Move key
+    index: number; // Combo index (from 0)
+    combo: string | null; // Current combo name (null if none)
+    def: AttackDef; // Move definition
 };
 
-// 战斗系统配置
+// Combat system config
 export type CombatOptions = {
-    allowAerialAttacks?: boolean; // 是否允许在空中（跳跃下落）出招，默认 true
-    allowFlyingAttacks?: boolean; // 是否允许在飞行模式出招，默认 false
-    bufferInput?: boolean; // 是否缓存出招输入以衔接连击，默认 true
-    targets?: THREE.Object3D[]; // 默认近战/远程命中候选目标
-    softLockFacing?: boolean; // 出招时是否自动面向当前目标（软锁定），默认 true
+    allowAerialAttacks?: boolean; // Allow attacks while airborne (jump/fall), default true
+    allowFlyingAttacks?: boolean; // Allow attacks in fly mode, default false
+    bufferInput?: boolean; // Buffer attack input to chain combos, default true
+    targets?: THREE.Object3D[]; // Default melee/ranged hit candidates
+    softLockFacing?: boolean; // Face the current target while attacking (soft lock), default true
 };
 
-// 远程攻击招式定义（RMB 矄准/射击）
+// Ranged attack definition (RMB aim/fire)
 export type RangedDef = {
-    clip?: string; // 射击动画片段名（可选）
-    timeScale?: number; // 播放速度倍率，默认 1
-    damage?: number; // 伤害数值
-    cooldownMs?: number; // 射速间隔（毫秒），默认 300
-    range?: number; // 射程（世界单位，按 scale 缩放），默认 4000
-    spread?: number; // 散布角（弧度），默认 0
-    element?: string; // 伤害类型标签
-    muzzleOffset?: [number, number, number]; // 枪口局部偏移
+    clip?: string; // Fire animation clip name (optional)
+    timeScale?: number; // Playback speed multiplier, default 1
+    damage?: number; // Damage value
+    cooldownMs?: number; // Fire interval (ms), default 300
+    range?: number; // Range (world units, scaled by scale), default 4000
+    spread?: number; // Spread angle (radians), default 0
+    element?: string; // Damage-type tag
+    muzzleOffset?: [number, number, number]; // Muzzle local offset
 };
 
-// 远程命中结果
+// Ranged hit result
 export type RangedHit = {
-    target: THREE.Object3D; // 命中目标
-    point: THREE.Vector3; // 命中点
-    distance: number; // 命中距离
-    damage: number; // 伤害数值
+    target: THREE.Object3D; // Hit target
+    point: THREE.Vector3; // Hit point
+    distance: number; // Hit distance
+    damage: number; // Damage value
 };
 
-// 击退（中键 MMB）配置
+// Knockback (MMB) config
 export type KnockOptions = {
-    clip?: string; // 击退动画片段名（可选）
-    radius?: number; // 生效半径（世界单位，按 scale 缩放），默认 220
-    force?: number; // 击退力度，默认 600
-    arcDeg?: number; // 生效锥形半角（度），360=全周，默认 360
-    cooldownMs?: number; // 冷却（毫秒），默认 1200
-    damage?: number; // 附带伤害，默认 0
+    clip?: string; // Knockback animation clip name (optional)
+    radius?: number; // Effect radius (world units, scaled by scale), default 220
+    force?: number; // Knockback force, default 600
+    arcDeg?: number; // Effect cone half-angle (degrees), 360=full circle, default 360
+    cooldownMs?: number; // Cooldown (ms), default 1200
+    damage?: number; // Bonus damage, default 0
 };
 
-// 击退事件载荷
+// Knockback event payload
 export type KnockEvent = {
-    target: THREE.Object3D; // 被击退目标
-    direction: THREE.Vector3; // 击退方向（单位向量）
-    force: number; // 击退力度
-    damage: number; // 附带伤害
+    target: THREE.Object3D; // Knocked-back target
+    direction: THREE.Vector3; // Knockback direction (unit vector)
+    force: number; // Knockback force
+    damage: number; // Bonus damage
 };
 
-// 闪避/冲刺（双击方向键）配置
+// Dodge/dash (double-tap direction) config
 export type DodgeOptions = {
-    clip?: string; // 闪避动画片段名（可选）
-    speed?: number; // 闪避初速度基准（按 scale 缩放），默认 1400
-    durationMs?: number; // 闪避持续时间（毫秒），默认 280
-    cooldownMs?: number; // 冷却（毫秒），默认 550
-    iframes?: boolean; // 闪避期间是否提供无敌帧，默认 true
-    doubleTapMs?: number; // 双击识别窗口（毫秒），默认 250
+    clip?: string; // Dodge animation clip name (optional)
+    speed?: number; // Dodge speed base (scaled by scale), default 1400
+    durationMs?: number; // Dodge duration (ms), default 280
+    cooldownMs?: number; // Cooldown (ms), default 550
+    iframes?: boolean; // Grant i-frames during dodge, default true
+    doubleTapMs?: number; // Double-tap detection window (ms), default 250
 };
 
-// 目标锁定系统配置
+// Target lock system config
 export type TargetOptions = {
-    maxRange?: number; // 可锁定最大距离（按 scale 缩放），默认 6000
-    softLockRange?: number; // 软锁定生效距离（按 scale 缩放），默认 3000
-    maxAngleDeg?: number; // 锁定候选相对镜头前方的最大半角（度），默认 70
-    isAlive?: (target: THREE.Object3D) => boolean; // 判定目标是否存活，默认总是 true
+    maxRange?: number; // Max lock range (scaled by scale), default 6000
+    softLockRange?: number; // Soft-lock range (scaled by scale), default 3000
+    maxAngleDeg?: number; // Max half-angle of lock candidates vs camera forward (degrees), default 70
+    isAlive?: (target: THREE.Object3D) => boolean; // Alive check, default always true
 };
 
-// 当前目标信息（供 UI 目标框/血条使用）
+// Current target info (for UI target frame / health bar)
 export type TargetInfo = {
-    object: THREE.Object3D; // 目标对象
-    hard: boolean; // 是否为 Tab 硬锁定（false=软锁定）
-    distance: number; // 与玩家距离
+    object: THREE.Object3D; // Target object
+    hard: boolean; // Tab hard lock (false = soft lock)
+    distance: number; // Distance from player
 };
 
-// ==================== 车辆配置 ====================
+// ==================== Vehicle config ====================
 
 export type VehicleOptions = {
-    url: string; // 车辆模型路径（GLB/GLTF）
-    position: THREE.Vector3; // 车辆初始世界坐标
-    wheelsNames: string[]; // 车轮节点名，顺序：左前、右前、左后、右后
-    scale?: number; // 车辆模型缩放，默认 1
-    animations: { openDoorAnim?: string }; // 车门开关动画名
-    boardingPoint: THREE.Vector3; // 上车点，局部坐标
-    seatOffset?: THREE.Vector3; // 角色上车后座位偏移，默认 (0,0,0)
-    chassisRatio?: number; // 底盘高度比例，默认 0.2
-    suspensionRestLengthRatio?: number; // 悬挂静止长度比例，默认 0.2
-    followVehicleDirection?: boolean; // 驾驶时镜头是否跟随车辆朝向，默认 true
-    speedMultiplier?: number; // 单车速度倍率，默认 1
+    url: string; // Vehicle model path (GLB/GLTF)
+    position: THREE.Vector3; // Vehicle initial world position
+    wheelsNames: string[]; // Wheel node names, order: FL, FR, RL, RR
+    scale?: number; // Vehicle model scale, default 1
+    animations: { openDoorAnim?: string }; // Door open/close animation name
+    boardingPoint: THREE.Vector3; // Boarding point, local space
+    seatOffset?: THREE.Vector3; // Seat offset after boarding, default (0,0,0)
+    chassisRatio?: number; // Chassis height ratio, default 0.2
+    suspensionRestLengthRatio?: number; // Suspension rest-length ratio, default 0.2
+    followVehicleDirection?: boolean; // Camera follows vehicle facing while driving, default true
+    speedMultiplier?: number; // Per-vehicle speed multiplier, default 1
 };
 
 export type VehicleInstance = {
-    vehicleGroup: THREE.Group; // 车辆模型组
-    chassisBody: RigidBody; // 底盘刚体
-    vehicleController: any; // Rapier 车辆控制器
-    updateWheelVisuals: () => void; // 同步车轮视觉的回调
-    vehicleMixer?: THREE.AnimationMixer; // 车辆动画混合器
-    vehicleActions?: Map<string, THREE.AnimationAction>; // 车辆动画动作表
-    vehiclIsOpenDoor: boolean; // 车门是否打开
-    vehicleBBox: THREE.Box3; // 车辆包围盒
-    pathPlanner: PathPlanner; // 上车路径规划器
-    scale: number; // 车辆缩放
-    boardingPoint: THREE.Vector3; // 上车点，局部坐标
-    seatOffset: THREE.Vector3; // 座位偏移
-    enterVehicleTime: number; // 上车动画时长
-    chassisRatio: number; // 底盘高度比例
-    suspensionRestLengthRatio: number; // 悬挂静止长度比例
-    size: { l: number; w: number; h: number }; // 车辆尺寸（长、宽、高）
-    speedMultiplier: number; // 单车速度倍率
-    physicsBoxMesh?: THREE.Mesh; // 物理盒体调试网格
+    vehicleGroup: THREE.Group; // Vehicle model group
+    chassisBody: RigidBody; // Chassis rigid body
+    vehicleController: any; // Rapier vehicle controller
+    updateWheelVisuals: () => void; // Callback to sync wheel visuals
+    vehicleMixer?: THREE.AnimationMixer; // Vehicle animation mixer
+    vehicleActions?: Map<string, THREE.AnimationAction>; // Vehicle action map
+    vehiclIsOpenDoor: boolean; // Whether the door is open
+    vehicleBBox: THREE.Box3; // Vehicle bounding box
+    pathPlanner: PathPlanner; // Boarding path planner
+    scale: number; // Vehicle scale
+    boardingPoint: THREE.Vector3; // Boarding point, local space
+    seatOffset: THREE.Vector3; // Seat offset
+    enterVehicleTime: number; // Enter-vehicle animation duration
+    chassisRatio: number; // Chassis height ratio
+    suspensionRestLengthRatio: number; // Suspension rest-length ratio
+    size: { l: number; w: number; h: number }; // Vehicle size (length, width, height)
+    speedMultiplier: number; // Per-vehicle speed multiplier
+    physicsBoxMesh?: THREE.Mesh; // Physics-box debug mesh
 };
 
 export type DynamicColliderEntry = {
-    source: THREE.Object3D; // 原始物体
-    mesh: THREE.Mesh; // BVH网格（本地空间几何）
-    prevWorldMatrix: THREE.Matrix4; // 上一帧世界矩阵
-    deltaPos: THREE.Vector3; // 本帧位移增量
-    deltaRotY: number; // 本帧 Y 轴旋转增量（弧度）
+    source: THREE.Object3D; // Source object
+    mesh: THREE.Mesh; // BVH mesh (local-space geometry)
+    prevWorldMatrix: THREE.Matrix4; // Previous-frame world matrix
+    deltaPos: THREE.Vector3; // This-frame position delta
+    deltaRotY: number; // This-frame Y-axis rotation delta (radians)
 }
