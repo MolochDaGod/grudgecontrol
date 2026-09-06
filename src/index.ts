@@ -53,3 +53,5 @@ export type { VehicleLoaderContext } from "./utils/vehicleLoader";
 export { isFbxUrl, loadModelAsset, loadExternalAnimationClips } from "./utils/grudgeAssetLoader";
 export { applyCapsuleCollision, createCollisionTemps } from "./utils/capsuleCollision";
 export type { CollisionTemps } from "./utils/capsuleCollision";
+export { LAB_PHYSICS, consumeFixedSteps, applyDeadzone } from "./labPhysics";
+export type { LabPhysicsContract, InputSnapshot } from "./labPhysics";

@@ -3,6 +3,7 @@ import type { World } from "@dimforge/rapier3d-compat";
 import type { playerController } from "../playerController";
 import { loadVehicleModel as loadVehicleModelUtil } from "../utils/vehicleLoader";
 import type { VehicleInstance, VehicleOptions } from "../types";
+import { LAB_PHYSICS, consumeFixedSteps } from "../labPhysics";
 
 export class VehicleSystem {
     private ctrl: playerController; // main controller
@@ -44,47 +45,59 @@ export class VehicleSystem {
     exitDoorClosed = false; // exit door closed
     doorTimer: any = null; // door open/close timer
     flip180 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI); // 180 deg yaw
+    private physAcc = 0;
+    private _chassisQuat = new THREE.Quaternion();
+    private _forward = new THREE.Vector3();
+    private _lookTarget = new THREE.Vector3();
+    private _vel = new THREE.Vector3();
+    private _vehicleUp = new THREE.Vector3();
+    private _size = new THREE.Vector3();
 
     constructor(ctrl: playerController) {
         this.ctrl = ctrl;
     }
 
-    // Init Rapier
+    // Lazy Rapier world — vehicles only. Walk capsule stays on BVH.
     async initRapier() {
         if (this.RAPIER) return;
         this.RAPIER = await import("@dimforge/rapier3d-compat");
         await this.RAPIER.init();
 
-        this.world = new this.RAPIER.World(new this.RAPIER.Vector3(0, -9.81, 0)) as World;
-        (this.world as any).maxCcdSubsteps = 2;
+        this.world = new this.RAPIER.World(new this.RAPIER.Vector3(0, LAB_PHYSICS.gravityY, 0)) as World;
+        this.world.timestep = LAB_PHYSICS.fixedDt;
+        this.physAcc = 0;
 
-        // Build trimesh colliders
-        const addTrimesh = (RAPIER: any, world: any, geom: THREE.BufferGeometry) => {
-            let g = geom.index ? geom.clone().toNonIndexed() : geom.clone();
-            const pos = g.attributes.position;
-            const count = pos.count;
+        const tmp = new THREE.Vector3();
+        const addTrimesh = (RAPIER: any, world: World, geom: THREE.BufferGeometry) => {
+            const posAttr = geom.attributes.position;
+            if (!posAttr) return;
+            const count = posAttr.count;
             const verts = new Float32Array(count * 3);
-            const tmp = new THREE.Vector3();
             for (let i = 0; i < count; i++) {
-                tmp.fromBufferAttribute(pos, i);
-                verts[i * 3] = tmp.x; verts[i * 3 + 1] = tmp.y; verts[i * 3 + 2] = tmp.z;
+                tmp.fromBufferAttribute(posAttr, i);
+                verts[i * 3] = tmp.x;
+                verts[i * 3 + 1] = tmp.y;
+                verts[i * 3 + 2] = tmp.z;
             }
-            const indices = count > 65535 ? new Uint32Array(count) : new Uint16Array(count);
-            for (let i = 0; i < count; i++) indices[i] = i;
-
+            let indices: Uint32Array;
+            if (geom.index) {
+                const src = geom.index.array;
+                indices = src instanceof Uint32Array ? src : new Uint32Array(src);
+            } else {
+                indices = new Uint32Array(count);
+                for (let i = 0; i < count; i++) indices[i] = i;
+            }
             const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
             world.createCollider(
-                RAPIER.ColliderDesc.trimesh(verts, indices).setRestitution(0).setFriction(0.8),
+                RAPIER.ColliderDesc.trimesh(verts, indices)
+                    .setRestitution(0)
+                    .setFriction(0.8)
+                    .setCollisionGroups(LAB_PHYSICS.groups.static),
                 body,
             );
         };
 
         for (const g of this.ctrl.collected) addTrimesh(this.RAPIER, this.world, g);
-
-        // Ground rigid body
-        const groundBody = this.world.createRigidBody(this.RAPIER.RigidBodyDesc.fixed());
-        groundBody.userData = { outOfBounds: true };
-
     }
 
     // Load a vehicle model
@@ -301,38 +314,37 @@ export class VehicleSystem {
         if (!v || !this.world) return;
         const { vehicleController, chassisBody, vehicleGroup } = v;
 
-        // Slope compensation
+        // Slope compensation. Chassis local +X is travel forward after model yaw −π/2.
         const rotation = chassisBody.rotation();
-        const quat = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
-        const forward = new THREE.Vector3(1, 0, 0).applyQuaternion(quat);
-        const slopeAngle = Math.asin(forward.y);
-        const factor = (slopeAngle < -0.05 && c.input.fwd) ? -Math.sin(slopeAngle) * 10 : 1;
+        const quat = this._chassisQuat.set(rotation.x, rotation.y, rotation.z, rotation.w);
+        const forward = this._forward.set(1, 0, 0).applyQuaternion(quat);
+        const slopeAngle = Math.asin(THREE.MathUtils.clamp(forward.y, -1, 1));
+        const throttle = c.input.axisY;
+        const factor = (slopeAngle < -0.05 && throttle > 0) ? -Math.sin(slopeAngle) * 10 : 1;
 
-        // Engine force
+        // Engine: analog throttle. A/D is yaw steer, not FPS strafe.
         const accelerateForce = this.params.power.accelerateForce * v.speedMultiplier;
-        const engineForce = (Number(c.input.fwd) - Number(c.input.bkd)) * accelerateForce * factor;
+        const engineForce = throttle * accelerateForce * factor;
         for (let i = 0; i < 4; i++) vehicleController.setWheelEngineForce(i, engineForce);
 
-        // Brake
-        const wheelBrake = Number(c.input.space) * this.params.power.brakeForce * delta;
+        const wheelBrake = Number(c.input.space) * this.params.power.brakeForce;
         for (let i = 0; i < 4; i++) vehicleController.setWheelBrake(i, wheelBrake);
 
-        // Steering
         const currentSteering = vehicleController.wheelSteering(0) || 0;
-        const steerDir = Number(c.input.lft) - Number(c.input.rgt);
-        const steerSpeed = steerDir === 0 ? this.params.steering.steerReturnSpeed : this.params.steering.steerSpeed;
+        const steerDir = -c.input.axisX * LAB_PHYSICS.vehicleSteerSign;
+        const steerSpeed = Math.abs(steerDir) < 0.01 ? this.params.steering.steerReturnSpeed : this.params.steering.steerSpeed;
         const steering = THREE.MathUtils.lerp(currentSteering, this.params.steering.maxSteerAngle * steerDir, 1 - Math.pow(1 - steerSpeed, delta));
         vehicleController.setWheelSteering(0, steering);
         vehicleController.setWheelSteering(1, steering);
 
         // Drift friction
-        const driftFriction = ((c.input.rgt || c.input.lft) && c.input.shift) ? 0.5 : 2;
+        const driftFriction = (Math.abs(c.input.axisX) > 0.4 && c.input.shift) ? 0.5 : 2;
         vehicleController.setWheelSideFrictionStiffness(2, driftFriction);
         vehicleController.setWheelSideFrictionStiffness(3, driftFriction);
 
         // Unstick: throttle held but almost stopped for too long — hop up + forward along travel
         const linv = chassisBody.linvel();
-        if ((c.input.fwd || c.input.bkd) && Math.hypot(linv.x, linv.z) < this.stuckSpeedThreshold) {
+        if (Math.abs(throttle) > 0.15 && Math.hypot(linv.x, linv.z) < this.stuckSpeedThreshold) {
             this.stuckTimer += delta;
         } else {
             this.stuckTimer = 0;
@@ -341,8 +353,7 @@ export class VehicleSystem {
             const g = 9.81;
             const vUp = Math.sqrt(2 * g * v.size.h * this.stuckHopRatio); // takeoff speed to reach ~height*ratio
             const mass = chassisBody.mass();
-            const dir = c.input.bkd ? -1 : 1;
-            // Chassis horizontal forward (local +X, same as slope compensation)
+            const dir = throttle < 0 ? -1 : 1;
             const fl = Math.hypot(forward.x, forward.z);
             const fx = fl > 0.001 ? forward.x / fl : 0;
             const fz = fl > 0.001 ? forward.z / fl : 0;
@@ -357,19 +368,15 @@ export class VehicleSystem {
 
         // Camera follow
         if (!c.isFirstPerson) {
-            const lookTarget = c.cam.springTarget(vehicleGroup.position, delta).clone();
+            const lookTarget = this._lookTarget.copy(c.cam.springTarget(vehicleGroup.position, delta));
             c.camera.position.sub(c.controls.target);
             c.controls.target.copy(lookTarget);
             c.camera.position.add(lookTarget);
             c.controls.update();
 
-            const baseDist = v.size.l * 0.8;
-            const desiredDist = baseDist;
+            c.cam.updateWithRaycast(c.controls.target, v.size.l * 0.8);
 
-            c.cam.updateWithRaycast(c.controls.target, desiredDist);
-
-            // Follow velocity: yaw camera to sit behind travel direction, keep height
-            if ((c.input.fwd || c.input.bkd) && this.params.followVehicleDirection) {
+            if (Math.abs(throttle) > 0.15 && this.params.followVehicleDirection) {
                 const vel = chassisBody.linvel();
                 if (Math.hypot(vel.x, vel.z) > 0.3) {
                     // Target azimuth: camera behind velocity
@@ -391,9 +398,9 @@ export class VehicleSystem {
         }
 
         // Auto-reset if flipped
-        const vehicleUp = c.upVector.clone().applyQuaternion(vehicleGroup.quaternion);
+        const vehicleUp = this._vehicleUp.copy(c.upVector).applyQuaternion(vehicleGroup.quaternion);
         if (vehicleUp.angleTo(c.upVector) > Math.PI / 2) {
-            const size = new THREE.Vector3();
+            const size = this._size;
             v.vehicleBBox?.getSize(size);
             const t = chassisBody.translation();
             chassisBody.setTranslation(new this.RAPIER.Vector3(t.x, t.y + size.y, t.z), true);
@@ -403,27 +410,29 @@ export class VehicleSystem {
         }
     }
 
-    // Step physics world
+    // Fixed 1/60 Rapier step: wheel forces → updateVehicle → world.step → visuals.
     updateInertia(delta: number) {
         if (!this.world) return;
-        this.world.timestep = delta;
-        this.world.step();
+        this.physAcc = consumeFixedSteps(this.physAcc, delta, (dt) => {
+            this.world!.timestep = dt;
+            for (const v of this.list) {
+                v.stepVehicle?.(dt);
+            }
+            this.world!.step();
+        });
 
         for (const v of this.list) {
-            const { vehicleController, chassisBody, vehicleGroup, updateWheelVisuals } = v;
-            vehicleController.updateVehicle(delta);
+            const { chassisBody, vehicleGroup, updateWheelVisuals } = v;
             if (chassisBody.isSleeping()) continue;
 
-            // Clamp max speed
             const vel = chassisBody.linvel();
-            const speed = new THREE.Vector3(vel.x, vel.y, vel.z).length();
+            const speed = this._vel.set(vel.x, vel.y, vel.z).length();
             const max = this.params.power.maxSpeed * v.speedMultiplier;
             if (speed > max) {
                 const s = max / speed;
                 chassisBody.setLinvel(new this.RAPIER.Vector3(vel.x * s, vel.y * s, vel.z * s), true);
             }
 
-            // Sync visual pose
             const t = chassisBody.translation();
             const r = chassisBody.rotation();
             vehicleGroup.position.set(t.x, t.y, t.z);
@@ -452,8 +461,8 @@ export class VehicleSystem {
         chassisBody.setLinvel(ZERO, true);
         chassisBody.setAngvel(ZERO, true);
         for (let i = 0; i < 4; i++) { vehicleController.setWheelEngineForce(i, 0); vehicleController.setWheelBrake(i, 1e6); }
-        vehicleController.updateVehicle(1 / 60);
-        this.world.timestep = 1 / 60;
+        v.stepVehicle?.(LAB_PHYSICS.fixedDt);
+        this.world.timestep = LAB_PHYSICS.fixedDt;
         this.world.step();
         chassisBody.setLinvel(ZERO, true);
         chassisBody.setAngvel(ZERO, true);

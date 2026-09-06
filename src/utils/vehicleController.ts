@@ -1,5 +1,6 @@
-import type { World } from "@dimforge/rapier3d-compat";
+import type { World, RigidBody, Collider } from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
+import { LAB_PHYSICS } from "../labPhysics";
 
 export type WheelInfo = {
     axleCs: THREE.Vector3;
@@ -8,67 +9,69 @@ export type WheelInfo = {
     radius: number;
 };
 
-// Create a Rapier vehicle controller
+const _up = new THREE.Vector3(0, 1, 0);
+const _steerQuat = new THREE.Quaternion();
+const _rotQuat = new THREE.Quaternion();
+const _suspensionDir = new THREE.Vector3(0, -1, 0);
+const _axleFallback = new THREE.Vector3(1, 0, 0);
+
+/** Rapier DynamicRayCastVehicleController + wheel visual sync. */
 export function createVehicleController(
     world: World,
-    chassisBody: any,
+    chassisBody: RigidBody,
     wheels: (THREE.Object3D | null)[],
     wheelsInfo: WheelInfo[],
 ) {
-    if (!world || !chassisBody) return { vehicle: null, updateWheelVisuals: () => {} };
+    if (!world || !chassisBody) return { vehicle: null, updateWheelVisuals: () => {}, destroy: () => {}, stepVehicle: () => {} };
 
     const vehicle = world.createVehicleController(chassisBody);
-    const suspensionDirection = new THREE.Vector3(0, -1, 0);
 
-    // Register per-wheel physics
     wheelsInfo.forEach((wheel, index) => {
-        vehicle.addWheel(wheel.position, suspensionDirection, wheel.axleCs, wheel.suspensionRestLength, wheel.radius);
-        vehicle.setWheelChassisConnectionPointCs(index, wheel.position); // connection point
-        vehicle.setWheelDirectionCs(index, suspensionDirection); // suspension direction
-        vehicle.setWheelAxleCs(index, wheel.axleCs); // axle
-        vehicle.setWheelSuspensionRestLength(index, wheel.suspensionRestLength); // rest length
-        vehicle.setWheelRadius(index, wheel.radius); // tire radius
-        vehicle.setWheelMaxSuspensionTravel(index, wheel.suspensionRestLength); // max travel
-        vehicle.setWheelSuspensionStiffness(index, 250); // stiffness
-        vehicle.setWheelSuspensionCompression(index, 6); // compression damping
-        vehicle.setWheelSuspensionRelaxation(index, 6); // rebound damping
-        vehicle.setWheelMaxSuspensionForce(index, 10000); // max force
-        vehicle.setWheelBrake(index, 0); // brake
-        vehicle.setWheelSteering(index, 0); // steer angle
-        vehicle.setWheelEngineForce(index, 0); // engine force
-        vehicle.setWheelFrictionSlip(index, 20); // longitudinal grip
-        vehicle.setWheelSideFrictionStiffness(index, 2); // lateral friction
+        vehicle.addWheel(wheel.position, _suspensionDir, wheel.axleCs, wheel.suspensionRestLength, wheel.radius);
+        vehicle.setWheelChassisConnectionPointCs(index, wheel.position);
+        vehicle.setWheelDirectionCs(index, _suspensionDir);
+        vehicle.setWheelAxleCs(index, wheel.axleCs);
+        vehicle.setWheelSuspensionRestLength(index, wheel.suspensionRestLength);
+        vehicle.setWheelRadius(index, wheel.radius);
+        vehicle.setWheelMaxSuspensionTravel(index, wheel.suspensionRestLength);
+        vehicle.setWheelSuspensionStiffness(index, 250);
+        vehicle.setWheelSuspensionCompression(index, 6);
+        vehicle.setWheelSuspensionRelaxation(index, 6);
+        vehicle.setWheelMaxSuspensionForce(index, 10000);
+        vehicle.setWheelBrake(index, 0);
+        vehicle.setWheelSteering(index, 0);
+        vehicle.setWheelEngineForce(index, 0);
+        vehicle.setWheelFrictionSlip(index, 20);
+        vehicle.setWheelSideFrictionStiffness(index, 2);
     });
 
-    const up = new THREE.Vector3(0, 1, 0);
-    const wheelSteeringQuat = new THREE.Quaternion();
-    const wheelRotationQuat = new THREE.Quaternion();
+    function wheelRayPredicate(collider: Collider) {
+        const parent = collider.parent();
+        return !parent || parent.handle !== chassisBody.handle;
+    }
 
-    // Sync wheel visual rotation
+    function stepVehicle(dt: number) {
+        vehicle.updateVehicle(dt, undefined, LAB_PHYSICS.groups.wheelRayFilter, wheelRayPredicate);
+    }
+
     function updateWheelVisuals() {
         for (const [index, wheelObj] of wheels.entries()) {
             if (!wheelObj) continue;
-            try {
-                const wheelAxleCs = vehicle.wheelAxleCs(index) ?? new THREE.Vector3(1, 0, 0);
-                const connection = vehicle.wheelChassisConnectionPointCs(index)?.y ?? 0;
-                const suspension = vehicle.wheelSuspensionLength(index) ?? 0;
-                const steering = vehicle.wheelSteering(index) ?? 0;
-                const rotationRad = vehicle.wheelRotation(index) ?? 0;
-
-                // Suspension compression offset
-                wheelObj.position.y = connection - suspension;
-                // Steer * spin
-                wheelSteeringQuat.setFromAxisAngle(up, steering);
-                wheelRotationQuat.setFromAxisAngle(wheelAxleCs, rotationRad);
-                wheelObj.quaternion.copy(wheelSteeringQuat).multiply(wheelRotationQuat);
-            } catch (e) {}
+            const wheelAxleCs = vehicle.wheelAxleCs(index) ?? _axleFallback;
+            const connection = vehicle.wheelChassisConnectionPointCs(index)?.y ?? 0;
+            const suspension = vehicle.wheelSuspensionLength(index) ?? 0;
+            const steering = vehicle.wheelSteering(index) ?? 0;
+            const rotationRad = vehicle.wheelRotation(index) ?? 0;
+            wheelObj.position.y = connection - suspension;
+            _steerQuat.setFromAxisAngle(_up, steering);
+            _rotQuat.setFromAxisAngle(wheelAxleCs as THREE.Vector3, rotationRad);
+            wheelObj.quaternion.copy(_steerQuat).multiply(_rotQuat);
         }
     }
 
-    // Destroy vehicle controller
     function destroy() {
-        try { world.removeVehicleController(vehicle); } catch { }
+        try { world.removeVehicleController(vehicle); } catch { /* already freed */ }
     }
 
-    return { vehicle, updateWheelVisuals, destroy };
+    return { vehicle, updateWheelVisuals, destroy, stepVehicle };
 }

@@ -3,6 +3,7 @@ import type { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { PathPlanner, type ObstacleChecker } from "./pathPlanner";
 import { createVehicleController } from "./vehicleController";
 import type { VehicleOptions, VehicleInstance } from "../types";
+import { LAB_PHYSICS } from "../labPhysics";
 
 export type VehicleLoaderContext = {
     loader: GLTFLoader;
@@ -222,15 +223,23 @@ export async function loadVehicleModel(
     halfExtents.x *= 0.95;
     halfExtents.z *= 0.95;
 
+    const chassisMass = Math.max(80, halfExtents.x * halfExtents.y * halfExtents.z * 400);
     const chassisBody = world.createRigidBody(
         RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(opts.position.x, opts.position.y, opts.position.z)
             .setLinearDamping(vehicleParams.chassis.linearDamping)
             .setAngularDamping(vehicleParams.chassis.angularDamping)
-            .setCanSleep(true)
-            .setAdditionalMass(10),
+            .setCcdEnabled(true)
+            .setCanSleep(false)
+            .setAdditionalMass(chassisMass),
     );
-    world.createCollider(RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z), chassisBody);
+    world.createCollider(
+        RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
+            .setFriction(0.8)
+            .setRestitution(0)
+            .setCollisionGroups(LAB_PHYSICS.groups.chassis),
+        chassisBody,
+    );
 
     // Physics debug box
     const physicsBoxMesh = new THREE.Mesh(
@@ -242,13 +251,15 @@ export async function loadVehicleModel(
     vehicleGroup.position.copy(opts.position);
     vehicleGroup.updateMatrixWorld(true);
 
-    const { vehicle, updateWheelVisuals } = createVehicleController(world, chassisBody, wheelWrappers, wheelsInfo);
+    const { vehicle, updateWheelVisuals, destroy, stepVehicle } = createVehicleController(world, chassisBody, wheelWrappers, wheelsInfo);
 
     return {
         vehicleGroup,
         chassisBody,
         vehicleController: vehicle,
         updateWheelVisuals,
+        stepVehicle,
+        destroyPhysics: destroy,
         vehicleMixer,
         vehicleActions,
         vehiclIsOpenDoor: false,

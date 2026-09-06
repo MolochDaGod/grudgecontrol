@@ -45,6 +45,28 @@ GitHub Pages (same Vite example build, `/grudgecontrol/` base): https://molochda
 
 Adopt: client sends pose (x, y, z, yaw, clip); spawn pads in metres; `minCamDistance` / `maxCamDistance`; GLTFLoader + DRACO + KTX2 on one loader.
 
+### Physics contract (this lab)
+
+| Body | Authority | Why |
+| --- | --- | --- |
+| Walk / fly / jump capsule | `three-mesh-bvh` shapecast | Large merged scene meshes. Do **not** add Rapier CCT on the same capsule. |
+| Vehicles | Rapier `World` + `DynamicRayCastVehicleController` | Lazy `import("@dimforge/rapier3d-compat")`. Fixed step **1/60**. Trimesh on **fixed** bodies only. Chassis is **dynamic + CCD**. Wheel rays ignore the chassis collider. |
+
+Constants: `LAB_PHYSICS` (`src/labPhysics.ts`). Gravity on the Rapier world is SI −9.81. Walk gravity stays the scaled Mixamo/lab values on the capsule.
+
+Packages: `three` **^0.185**, `@dimforge/rapier3d-compat` **^0.19.3** (optional until a vehicle loads).
+
+### Controls
+
+| Mode | W/S | A/D |
+| --- | --- | --- |
+| On foot | Forward / back (camera XZ) | **Strafe** |
+| Vehicle | Throttle / reverse | **Steer** (A = nose left under chase cam) — not FPS strafe |
+
+Gamepad (standard mapping): left stick move/steer, right stick look, A jump. Analog axes are `input.axisX` / `input.axisY` (−1…1). `setInput({ moveX, moveY })` accepts analog, not only −1/0/1.
+
+QA probe: add `?qa=1` then `window.__grudgeControlProbe` (`getYaw`, `getSpeed`, `getMode`, `setSteer`).
+
 ---
 
 ## Install
@@ -56,9 +78,9 @@ npm install
 Peer dependencies for the library:
 
 ```bash
-npm install three three-mesh-bvh
-# optional — vehicles
-npm install @dimforge/rapier3d-compat
+npm install three@^0.185 three-mesh-bvh
+# optional — vehicles (lazy-loaded)
+npm install @dimforge/rapier3d-compat@^0.19.3
 ```
 
 Package name on disk: `grudge-control` (`package.json`). Import from source in this repo:
@@ -307,7 +329,10 @@ await player.loadVehicleModel({
 
 | Method | Description |
 | --- | --- |
-| `setInput(input)` | Feed custom input (gamepad or your own map). |
+| `setInput(input)` | Feed analog `moveX`/`moveY` (−1…1), look deltas, and held/toggle actions. Keyboard + gamepad + touch all write the same axes. |
+| `getInputSnapshot()` | `{ axisX, axisY, jump, sprint, mode, yaw, speed }`. |
+| `getPhysicsContract()` | `LAB_PHYSICS` (walk BVH, vehicle Rapier, fixedDt, collision groups). |
+| `getRapierWorld()` | Rapier `World` after a vehicle has loaded, else `null`. |
 | `setKeyMap(map?)` | Rebind keys at runtime; omit the argument to restore defaults. |
 | `setMouseSensitivity(v)` | Set mouse sensitivity. |
 | `setPlayerScale(v)` | Rescale the player and update collider-related values. |
@@ -374,8 +399,8 @@ player.setKeyMap();
 
 ```ts
 player.setInput({
-    moveX: 1 | 0 | -1,
-    moveY: 1 | 0 | -1,
+    moveX: number, // −1…1 left … right
+    moveY: number, // −1…1 back … forward
     lookDeltaX: number,
     lookDeltaY: number,
     jump: boolean,

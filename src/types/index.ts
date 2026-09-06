@@ -205,6 +205,8 @@ export type VehicleInstance = {
     chassisBody: RigidBody; // Chassis rigid body
     vehicleController: any; // Rapier vehicle controller
     updateWheelVisuals: () => void; // Callback to sync wheel visuals
+    stepVehicle?: (dt: number) => void; // Rapier updateVehicle(dt) before world.step
+    destroyPhysics?: () => void; // removeVehicleController
     vehicleMixer?: THREE.AnimationMixer; // Vehicle animation mixer
     vehicleActions?: Map<string, THREE.AnimationAction>; // Vehicle action map
     vehiclIsOpenDoor: boolean; // Whether the door is open

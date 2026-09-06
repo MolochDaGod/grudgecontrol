@@ -26,10 +26,13 @@ export class CameraSystem {
     centerRay = new THREE.Raycaster(); // screen-center ray
     centerMouse = new THREE.Vector2(); // screen-center coords
     playerToCam = new THREE.Vector3(); // player-to-camera vector
+    private _rayDir = new THREE.Vector3();
+    private _camSafe = new THREE.Vector3();
 
     constructor(ctrl: playerController) {
         this.ctrl = ctrl;
         (this.raycaster as any).firstHitOnly = true;
+        (this.centerRay as any).firstHitOnly = true;
     }
 
     // Spring-damp controls.target toward dest; returns this frame's target
@@ -227,21 +230,19 @@ export class CameraSystem {
     // Raycast keep-out from walls
     updateWithRaycast(origin: THREE.Vector3, maxDist: number = this.maxDist, minDist = this.minDist) {
         this.playerToCam.subVectors(this.ctrl.camera.position, origin);
-        const direction = this.playerToCam.clone().normalize();
+        const direction = this._rayDir.copy(this.playerToCam).normalize();
         this.raycaster.set(origin, direction);
         this.raycaster.far = maxDist;
 
         const hits = this.raycaster.intersectObject(this.ctrl.collider!, false);
-        // Occluded: pull in to a safe distance
         if (hits.length > 0) {
             const safeDist = Math.max(hits[0].distance - this.epsilon, minDist);
-            this.ctrl.camera.position.lerp(origin.clone().add(direction.multiplyScalar(safeDist)), this.collisionLerp);
+            this.ctrl.camera.position.lerp(this._camSafe.copy(origin).addScaledVector(direction, safeDist), this.collisionLerp);
         } else {
-            // Clear: try to restore max distance
             this.raycaster.far = maxDist;
             const maxHits = this.raycaster.intersectObject(this.ctrl.collider!, false);
             const safeDist = maxHits.length > 0 ? Math.min(maxDist, maxHits[0].distance - this.epsilon) : maxDist;
-            this.ctrl.camera.position.lerp(origin.clone().add(direction.multiplyScalar(safeDist)), this.collisionLerp);
+            this.ctrl.camera.position.lerp(this._camSafe.copy(origin).addScaledVector(direction, safeDist), this.collisionLerp);
         }
     }
 
@@ -254,7 +255,6 @@ export class CameraSystem {
 
         const checkTargets = this.ctrl.collider ? [this.ctrl.collider, ...this.ctrl.scene.children] : this.ctrl.scene.children;
         const hits = this.centerRay.intersectObjects(checkTargets, true);
-        hits.sort((a, b) => a.distance - b.distance);
         if (hits[0]) return hits[0];
 
         // No hit: virtual point 1000 units along the ray

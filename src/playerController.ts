@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { MeshBVH, BVHHelper, acceleratedRaycast } from "three-mesh-bvh";
+import { MeshBVH, BVHHelper, acceleratedRaycast, SAH } from "three-mesh-bvh";
 import type { GLTF } from "three/examples/jsm/Addons.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
@@ -17,16 +17,17 @@ import { CombatSystem } from "./systems/CombatSystem";
 import { TargetSystem } from "./systems/TargetSystem";
 import { applyCapsuleCollision, createCollisionTemps, type CollisionTemps } from "./utils/capsuleCollision";
 import { loadExternalAnimationClips, loadModelAsset } from "./utils/grudgeAssetLoader";
+import { LAB_PHYSICS, type InputSnapshot } from "./labPhysics";
 
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
-
-const clock = new THREE.Clock();
 
 function isMobileDevice() {
     return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 }
 
 export class playerController {
+
+    private timer = new THREE.Timer();
 
     // ==================== Scene refs ====================
     loader: GLTFLoader = new GLTFLoader(); // GLTF loader
@@ -206,6 +207,7 @@ export class playerController {
             for (const obj of list) this.addDynamicCollider(obj);
         }
 
+        this.timer.connect(document);
         this.input.bindEvents();
         this.cam.setCamPos();
         this.cam.initControls();
@@ -216,7 +218,7 @@ export class playerController {
     // Init loaders
     private async initLoader() {
         const dracoLoader = new DRACOLoader();
-        dracoLoader.setDecoderPath("https://unpkg.com/three@0.182.0/examples/jsm/libs/draco/gltf/");
+        dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
         this.loader.setDRACOLoader(dracoLoader);
     }
 
@@ -531,7 +533,7 @@ export class playerController {
         // Merge and build BVH
         const merged = BufferGeometryUtils.mergeGeometries(this.collected, false);
         if (!merged) { console.error("Failed to merge geometries"); return; }
-        (merged as any).boundsTree = new MeshBVH(merged, { maxDepth: 100 });
+        (merged as any).boundsTree = new MeshBVH(merged, { strategy: SAH, maxLeafSize: 10 });
         this.collider = new THREE.Mesh(merged, new THREE.MeshBasicMaterial({ opacity: 0.5, transparent: true, wireframe: true, depthTest: true, side: THREE.DoubleSide }));
         this.collider.layers.enable(1);
 
@@ -652,15 +654,21 @@ export class playerController {
     // ==================== Main loop ====================
 
     // Main loop
-    async update(delta = clock.getDelta()) {
+    async update(delta?: number) {
+        if (delta === undefined) {
+            this.timer.update();
+            delta = this.timer.getDelta();
+        }
         if (!this.isupdate || !this.playerCapsule || !this.collider) return;
-        delta = Math.min(delta, 1 / 40) * this.timeScale;
+        this.input.pollGamepad();
+        delta = Math.min(delta, LAB_PHYSICS.maxFrameDt) * this.timeScale;
         if (this.controllerMode === 1) {
             this.vehicle.updateVehicle(delta);
         } else {
             this.updatePlayer(delta);
-            if (this.isChangeControllerTransitionTimer) this.vehicle.updateInertia(delta);
+            if (this.vehicle.world) this.vehicle.updateInertia(delta);
         }
+        this.syncControlsProbe();
     }
 
     // Player frame update
@@ -709,17 +717,13 @@ export class playerController {
         this.camera.getWorldDirection(this.camDir);
         const angle = 2 * Math.PI - (Math.atan2(this.camDir.z, this.camDir.x) + Math.PI / 2);
 
-        // Keyed move direction
         this.moveDir.set(0, 0, 0);
-        if (this.input.fwd) this.moveDir.add(this.DIR_FWD);
-        if (this.input.bkd) this.moveDir.add(this.DIR_BKD);
-        if (this.input.lft) this.moveDir.add(this.DIR_LFT);
-        if (this.input.rgt) this.moveDir.add(this.DIR_RGT);
         if (this.isFlying) {
-            if (this.input.fwd) this.moveDir.copy(this.camDir);
+            if (this.input.axisY > 0.01) this.moveDir.copy(this.camDir).multiplyScalar(this.input.axisY);
             if (this.input.space) this.moveDir.y += 1;
             this.curPlayerSpeed = this.input.shift ? this.playerFlySpeed * 2 : this.playerFlySpeed;
         } else {
+            this.moveDir.set(this.input.axisX, 0, -this.input.axisY);
             this.curPlayerSpeed = this.input.shift ? this.playerSpeed * 2 : this.playerSpeed;
         }
 
@@ -747,7 +751,7 @@ export class playerController {
             const diffX = targetX - this.playerVelocity.x; // Speed delta X
             const diffZ = targetZ - this.playerVelocity.z; // Speed delta Z
             // Clamp XZ as a single 2D vector
-            const hasXZInput = this.moveDir.x !== 0 || this.moveDir.z !== 0;
+            const hasXZInput = this.input.axisX !== 0 || this.input.axisY !== 0;
             const xzDiffLen = Math.hypot(diffX, diffZ);
             if (xzDiffLen > 0) {
                 const xzApplied = Math.min(xzDiffLen, hasXZInput ? accelStep : decelStep);
@@ -1180,8 +1184,24 @@ export class playerController {
     // Screen-center raycast
     getCenterScreenRaycastHit() { return this.cam.getCenterHit(); }
 
+    getPhysicsContract() { return LAB_PHYSICS; }
+    getRapierWorld() { return this.vehicle.world; }
+    getInputSnapshot(): InputSnapshot { return this.input.getSnapshot(); }
+
+    private syncControlsProbe() {
+        if (typeof window === "undefined") return;
+        if (!new URLSearchParams(window.location.search).has("qa")) return;
+        (window as any).__grudgeControlProbe = {
+            getYaw: () => this.playerCapsule?.rotation.y ?? 0,
+            getSpeed: () => Math.hypot(this.playerVelocity.x, this.playerVelocity.z),
+            getMode: () => this.controllerMode,
+            getSteer: () => -this.input.axisX,
+            setSteer: (v: number) => { this.input.axisX = Math.max(-1, Math.min(1, v)); },
+            getSnapshot: () => this.input.getSnapshot(),
+        };
+    }
+
     // --- Input ---
-    // Set input state
     setInput(input: Parameters<InputSystem["setInput"]>[0]) { this.input.setInput(input); }
     // Custom key map at runtime
     setKeyMap(map?: KeyMap) { this.input.buildKeyMap(map); }
@@ -1196,6 +1216,7 @@ export class playerController {
 
     // --- Destroy ---
     destroy() {
+        this.timer.dispose();
         this.input.unbindEvents();
         this.combat.dispose();
         this.target.dispose();
@@ -1216,8 +1237,15 @@ export class playerController {
         this.clearDynamicColliders();
 
         // Clear all vehicles
-        for (const v of this.vehicle.list) { this.scene.remove(v.vehicleGroup); v.pathPlanner?.dispose(); v.vehicleController?.destroy?.(); }
+        for (const v of this.vehicle.list) {
+            this.scene.remove(v.vehicleGroup);
+            v.pathPlanner?.dispose();
+            v.destroyPhysics?.();
+        }
         this.vehicle.list = [];
         this.vehicle.active = null;
+        try { this.vehicle.world?.free?.(); } catch { /* already freed */ }
+        this.vehicle.world = null;
+        this.vehicle.RAPIER = null;
     }
 }

@@ -7,6 +7,7 @@ export interface CollisionTemps {
     localBox: THREE.Box3;     // AABB of the capsule segment in collider local space
     closestSeg: THREE.Vector3; // closest point on the capsule segment
     closestTri: THREE.Vector3; // closest point on the triangle
+    pushDir: THREE.Vector3;    // push-out direction (no alloc in shapecast)
 }
 
 // Allocate one set of scratch objects
@@ -17,6 +18,7 @@ export function createCollisionTemps(): CollisionTemps {
         localBox: new THREE.Box3(),
         closestSeg: new THREE.Vector3(),
         closestTri: new THREE.Vector3(),
+        pushDir: new THREE.Vector3(),
     };
 }
 
@@ -53,11 +55,11 @@ export function applyCapsuleCollision(
             const distance = tri.closestPointToSegment(temps.localSeg, temps.closestSeg, temps.closestTri);
             if (distance >= capsuleInfo.radius) return;
 
-            // Narrow filter
-            const dir = temps.closestTri.clone().sub(temps.closestSeg).normalize();
+            const dir = temps.pushDir.subVectors(temps.closestTri, temps.closestSeg);
+            if (dir.lengthSq() < 1e-12) return;
+            dir.normalize();
             if (skipTri?.(tri, dir)) return;
 
-            // Push the capsule segment out
             temps.localSeg.start.addScaledVector(dir, capsuleInfo.radius - distance);
             temps.localSeg.end.addScaledVector(dir, capsuleInfo.radius - distance);
         },
