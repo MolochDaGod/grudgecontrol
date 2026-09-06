@@ -200,6 +200,12 @@ export class playerController {
         await this.initLoader();
         this.buildStaticCollider(opts.staticCollider);
         await this.loadPlayerModelGLB();
+        try {
+            await this.vehicle.initRapier();
+            if (this.playerCapsule) this.vehicle.attachWalkCct(this.playerCapsule);
+        } catch (e) {
+            console.warn("Rapier CCT unavailable; walk falls back to BVH shapecast", e);
+        }
 
         // Register dynamic colliders at init
         if (opts.dynamicCollider) {
@@ -765,14 +771,16 @@ export class playerController {
             }
         }
 
-        // Ground check
-        const s = this.playerModelConfig.scale;
-        this.groundRaycaster.ray.origin.copy(this.playerCapsule.position);
-        const staticHits = this.groundRaycaster.intersectObject(this.collider!, false);
+        const capsuleInfo = this.playerCapsule.capsuleInfo;
+        const useCct = !this.isFlying && !v.isMovingToBoarding && !!this.vehicle.cct;
 
-        // Also test dynamic colliders; keep the highest ground point
-        let bestHit: THREE.Intersection | undefined = staticHits[0];
+        this.groundRaycaster.ray.origin.copy(this.playerCapsule.position);
         let hitEntry: DynamicColliderEntry | null = null;
+        let bestHit: THREE.Intersection | undefined;
+        if (!useCct) {
+            const staticHits = this.groundRaycaster.intersectObject(this.collider!, false);
+            bestHit = staticHits[0];
+        }
         for (const entry of this.dynamicColliders) {
             const dynHits = this.groundRaycaster.intersectObject(entry.mesh, false);
             if (dynHits.length > 0 && (!bestHit || dynHits[0].point.y > bestHit.point.y)) {
@@ -780,71 +788,86 @@ export class playerController {
                 hitEntry = entry;
             }
         }
-        // Update active dynamic collider
         this.activeDynamicCollider = hitEntry;
 
-        if (!this.isFlying) {
-            if (bestHit) {
-                const capsuleInfo = this.playerCapsule.capsuleInfo;
-                const snapH = parseFloat((-capsuleInfo.segment.end.y + capsuleInfo.radius).toFixed(6));
-                const maxH = parseFloat((snapH * 1.2).toFixed(6));
-                const snapY = bestHit.point.y + snapH;
-                const dist = parseFloat((this.playerCapsule.position.y - bestHit.point.y).toFixed(6));
-                if (dist > maxH) {
-                    this.applyGravity(delta);
-                } else if (this.playerVelocity.y <= 0) {
-                    if (this.playerIsOnGround) {
-                        // Already grounded: follow terrain (slopes, dynamic platforms)
-                        this.snapToGround(snapY);
-                    } else {
-                        // Falling: snap only if this frame's velocity reaches the land point, else keep gravity
-                        const predictedY = this.playerCapsule.position.y + this.playerVelocity.y * delta;
-                        if (predictedY <= snapY) {
-                            this.snapToGround(snapY);
-                        } else {
-                            this.applyGravity(delta);
-                        }
-                    }
+        if (useCct) {
+            if (!this.playerIsOnGround) this.applyGravity(delta);
+            this.xzDir.set(
+                this.playerVelocity.x * delta,
+                this.playerVelocity.y * delta,
+                this.playerVelocity.z * delta,
+            );
+            const out = this.vehicle.moveWalkCct(this.xzDir, this.playerCapsule.position);
+            if (out) {
+                this.playerCapsule.position.set(out.x, out.y, out.z);
+                this.playerCapsule.updateMatrixWorld();
+                if (out.grounded) {
+                    this.playerVelocity.y = 0;
+                    this.setOnGround(true);
+                } else {
+                    this.setOnGround(false);
                 }
-            } else {
-                this.applyGravity(delta);
             }
-            // Apply gravity velocity
-            this.playerCapsule.position.y += this.playerVelocity.y * delta;
-        }
-
-        // Stepped collision move
-        const capsuleInfo = this.playerCapsule.capsuleInfo;
-        const xzSpeed = Math.hypot(this.playerVelocity.x, this.playerVelocity.z);
-        const totalDist = this.isFlying ? this.playerVelocity.length() * delta : xzSpeed * delta;
-        this.xzDir.set(this.playerVelocity.x, this.isFlying ? this.playerVelocity.y : 0, this.playerVelocity.z).normalize();
-        const maxStep = capsuleInfo.radius * 0.8;
-        const steps = Math.ceil(totalDist / maxStep) || 1;
-        const stepDist = totalDist / steps;
-        for (let i = 0; i < steps; i++) {
-            this.playerCapsule.position.addScaledVector(this.xzDir, stepDist);
-            this.playerCapsule.updateMatrixWorld();
-
-            if (!v.isMovingToBoarding) {
-                // Static collision
+            for (const dynEntry of this.dynamicColliders) {
                 applyCapsuleCollision(
                     this.playerCapsule,
                     capsuleInfo,
-                    this.collider!,
-                    this.staticTemps,
-                    (tri: any, dir: THREE.Vector3) => !this.isFlying && this.playerIsOnGround && this.shouldSkipTriCollision(tri, dir),
+                    dynEntry.mesh,
+                    this.dynTemps,
+                    (tri: any, dir: THREE.Vector3) => this.playerIsOnGround && this.shouldSkipTriCollision(tri, dir),
                 );
+            }
+        } else {
+            if (!this.isFlying) {
+                if (bestHit) {
+                    const snapH = parseFloat((-capsuleInfo.segment.end.y + capsuleInfo.radius).toFixed(6));
+                    const maxH = parseFloat((snapH * 1.2).toFixed(6));
+                    const snapY = bestHit.point.y + snapH;
+                    const dist = parseFloat((this.playerCapsule.position.y - bestHit.point.y).toFixed(6));
+                    if (dist > maxH) {
+                        this.applyGravity(delta);
+                    } else if (this.playerVelocity.y <= 0) {
+                        if (this.playerIsOnGround) {
+                            this.snapToGround(snapY);
+                        } else {
+                            const predictedY = this.playerCapsule.position.y + this.playerVelocity.y * delta;
+                            if (predictedY <= snapY) this.snapToGround(snapY);
+                            else this.applyGravity(delta);
+                        }
+                    }
+                } else {
+                    this.applyGravity(delta);
+                }
+                this.playerCapsule.position.y += this.playerVelocity.y * delta;
+            }
 
-                // Dynamic collision
-                for (const dynEntry of this.dynamicColliders) {
-                    this.playerCapsule.updateMatrixWorld();
+            const xzSpeed = Math.hypot(this.playerVelocity.x, this.playerVelocity.z);
+            const totalDist = this.isFlying ? this.playerVelocity.length() * delta : xzSpeed * delta;
+            this.xzDir.set(this.playerVelocity.x, this.isFlying ? this.playerVelocity.y : 0, this.playerVelocity.z).normalize();
+            const maxStep = capsuleInfo.radius * 0.8;
+            const steps = Math.ceil(totalDist / maxStep) || 1;
+            const stepDist = totalDist / steps;
+            for (let i = 0; i < steps; i++) {
+                this.playerCapsule.position.addScaledVector(this.xzDir, stepDist);
+                this.playerCapsule.updateMatrixWorld();
+                if (!v.isMovingToBoarding) {
                     applyCapsuleCollision(
                         this.playerCapsule,
                         capsuleInfo,
-                        dynEntry.mesh,
-                        this.dynTemps,
+                        this.collider!,
+                        this.staticTemps,
                         (tri: any, dir: THREE.Vector3) => !this.isFlying && this.playerIsOnGround && this.shouldSkipTriCollision(tri, dir),
                     );
+                    for (const dynEntry of this.dynamicColliders) {
+                        this.playerCapsule.updateMatrixWorld();
+                        applyCapsuleCollision(
+                            this.playerCapsule,
+                            capsuleInfo,
+                            dynEntry.mesh,
+                            this.dynTemps,
+                            (tri: any, dir: THREE.Vector3) => !this.isFlying && this.playerIsOnGround && this.shouldSkipTriCollision(tri, dir),
+                        );
+                    }
                 }
             }
         }
@@ -1244,6 +1267,14 @@ export class playerController {
         }
         this.vehicle.list = [];
         this.vehicle.active = null;
+        try {
+            if (this.vehicle.cct && this.vehicle.world) {
+                (this.vehicle.world as any).removeCharacterController?.(this.vehicle.cct);
+            }
+        } catch { /* already freed */ }
+        this.vehicle.cct = null;
+        this.vehicle.walkBody = null;
+        this.vehicle.walkCollider = null;
         try { this.vehicle.world?.free?.(); } catch { /* already freed */ }
         this.vehicle.world = null;
         this.vehicle.RAPIER = null;

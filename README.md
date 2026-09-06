@@ -47,12 +47,15 @@ Adopt: client sends pose (x, y, z, yaw, clip); spawn pads in metres; `minCamDist
 
 ### Physics contract (this lab)
 
+Same play stack as Open / Island3D / Casting: **one Rapier world**.
+
 | Body | Authority | Why |
 | --- | --- | --- |
-| Walk / fly / jump capsule | `three-mesh-bvh` shapecast | Large merged scene meshes. Do **not** add Rapier CCT on the same capsule. |
-| Vehicles | Rapier `World` + `DynamicRayCastVehicleController` | Lazy `import("@dimforge/rapier3d-compat")`. Fixed step **1/60**. Trimesh on **fixed** bodies only. Chassis is **dynamic + CCD**. Wheel rays ignore the chassis collider. |
+| Walk / jump capsule | Rapier **CCT** (`createCharacterController` + kinematic capsule) | Fleet play: `CharacterCapsuleKcc` / Island3D `addCharacterCapsule`. Gravity in desired Y, autostep + snap. |
+| Vehicles | Same world + `DynamicRayCastVehicleController` | Dynamic CCD chassis. Wheel rays hit static only. |
+| Camera / aim / moving platforms | `three-mesh-bvh` | Pick accel — **not** a second walk engine. Fly still uses BVH shapecast. |
 
-Constants: `LAB_PHYSICS` (`src/labPhysics.ts`). Gravity on the Rapier world is SI −9.81. Walk gravity stays the scaled Mixamo/lab values on the capsule.
+Constants: `LAB_PHYSICS` (`src/labPhysics.ts`). If Rapier WASM fails to init, walk falls back to BVH shapecast.
 
 Packages: `three` **^0.185**, `@dimforge/rapier3d-compat` **^0.19.3** (optional until a vehicle loads).
 

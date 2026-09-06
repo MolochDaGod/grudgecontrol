@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { World } from "@dimforge/rapier3d-compat";
+import type { World, RigidBody, Collider, KinematicCharacterController } from "@dimforge/rapier3d-compat";
 import type { playerController } from "../playerController";
 import { loadVehicleModel as loadVehicleModelUtil } from "../utils/vehicleLoader";
 import type { VehicleInstance, VehicleOptions } from "../types";
@@ -12,7 +12,12 @@ export class VehicleSystem {
     active: VehicleInstance | null = null; // currently boarded vehicle
     maxCount = 6; // max vehicle count
     RAPIER: any = null; // physics module
-    world: World | null = null; // physics world
+    world: World | null = null; // physics world (CCT walk + vehicles)
+    cct: KinematicCharacterController | null = null;
+    walkBody: RigidBody | null = null;
+    walkCollider: Collider | null = null;
+    walkHalfHeight = 0;
+    walkRadius = 0;
     params = {
         debug: { showPhysicsBox: false }, // debug draw
         chassis: { linearDamping: 0.5, angularDamping: 0.5 }, // chassis damping
@@ -57,7 +62,7 @@ export class VehicleSystem {
         this.ctrl = ctrl;
     }
 
-    // Lazy Rapier world — vehicles only. Walk capsule stays on BVH.
+    /** Same Rapier world as Island3D / Open: CCT walk + vehicles. */
     async initRapier() {
         if (this.RAPIER) return;
         this.RAPIER = await import("@dimforge/rapier3d-compat");
@@ -98,6 +103,84 @@ export class VehicleSystem {
         };
 
         for (const g of this.ctrl.collected) addTrimesh(this.RAPIER, this.world, g);
+    }
+
+    /**
+     * Fleet CCT: kinematic capsule + createCharacterController.
+     * `capsule.position` is the top sphere centre (lab mesh convention).
+     */
+    attachWalkCct(capsule: THREE.Mesh & { capsuleInfo?: { radius: number; segment: THREE.Line3 } }) {
+        if (!this.world || !this.RAPIER || !capsule.capsuleInfo) return;
+        const info = capsule.capsuleInfo;
+        const r = info.radius;
+        const segLen = info.segment.start.distanceTo(info.segment.end);
+        const hh = Math.max(r * 0.05, segLen / 2);
+        this.walkRadius = r;
+        this.walkHalfHeight = hh;
+        const centerY = capsule.position.y - hh;
+        const body = this.world.createRigidBody(
+            this.RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(
+                capsule.position.x,
+                centerY,
+                capsule.position.z,
+            ),
+        );
+        const collider = this.world.createCollider(
+            this.RAPIER.ColliderDesc.capsule(hh, r)
+                .setFriction(0)
+                .setRestitution(0)
+                .setDensity(1)
+                .setCollisionGroups(LAB_PHYSICS.groups.walk),
+            body,
+        );
+        const offset = Math.max(r * 0.08, 1e-4);
+        const cct = this.world.createCharacterController(offset);
+        cct.setUp({ x: 0, y: 1, z: 0 });
+        cct.setMaxSlopeClimbAngle((50 * Math.PI) / 180);
+        cct.setMinSlopeSlideAngle((40 * Math.PI) / 180);
+        const step = Math.max(r * 0.5, 40 * this.ctrl.playerModelConfig.scale);
+        cct.enableAutostep(step, r * 0.5, true);
+        cct.enableSnapToGround(step);
+        cct.setApplyImpulsesToDynamicBodies(true);
+        this.walkBody = body;
+        this.walkCollider = collider;
+        this.cct = cct;
+        this.world.step();
+    }
+
+    setWalkCctEnabled(on: boolean) {
+        this.walkCollider?.setEnabled(on);
+    }
+
+    syncWalkCctFromCapsule() {
+        if (!this.walkBody || !this.ctrl.playerCapsule) return;
+        const p = this.ctrl.playerCapsule.position;
+        this.walkBody.setNextKinematicTranslation({
+            x: p.x,
+            y: p.y - this.walkHalfHeight,
+            z: p.z,
+        });
+    }
+
+    /** Gravity belongs in `desired` (Rapier CCT law). Returns new top-sphere position. */
+    moveWalkCct(desired: THREE.Vector3, topPos: THREE.Vector3): { x: number; y: number; z: number; grounded: boolean } | null {
+        if (!this.cct || !this.walkBody || !this.walkCollider) return null;
+        const center = {
+            x: topPos.x,
+            y: topPos.y - this.walkHalfHeight,
+            z: topPos.z,
+        };
+        this.walkBody.setTranslation(center, true);
+        this.cct.computeColliderMovement(this.walkCollider, { x: desired.x, y: desired.y, z: desired.z });
+        const mv = this.cct.computedMovement();
+        const nc = { x: center.x + mv.x, y: center.y + mv.y, z: center.z + mv.z };
+        this.walkBody.setNextKinematicTranslation(nc);
+        return {
+            x: nc.x,
+            y: nc.y + this.walkHalfHeight,
+            z: nc.z,
+            grounded: this.cct.computedGrounded(),
+        };
     }
 
     // Load a vehicle model
@@ -263,6 +346,7 @@ export class VehicleSystem {
         c.cam.setOverShoulder(false);
         v.vehicleGroup.attach(c.playerCapsule);
         c.playerCapsule.position.add(v.seatOffset.clone().multiplyScalar(v.scale).add(new THREE.Vector3(0, offsetY, 0)));
+        this.setWalkCctEnabled(false);
         this.isMovingToBoarding = false;
         c.syncDebugVisibility();
         c.onVehicleEnter?.(v);
@@ -294,6 +378,8 @@ export class VehicleSystem {
         c.mobileControls?.syncControllerModeBtn(0);
         c.cam.setOverShoulder(c.enableOverShoulderView);
         c.scene.attach(c.playerCapsule);
+        this.setWalkCctEnabled(true);
+        this.syncWalkCctFromCapsule();
         if (c.isFirstPerson) c.cam.setFirstPerson();
         c.syncDebugVisibility();
         this.setTransition();

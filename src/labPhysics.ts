@@ -1,32 +1,34 @@
 /**
  * Lab physics + control contract.
  *
- * Walk/fly body: three-mesh-bvh capsule (not Rapier CCT). Large merged
- * scene meshes stay on BVH — one authority per body.
- * Vehicles: Rapier World + DynamicRayCastVehicleController, lazy-loaded.
- * Do not put Rapier CCT on the walking capsule.
+ * Same stack as Open / Island3D / Casting play:
+ * walk = Rapier kinematic CCT on one World; vehicles = DynamicRayCastVehicle
+ * on that same World. three-mesh-bvh is pick / camera / moving-platform only
+ * — not a second walk engine.
  */
 
 export const LAB_PHYSICS = {
-    /** Rapier / vehicle integrator */
+    /** Rapier integrator (CCT + vehicles) */
     fixedDt: 1 / 60,
     maxFrameDt: 0.05,
     maxSubsteps: 5,
-    /** SI gravity for the Rapier vehicle world only */
+    /** World gravity for dynamic vehicles. Walk gravity is in CCT desired Y. */
     gravityY: -9.81,
-    /** Walk/fly capsule is BVH; vehicles are Rapier */
-    walkAuthority: "bvh-capsule" as const,
+    /** Fleet play walk: Rapier KinematicCharacterController */
+    walkAuthority: "rapier-cct" as const,
     vehicleAuthority: "rapier-dynamic-raycast-vehicle" as const,
+    pickAuthority: "three-mesh-bvh" as const,
     rapierPackage: "@dimforge/rapier3d-compat" as const,
     rapierVersion: "^0.19.3" as const,
     /**
      * Rapier interaction groups: high 16 = membership, low 16 = filter.
-     * Static trimesh = bit 0. Chassis cuboid = bit 1, collides with static only.
-     * Wheel rays use filter 0x0001 so they ignore the chassis.
+     * Static trimesh = bit 0. Chassis = bit 1. Walk CCT = bit 2.
+     * Wheel rays hit static only.
      */
     groups: {
         static: (0b0001 << 16) | 0xffff,
-        chassis: (0b0010 << 16) | 0b0001,
+        chassis: (0b0010 << 16) | 0b0101,
+        walk: (0b0100 << 16) | 0b0011,
         wheelRayFilter: 0x0001,
     },
     /** +1 = A / left stick left turns the nose left under a chase camera */
